@@ -1,0 +1,133 @@
+.scene-props-ui {
+  --scene-surface: #252629;
+  --scene-surface-raised: #303135;
+  --scene-surface-hover: #3a3c40;
+  --scene-border: #46484d;
+  --scene-text: #eceeef;
+  --scene-text-secondary: #bec1c5;
+  --scene-text-muted: #a2a5aa;
+  --scene-focus: #d2d5db;
+  background: var(--scene-surface);
+  color: var(--scene-text);
+}
+
+.scene-props-ui .scene-section-title {
+  color: var(--scene-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.scene-props-ui .scene-property-row {
+  min-height: 25px;
+}
+
+.scene-props-ui .scene-property-label {
+  color: var(--scene-text-secondary);
+}
+
+.scene-props-ui .scene-input {
+  min-height: 25px;
+  border-color: var(--scene-border);
+  background: var(--scene-surface-raised);
+  color: var(--scene-text);
+}
+
+.scene-props-ui .scene-input:focus {
+  border-color: var(--scene-focus);
+  box-shadow: 0 0 0 1px var(--scene-focus);
+}
+
+.scene-props-ui .color-control {
+  border-color: var(--scene-border);
+  background: #2b2c2f;
+  box-shadow: none;
+}
+
+.scene-props-ui .color-control-title {
+  color: var(--scene-text);
+}
+
+.scene-props-ui .color-control-button {
+  min-height: 24px;
+  border-color: var(--scene-border);
+  background: var(--scene-surface-raised);
+  color: var(--scene-text-secondary);
+  box-shadow: none;
+}
+
+.scene-props-ui .color-control-button:hover {
+  border-color: var(--scene-text-secondary);
+  background: var(--scene-surface-hover);
+  color: var(--scene-text);
+}
+
+.scene-props-ui .color-control-preview,
+.scene-props-ui .color-control-swatch {
+  border-color: var(--scene-border);
+}
+
+.scene-props-ui .color-control-preview:focus-within {
+  outline: 2px solid var(--scene-focus);
+  outline-offset: 2px;
+}
+
+.scene-props-ui .color-control-input {
+  min-width: 0;
+  min-height: 25px;
+  border-color: var(--scene-border);
+  background: var(--scene-surface-raised);
+  color: var(--scene-text);
+}
+
+.scene-props-ui .color-control-input:focus {
+  border-color: var(--scene-focus);
+}
+
+.scene-props-ui .color-control-swatch {
+  width: 20px;
+  height: 20px;
+}
+
+.scene-props-ui .color-control-swatch:hover {
+  outline: 1px solid var(--scene-text);
+  outline-offset: 1px;
+}
+
+.scene-props-ui .scene-preset-list {
+  padding: 4px;
+  border: 1px solid var(--scene-border);
+  border-radius: 4px;
+  background: #2b2c2f;
+}
+
+.scene-props-ui .scene-preset-label,
+.scene-props-ui .scene-help-text,
+.scene-props-ui .scene-status-text {
+  color: var(--scene-text-muted);
+}
+
+.scene-props-ui .scene-preset-button {
+  min-height: 24px;
+  border-color: var(--scene-border);
+  background: var(--scene-surface-raised);
+  color: var(--scene-text-secondary);
+}
+
+.scene-props-ui .scene-preset-button:hover {
+  border-color: var(--scene-text-secondary);
+  background: var(--scene-surface-hover);
+  color: var(--scene-text);
+}
+
+.scene-props-ui .scene-preset-button.scene-preset-active {
+  border-color: var(--scene-text-secondary);
+  background: #4b4d52;
+  color: var(--scene-text);
+}
+
+.scene-props-ui :is(input, button):focus-visible {
+  outline: 2px solid var(--scene-focus);
+  outline-offset: 2px;
+}

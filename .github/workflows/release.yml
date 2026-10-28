@@ -1,0 +1,112 @@
+name: Release Windows x64
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build output
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release version
+        shell: pwsh
+        run: |
+          $tagVersion = "${{ github.ref_name }}" -replace '^v', ''
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $cargoVersion = Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "(.+)"$' |
+            Select-Object -First 1 |
+            ForEach-Object { $_.Matches[0].Groups[1].Value }
+
+          if ($tagVersion -ne $packageVersion -or $tagVersion -ne $tauriVersion -or $tagVersion -ne $cargoVersion) {
+            throw "Tag version $tagVersion does not match package ($packageVersion), Tauri ($tauriVersion), and Cargo ($cargoVersion)."
+          }
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Verify third-party notices
+        run: pnpm notices:check
+
+      - name: Run lint
+        run: pnpm lint
+
+      - name: Build web application
+        run: pnpm build
+
+      - name: Build installer and create draft prerelease
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: Unofficial Magic Rampage Scene Editor v__VERSION__
+          releaseBody: Experimental unsigned Windows x64 build. Back up projects before editing and verify the SHA-256 checksum before installing.
+          releaseDraft: true
+          prerelease: true
+          args: --bundles nsis --target x86_64-pc-windows-msvc
+
+      - name: Verify packaged notice resources
+        shell: pwsh
+        run: |
+          foreach ($name in @('THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_LICENSES.md')) {
+            $expected = (Get-FileHash -Algorithm SHA256 -LiteralPath $name).Hash
+            foreach ($directory in @('dist', 'src-tauri/target/x86_64-pc-windows-msvc/release')) {
+              $path = Join-Path $directory $name
+              if (-not (Test-Path -LiteralPath $path) -or (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash -ne $expected) {
+                throw "Missing or changed notice resource: $path"
+              }
+            }
+          }
+          if (-not (Get-ChildItem -Path src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis -Filter '*-setup.exe')) {
+            throw 'NSIS installer was not produced.'
+          }
+
+      - name: Generate and upload SHA-256 checksum
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $installer = Get-ChildItem -Path src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis -Filter '*-setup.exe' |
+            Select-Object -First 1
+          if (-not $installer) {
+            throw 'NSIS installer was not produced.'
+          }
+
+          $checksumPath = "$($installer.FullName).sha256"
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer.FullName).Hash.ToLowerInvariant()
+          "$hash  $($installer.Name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
+          gh release upload "${{ github.ref_name }}" $checksumPath --clobber

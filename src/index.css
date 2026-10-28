@@ -1,0 +1,237 @@
+@import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Custom sleek vertical scrollbar for panels (Hierarchy, Inspector, etc.) */
+.custom-scrollbar,
+.hierarchy-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.35) rgba(0, 0, 0, 0.15);
+  scroll-behavior: smooth;
+}
+
+.hierarchy-scrollbar::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.hierarchy-scrollbar::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 9999px;
+}
+
+.hierarchy-scrollbar::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  transition: background-color 0.2s ease;
+}
+
+.hierarchy-scrollbar::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(129, 140, 248, 0.7);
+}
+
+.hierarchy-scrollbar::-webkit-scrollbar-thumb:active,
+.custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: rgba(99, 102, 241, 0.95);
+}
+
+/* Global scrollbar fallback for WebKit browsers */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
+
+/* Checkerboard pattern for transparent color preview */
+.bg-checkerboard {
+  background-color: #111827;
+  background-image:
+    linear-gradient(45deg, #1f2937 25%, transparent 25%),
+    linear-gradient(-45deg, #1f2937 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #1f2937 75%),
+    linear-gradient(-45deg, transparent 75%, #1f2937 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+}
+
+/* Image rendering pixelated for crisp retro / sprite rendering */
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+/* XML Editor / Code tab sizing */
+.tab-size-2 {
+  tab-size: 2;
+  -moz-tab-size: 2;
+}
+
+/* Vertical text orientation utilities */
+.vertical-rl {
+  writing-mode: vertical-rl;
+}
+
+.vertical-lr-reverse {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+/* Auto-fill responsive grid for scene cards */
+.grid-auto-scenes {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+/* Reusable editor inputs */
+.editor-input {
+  background-color: #1f2937;
+  color: #e5e7eb;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #374151;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.editor-input:focus {
+  border-color: #6366f1;
+}
+
+.editor-input:disabled {
+  color: #6b7280;
+  cursor: not-allowed;
+  background-color: rgba(17, 24, 39, 0.6);
+}
+
+.editor-input-mono {
+  background-color: #1f2937;
+  color: #e5e7eb;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid #374151;
+  outline: none;
+  text-align: center;
+  min-width: 0;
+  transition: border-color 0.15s ease;
+}
+
+.editor-input-mono:focus {
+  border-color: #6366f1;
+}
+
+.editor-input-mono:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+  background-color: rgba(17, 24, 39, 0.6);
+}
+
+/* Unity-style Transform Axis Input Groups */
+.axis-input-group {
+  display: flex;
+  align-items: center;
+  background-color: #111827;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.axis-input-group:focus-within {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35);
+}
+
+.axis-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 10px;
+  min-width: 18px;
+  padding: 2px 4px;
+  user-select: none;
+  border-right: 1px solid #374151;
+  font-family: ui-monospace, monospace;
+}
+
+.axis-badge-x {
+  color: #f87171;
+  background-color: rgba(239, 68, 68, 0.15);
+  border-right-color: rgba(239, 68, 68, 0.25);
+}
+
+.axis-badge-y {
+  color: #34d399;
+  background-color: rgba(16, 185, 129, 0.15);
+  border-right-color: rgba(16, 185, 129, 0.25);
+}
+
+.axis-badge-z {
+  color: #38bdf8;
+  background-color: rgba(14, 165, 233, 0.15);
+  border-right-color: rgba(14, 165, 233, 0.25);
+}
+
+.axis-badge-angle {
+  color: #fbbf24;
+  background-color: rgba(245, 158, 11, 0.15);
+  border-right-color: rgba(245, 158, 11, 0.25);
+}
+
+.axis-number-input {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  color: #f3f4f6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  padding: 2px 4px;
+  border: none;
+  outline: none;
+}
+
+.axis-number-input::-webkit-inner-spin-button,
+.axis-number-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.axis-number-input {
+  -moz-appearance: textfield;
+}

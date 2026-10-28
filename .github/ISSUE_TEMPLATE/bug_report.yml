@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible problem in the scene editor
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach game-extracted assets, private projects, credentials, or personal information. Use a minimal synthetic fixture if a file is required.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: 0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options:
+        - Windows desktop application
+        - Web application in Chrome
+        - Web application in Edge
+        - Other supported Chromium browser
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Remove personal paths and private project data before pasting logs.
+      render: shell
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Content confirmation
+      options:
+        - label: I have not attached copyrighted game assets, credentials, or private project data.
+          required: true
+
