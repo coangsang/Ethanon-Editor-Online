@@ -146,6 +146,14 @@ export function resolveCustomDataRefValue(
   }
 
   if (refType === 'baseData') {
+    if (!isBaseDataFieldCompatibleWithType(refValue, variable.type)) {
+      return {
+        status: 'broken',
+        value: cloneCustomDataValue(variable.value),
+        reason: `Field "${refValue}" is not compatible with variable type "${variable.type}"`,
+      };
+    }
+
     if (refValue === 'id') {
       return {
         status: 'ok',
@@ -198,19 +206,26 @@ export function resolveCustomDataRefValue(
         };
       }
       return {
-        status: 'ok',
-        value: coerceScalarToVariableType(String(targetVar.value ?? ''), variable.type),
-        sourceType: targetVar.type,
+        status: 'broken',
+        value: cloneCustomDataValue(variable.value),
+        reason: `Cannot reference scalar variable "${refValue}" as ${variable.type}`,
       };
     }
 
     if (isVectorValue(targetVar.value)) {
+      if (variable.type !== 'string') {
+        return {
+          status: 'broken',
+          value: cloneCustomDataValue(variable.value),
+          reason: `Cannot reference vector variable "${refValue}" as ${variable.type}`,
+        };
+      }
       const textVal = targetVar.value.z === undefined
         ? `${targetVar.value.x}, ${targetVar.value.y}`
         : `${targetVar.value.x}, ${targetVar.value.y}, ${targetVar.value.z}`;
       return {
         status: 'ok',
-        value: coerceScalarToVariableType(textVal, variable.type),
+        value: textVal,
         sourceType: targetVar.type,
       };
     }

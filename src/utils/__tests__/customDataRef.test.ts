@@ -6,6 +6,7 @@ import {
   resolveCustomDataRefValue,
   syncEntitiesCustomDataRefs,
 } from '../customDataRef';
+import { cloneEntityTree } from '../prefabUtils';
 
 function createEntity(overrides: Partial<EntityInstance> & { id: number; editorEntityUID: string }): EntityInstance {
   return {
@@ -149,6 +150,128 @@ describe('customDataRef index and synchronization', () => {
     const synced = syncEntitiesCustomDataRefs(entities);
     expect(synced[2].customData[0].value).toBe('fallback-val');
     expect(synced[2].customData[1].value).toBe('kept-val');
+  });
+
+  it('rejects incompatible types for baseData and customData references with status broken', () => {
+    const target = createEntity({
+      id: 99,
+      editorEntityUID: 'uid-target',
+      entityName: 'torch.ent',
+      customData: [
+        { type: 'int', name: 'fuel', value: '100' },
+        { type: 'vector2', name: 'sparkOffset', value: { x: 5, y: 10 } },
+      ],
+    });
+
+    const subscriber = createEntity({
+      id: 100,
+      editorEntityUID: 'uid-sub',
+      customData: [
+        // Incompatible 1: vector2 referencing baseData "name" (which is a string)
+        {
+          type: 'vector2',
+          name: 'invalidVectorNameRef',
+          value: { x: 0, y: 0 },
+          refEditorUID: 'uid-target',
+          refType: 'baseData',
+          refValue: 'name',
+        },
+        // Incompatible 2: vector2 referencing baseData "id" (which is int)
+        {
+          type: 'vector2',
+          name: 'invalidVectorIdRef',
+          value: { x: 0, y: 0 },
+          refEditorUID: 'uid-target',
+          refType: 'baseData',
+          refValue: 'id',
+        },
+        // Incompatible 3: int referencing baseData "name" (which is string)
+        {
+          type: 'int',
+          name: 'invalidIntNameRef',
+          value: '0',
+          refEditorUID: 'uid-target',
+          refType: 'baseData',
+          refValue: 'name',
+        },
+        // Incompatible 4: vector2 referencing scalar customData (fuel: int)
+        {
+          type: 'vector2',
+          name: 'invalidVectorToScalarRef',
+          value: { x: 0, y: 0 },
+          refEditorUID: 'uid-target',
+          refType: 'customData',
+          refValue: 'fuel',
+        },
+        // Incompatible 5: int referencing vector customData (sparkOffset: vector2)
+        {
+          type: 'int',
+          name: 'invalidIntToVectorRef',
+          value: '0',
+          refEditorUID: 'uid-target',
+          refType: 'customData',
+          refValue: 'sparkOffset',
+        },
+      ],
+    });
+
+    const index = buildCustomDataRefIndex([target, subscriber]);
+
+    const res1 = resolveCustomDataRefValue(subscriber.customData[0], index, 'uid-sub');
+    expect(res1.status).toBe('broken');
+    expect(res1.reason).toContain('not compatible');
+
+    const res2 = resolveCustomDataRefValue(subscriber.customData[1], index, 'uid-sub');
+    expect(res2.status).toBe('broken');
+    expect(res2.reason).toContain('not compatible');
+
+    const res3 = resolveCustomDataRefValue(subscriber.customData[2], index, 'uid-sub');
+    expect(res3.status).toBe('broken');
+    expect(res3.reason).toContain('not compatible');
+
+    const res4 = resolveCustomDataRefValue(subscriber.customData[3], index, 'uid-sub');
+    expect(res4.status).toBe('broken');
+    expect(res4.reason).toContain('Cannot reference scalar variable');
+
+    const res5 = resolveCustomDataRefValue(subscriber.customData[4], index, 'uid-sub');
+    expect(res5.status).toBe('broken');
+    expect(res5.reason).toContain('Cannot reference vector variable');
+  });
+
+  it('syncs intra-tree references after cloneEntityTree so values reflect newly assigned target IDs', () => {
+    const button = createEntity({
+      id: 10,
+      editorEntityUID: 'btn-1',
+      entityName: 'button.ent',
+    });
+
+    const door = createEntity({
+      id: 11,
+      editorEntityUID: 'door-1',
+      entityName: 'door.ent',
+      customData: [
+        {
+          type: 'int',
+          name: 'targetButtonId',
+          value: '10',
+          refEditorUID: 'btn-1',
+          refType: 'baseData',
+          refValue: 'id',
+        },
+      ],
+    });
+
+    const cloned = cloneEntityTree([button, door], [button, door]);
+
+    // Check newly cloned entities
+    const clonedDoor = cloned.newClonedEntities.find(e => e.entityName === 'door.ent')!;
+    const clonedButton = cloned.newClonedEntities.find(e => e.entityName === 'button.ent')!;
+
+    expect(clonedButton.id).not.toBe(10);
+    expect(clonedDoor.id).not.toBe(11);
+    expect(clonedDoor.customData[0].refEditorUID).toBe(clonedButton.editorEntityUID);
+    // Value must be synced to the newly created button's ID, NOT stale "10"
+    expect(clonedDoor.customData[0].value).toBe(String(clonedButton.id));
   });
 });
 

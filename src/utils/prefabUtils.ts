@@ -1,5 +1,6 @@
 import type { EntityInstance } from '../types';
 import { cascadeWorldTransforms, normalizeHierarchy } from './sceneHierarchy';
+import { syncEntitiesCustomDataRefs } from './customDataRef';
 
 export interface CloneEntityTreeOptions {
   positionOffset?: { x: number; y: number };
@@ -113,7 +114,11 @@ export function cloneEntityTree(
   combined = cascadeWorldTransforms(combined, newEntityIds);
   combined = normalizeHierarchy(combined);
 
-  return { combinedEntities: combined, newRootUids, newClonedEntities: newEntities };
+  const newEntityUids = new Set(newEntities.map(e => e.editorEntityUID));
+  combined = syncEntitiesCustomDataRefs(combined, newEntityUids);
+  const syncedNewEntities = combined.filter(e => newEntityUids.has(e.editorEntityUID));
+
+  return { combinedEntities: combined, newRootUids, newClonedEntities: syncedNewEntities };
 }
 
 export function instantiatePrefab(

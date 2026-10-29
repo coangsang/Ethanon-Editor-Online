@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EntityInstance } from '../types';
 
 interface EntityRefPickerModalProps {
@@ -19,16 +19,26 @@ export function EntityRefPickerModal({
   onClose,
 }: EntityRefPickerModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  useEffect(() => {
+    if (isOpen) {
+      setSearchQuery('');
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
-    setSearchQuery('');
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   const availableEntities = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();

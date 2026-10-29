@@ -201,6 +201,11 @@ interface SceneStore {
 
 export { getAllDescendantUIDs, getAllDescendantIds } from '../utils/sceneHierarchy';
 
+function normalizeLoadedScene(scene: SceneData): SceneData {
+  const syncedEntities = syncEntitiesCustomDataRefs(scene.entities);
+  return syncedEntities !== scene.entities ? { ...scene, entities: syncedEntities } : scene;
+}
+
 export const useSceneStore = create<SceneStore>((set, get) => {
   let inspectorEdits = new Map<string, Map<InspectorEditKey, InspectorEditMutation>>();
   let inspectorTimer: ReturnType<typeof setTimeout> | null = null;
@@ -341,7 +346,8 @@ export const useSceneStore = create<SceneStore>((set, get) => {
 
   loadScene: (xml) => {
     get().flushInspectorEdits();
-    const scene = parseScene(xml);
+    const rawScene = parseScene(xml);
+    const scene = normalizeLoadedScene(rawScene);
     replaceScene({
       scene,
       selectedUIDs: [],
@@ -365,7 +371,8 @@ export const useSceneStore = create<SceneStore>((set, get) => {
       loadedProject = project;
 
       const firstScene = project.scenes[0] ?? null;
-      const scene = firstScene ? parseScene(await readSceneFile(firstScene.handle)) : DEFAULT_SCENE;
+      const rawScene = firstScene ? parseScene(await readSceneFile(firstScene.handle)) : DEFAULT_SCENE;
+      const scene = normalizeLoadedScene(rawScene);
       if (JSON.stringify(get().scene) !== sceneBeforeLoading) {
         throw new Error('The current scene changed while the project was loading. Open Project was cancelled.');
       }
@@ -490,7 +497,8 @@ export const useSceneStore = create<SceneStore>((set, get) => {
 
     set({ projectStatus: 'loading', projectError: null });
     try {
-      const scene = parseScene(await readSceneFile(entry.handle));
+      const rawScene = parseScene(await readSceneFile(entry.handle));
+      const scene = normalizeLoadedScene(rawScene);
       if (JSON.stringify(get().scene) !== sceneBeforeLoading) {
         throw new Error('The current scene changed while the new scene was loading. Open Scene was cancelled.');
       }
@@ -1053,39 +1061,19 @@ export const useSceneStore = create<SceneStore>((set, get) => {
 
   selectEntity: (uid) => {
     get().flushInspectorEdits();
-    const { scene } = get();
-    const nextSelectedUIDs = uid !== null ? [uid] : [];
-    const syncedEntities = nextSelectedUIDs.length > 0
-      ? syncEntitiesCustomDataRefs(scene.entities, nextSelectedUIDs)
-      : scene.entities;
-    set({
-      selectedUIDs: nextSelectedUIDs,
-      ...(syncedEntities !== scene.entities ? { scene: { ...scene, entities: syncedEntities } } : {}),
-    });
+    set({ selectedUIDs: uid !== null ? [uid] : [] });
   },
   setSelection: (uids) => {
     get().flushInspectorEdits();
-    const { scene } = get();
-    const syncedEntities = uids.length > 0
-      ? syncEntitiesCustomDataRefs(scene.entities, uids)
-      : scene.entities;
-    set({
-      selectedUIDs: uids,
-      ...(syncedEntities !== scene.entities ? { scene: { ...scene, entities: syncedEntities } } : {}),
-    });
+    set({ selectedUIDs: uids });
   },
   toggleSelection: (uid) => {
     get().flushInspectorEdits();
-    const { selectedUIDs, scene } = get();
-    const nextSelectedUIDs = selectedUIDs.includes(uid)
-      ? selectedUIDs.filter(suid => suid !== uid)
-      : [...selectedUIDs, uid];
-    const syncedEntities = nextSelectedUIDs.length > 0
-      ? syncEntitiesCustomDataRefs(scene.entities, nextSelectedUIDs)
-      : scene.entities;
+    const { selectedUIDs } = get();
     set({
-      selectedUIDs: nextSelectedUIDs,
-      ...(syncedEntities !== scene.entities ? { scene: { ...scene, entities: syncedEntities } } : {}),
+      selectedUIDs: selectedUIDs.includes(uid)
+        ? selectedUIDs.filter(suid => suid !== uid)
+        : [...selectedUIDs, uid],
     });
   },
   focusEntity: (uid) => set(state => ({
