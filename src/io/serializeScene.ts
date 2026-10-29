@@ -1,6 +1,7 @@
 import { XMLBuilder } from 'fast-xml-parser';
 import type { CustomDataVariable, CustomDataVectorValue, EntityInstance, SceneData } from '../types';
 import { ensureEntExtension, entityHasFileNameTag } from '../utils/entityTemplate';
+import { syncEntitiesCustomDataRefs } from '../utils/customDataRef';
 
 const INLINE_ENTITY_ATTRIBUTE_KEYS = new Set([
   'shape',
@@ -64,24 +65,43 @@ function isVectorValue(value: CustomDataVariable['value']): value is CustomDataV
   return typeof value === 'object' && value !== null;
 }
 
-function serializeCustomData(variables: CustomDataVariable[]) {
-  if (variables.length === 0) return '';
+export function serializeCustomDataVariables(variables: CustomDataVariable[], isClean = false) {
+  if (!variables || variables.length === 0) return '';
 
   return {
     Variable: variables.map(variable => {
       const isVector = variable.type === 'vector2' || variable.type === 'vector3';
       const value = variable.value;
+      const hasRef = !isClean && Boolean(variable.refEditorUID && variable.refEditorUID.trim());
+      const refAttrs = hasRef
+        ? {
+            '@_refEditorUID': variable.refEditorUID!.trim(),
+            '@_refType': variable.refType ?? '',
+            '@_refValue': variable.refValue ?? '',
+          }
+        : {};
+
+      let serializedValue: unknown;
+      if (isVector && isVectorValue(value)) {
+        serializedValue = {
+          '@_x': value.x,
+          '@_y': value.y,
+          ...(variable.type === 'vector3' ? { '@_z': value.z ?? 0 } : {}),
+          ...refAttrs,
+        };
+      } else if (hasRef) {
+        serializedValue = {
+          ...refAttrs,
+          '#text': String(value ?? ''),
+        };
+      } else {
+        serializedValue = String(value ?? '');
+      }
 
       return {
         Type: variable.type,
         Name: variable.name,
-        Value: isVector && isVectorValue(value)
-          ? {
-              '@_x': value.x,
-              '@_y': value.y,
-              ...(variable.type === 'vector3' ? { '@_z': value.z ?? 0 } : {}),
-            }
-          : String(value ?? ''),
+        Value: serializedValue,
       };
     }),
   };
@@ -105,7 +125,7 @@ export function serializePreservedNode(value: unknown): unknown {
   );
 }
 
-function serializeNestedEntity(entity: EntityInstance) {
+function serializeNestedEntity(entity: EntityInstance, isClean = false) {
   const diffuseColor = entity.diffuseColor ?? entity.color;
   const hasFileName = entityHasFileNameTag(entity);
   const fileNameToUse = hasFileName && entity.entityName && entity.entityName.trim()
@@ -125,7 +145,7 @@ function serializeNestedEntity(entity: EntityInstance) {
     return {
       ...(fileNameToUse ? { FileName: fileNameToUse } : {}),
       ...diffuseColorNode,
-      CustomData: serializeCustomData(entity.customData),
+      CustomData: serializeCustomDataVariables(entity.customData, isClean),
     };
   }
 
@@ -147,7 +167,7 @@ function serializeNestedEntity(entity: EntityInstance) {
   return {
     Particles: '',
     ...restPreserved,
-    CustomData: serializeCustomData(entity.customData),
+    CustomData: serializeCustomDataVariables(entity.customData, isClean),
   };
 }
 
@@ -169,8 +189,9 @@ export interface SerializeSceneOptions {
 }
 
 export function serializeScene(scene: SceneData, options?: SerializeSceneOptions): string {
-  const { properties: p, entities } = scene;
+  const { properties: p } = scene;
   const isClean = Boolean(options?.clean);
+  const entities = syncEntitiesCustomDataRefs(scene.entities);
 
   const xmlObj = {
     '?xml': { '@_version': '1.0' },
@@ -216,7 +237,7 @@ export function serializeScene(scene: SceneData, options?: SerializeSceneOptions
               }
             } : {})
           },
-          Entity: serializeNestedEntity(e),
+          Entity: serializeNestedEntity(e, isClean),
         })),
       },
     },
@@ -225,4 +246,3 @@ export function serializeScene(scene: SceneData, options?: SerializeSceneOptions
   const builder = new XMLBuilder(SCENE_XML_BUILDER_OPTIONS as any);
   return builder.build(xmlObj);
 }
-

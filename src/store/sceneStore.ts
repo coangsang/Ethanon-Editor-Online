@@ -7,6 +7,7 @@ import { serializePrefab } from '../io/serializePrefab';
 import { computeLocalFromWorld } from '../utils/transformMath';
 import { ensureEntExtension, entityHasFileNameTag } from '../utils/entityTemplate';
 import { instantiatePrefab, cloneEntityTree } from '../utils/prefabUtils';
+import { collectAffectedSubscriberUids, syncEntitiesCustomDataRefs } from '../utils/customDataRef';
 import {
   applyLocalTransformPatch,
   applyWorldTransformPatches,
@@ -319,6 +320,10 @@ export const useSceneStore = create<SceneStore>((set, get) => {
           }
         }
       }
+      const affectedUids = collectAffectedSubscriberUids(entities, batch.keys());
+      if (affectedUids.size > 0) {
+        entities = syncEntitiesCustomDataRefs(entities, affectedUids);
+      }
     } catch (error) {
       // Preserve the entire transaction; a later flush can retry it without publishing a partial scene.
       inspectorEdits = batch;
@@ -518,10 +523,12 @@ export const useSceneStore = create<SceneStore>((set, get) => {
       return;
     }
 
-    set({ projectStatus: 'saving', projectError: null });
+    const syncedEntities = syncEntitiesCustomDataRefs(scene.entities);
+    const syncedScene = syncedEntities !== scene.entities ? { ...scene, entities: syncedEntities } : scene;
+    set({ projectStatus: 'saving', projectError: null, ...(syncedScene !== scene ? { scene: syncedScene } : {}) });
     try {
-      await writeSceneFile(activeSceneHandle, serializeScene(scene, options));
-      savedSceneSnapshot = JSON.stringify(scene);
+      await writeSceneFile(activeSceneHandle, serializeScene(syncedScene, options));
+      savedSceneSnapshot = JSON.stringify(syncedScene);
       set({ projectStatus: 'ready', projectError: null });
     } catch (e) {
       set({
@@ -544,10 +551,12 @@ export const useSceneStore = create<SceneStore>((set, get) => {
       return;
     }
 
-    set({ projectStatus: 'saving', projectError: null });
+    const syncedEntities = syncEntitiesCustomDataRefs(scene.entities);
+    const syncedScene = syncedEntities !== scene.entities ? { ...scene, entities: syncedEntities } : scene;
+    set({ projectStatus: 'saving', projectError: null, ...(syncedScene !== scene ? { scene: syncedScene } : {}) });
     try {
-      const entry = await writeSceneAs(scenesHandle, trimmed, serializeScene(scene, options));
-      savedSceneSnapshot = JSON.stringify(scene);
+      const entry = await writeSceneAs(scenesHandle, trimmed, serializeScene(syncedScene, options));
+      savedSceneSnapshot = JSON.stringify(syncedScene);
       set(state => ({
         projectScenes: [...state.projectScenes.filter(item => item.name !== entry.name), entry]
           .sort((a, b) => a.name.localeCompare(b.name)),
@@ -698,7 +707,13 @@ export const useSceneStore = create<SceneStore>((set, get) => {
 
   saveScene: (options) => {
     get().flushInspectorEdits();
-    return serializeScene(get().scene, options);
+    const { scene } = get();
+    const syncedEntities = syncEntitiesCustomDataRefs(scene.entities);
+    const syncedScene = syncedEntities !== scene.entities ? { ...scene, entities: syncedEntities } : scene;
+    if (syncedScene !== scene) {
+      set({ scene: syncedScene });
+    }
+    return serializeScene(syncedScene, options);
   },
 
   addEntity: (templateName, x, y) => {
@@ -849,6 +864,11 @@ export const useSceneStore = create<SceneStore>((set, get) => {
     newEntities = syncLocalPositions(newEntities, updatedUids);
     newEntities = cascadeWorldTransforms(newEntities, updatedUids);
 
+    const affectedUids = collectAffectedSubscriberUids(newEntities, updatedUids);
+    if (affectedUids.size > 0) {
+      newEntities = syncEntitiesCustomDataRefs(newEntities, affectedUids);
+    }
+
     const hist = pushHistorySnapshot(history, historyIndex, newEntities);
     set({ scene: { ...scene, entities: newEntities }, ...hist });
   },
@@ -859,7 +879,12 @@ export const useSceneStore = create<SceneStore>((set, get) => {
     const index = buildHierarchyIndex(scene.entities);
     const target = findEntityInIndex(index, uidOrId);
     if (!target) return;
-    const newEntities = scene.entities.map(e => e.editorEntityUID === target.editorEntityUID ? { ...e, ...patch } : e);
+    let newEntities = scene.entities.map(e => e.editorEntityUID === target.editorEntityUID ? { ...e, ...patch } : e);
+
+    const affectedUids = collectAffectedSubscriberUids(newEntities, [target.editorEntityUID]);
+    if (affectedUids.size > 0) {
+      newEntities = syncEntitiesCustomDataRefs(newEntities, affectedUids);
+    }
 
     const hist = pushHistorySnapshot(history, historyIndex, newEntities);
     set({ scene: { ...scene, entities: newEntities }, ...hist });
@@ -1028,19 +1053,39 @@ export const useSceneStore = create<SceneStore>((set, get) => {
 
   selectEntity: (uid) => {
     get().flushInspectorEdits();
-    set({ selectedUIDs: uid !== null ? [uid] : [] });
+    const { scene } = get();
+    const nextSelectedUIDs = uid !== null ? [uid] : [];
+    const syncedEntities = nextSelectedUIDs.length > 0
+      ? syncEntitiesCustomDataRefs(scene.entities, nextSelectedUIDs)
+      : scene.entities;
+    set({
+      selectedUIDs: nextSelectedUIDs,
+      ...(syncedEntities !== scene.entities ? { scene: { ...scene, entities: syncedEntities } } : {}),
+    });
   },
   setSelection: (uids) => {
     get().flushInspectorEdits();
-    set({ selectedUIDs: uids });
+    const { scene } = get();
+    const syncedEntities = uids.length > 0
+      ? syncEntitiesCustomDataRefs(scene.entities, uids)
+      : scene.entities;
+    set({
+      selectedUIDs: uids,
+      ...(syncedEntities !== scene.entities ? { scene: { ...scene, entities: syncedEntities } } : {}),
+    });
   },
   toggleSelection: (uid) => {
     get().flushInspectorEdits();
-    const { selectedUIDs } = get();
+    const { selectedUIDs, scene } = get();
+    const nextSelectedUIDs = selectedUIDs.includes(uid)
+      ? selectedUIDs.filter(suid => suid !== uid)
+      : [...selectedUIDs, uid];
+    const syncedEntities = nextSelectedUIDs.length > 0
+      ? syncEntitiesCustomDataRefs(scene.entities, nextSelectedUIDs)
+      : scene.entities;
     set({
-      selectedUIDs: selectedUIDs.includes(uid)
-        ? selectedUIDs.filter(suid => suid !== uid)
-        : [...selectedUIDs, uid],
+      selectedUIDs: nextSelectedUIDs,
+      ...(syncedEntities !== scene.entities ? { scene: { ...scene, entities: syncedEntities } } : {}),
     });
   },
   focusEntity: (uid) => set(state => ({

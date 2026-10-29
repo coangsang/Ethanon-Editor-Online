@@ -86,6 +86,16 @@ export function cloneEntityTree(
       position = { ...e.position };
     }
 
+    const remappedCustomData = (e.customData ?? []).map(v => {
+      if (v.refEditorUID && uidMap.has(v.refEditorUID)) {
+        return {
+          ...v,
+          refEditorUID: uidMap.get(v.refEditorUID),
+        };
+      }
+      return { ...v };
+    });
+
     const clonedEntity: EntityInstance = {
       ...JSON.parse(JSON.stringify(e)),
       id: newId,
@@ -93,6 +103,7 @@ export function cloneEntityTree(
       editorParentEntity,
       localPosition,
       position,
+      customData: remappedCustomData,
     };
     newEntities.push(clonedEntity);
   });
@@ -115,4 +126,3 @@ export function instantiatePrefab(
   });
   return result.combinedEntities;
 }
-

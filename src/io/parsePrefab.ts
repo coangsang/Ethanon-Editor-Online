@@ -1,7 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import type { EntityInstance, InlineEntityTemplate, CustomDataVariable } from '../types';
 import { normalizeHierarchy } from '../utils/sceneHierarchy';
-import { parseParticleSystem } from './parseScene';
+import { extractCustomDataRefMetadata, parseParticleSystem } from './parseScene';
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' });
 
@@ -68,6 +68,8 @@ function parseCustomData(entityData: Record<string, unknown> | Array<Record<stri
   return toArray(customData?.Variable).map((variable: any) => {
     const type = String(variable.Type ?? '');
     const value = variable.Value;
+    const refMeta = extractCustomDataRefMetadata(value);
+
     if (
       (type === 'vector2' || type === 'vector3') &&
       value &&
@@ -81,13 +83,19 @@ function parseCustomData(entityData: Record<string, unknown> | Array<Record<stri
           y: Number(value.y ?? 0),
           ...(type === 'vector3' ? { z: Number(value.z ?? 0) } : {}),
         },
+        ...refMeta,
       };
     }
+
+    const scalarRaw = (value && typeof value === 'object')
+      ? (value as Record<string, unknown>)['#text'] ?? ''
+      : value;
 
     return {
       type,
       name: String(variable.Name ?? ''),
-      value: String(value ?? ''),
+      value: String(scalarRaw ?? ''),
+      ...refMeta,
     };
   });
 }

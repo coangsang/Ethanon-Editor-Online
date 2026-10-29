@@ -1,5 +1,5 @@
 import { XMLParser } from 'fast-xml-parser';
-import type { SceneData, EntityInstance, EntityTemplate, EntityType, CustomDataVariable, InlineEntityTemplate, ParticleSystemConfig } from '../types';
+import type { SceneData, EntityInstance, EntityTemplate, EntityType, CustomDataRefType, CustomDataVariable, InlineEntityTemplate, ParticleSystemConfig } from '../types';
 import { normalizeHierarchy } from '../utils/sceneHierarchy';
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' });
@@ -67,9 +67,13 @@ type RawCustomVariable = {
   Type?: string | number;
   Name?: string | number;
   Value?: string | number | {
+    '#text'?: string | number;
     x?: string | number;
     y?: string | number;
     z?: string | number;
+    refEditorUID?: string | number;
+    refType?: string | number;
+    refValue?: string | number;
   };
 };
 
@@ -103,6 +107,28 @@ function parseEmissiveColor(color?: RawColor): { r: number; g: number; b: number
   return parsed ? { ...parsed, a: toNumber(color?.a, 0) } : undefined;
 }
 
+export function extractCustomDataRefMetadata(rawValue: unknown): {
+  refEditorUID?: string;
+  refType?: CustomDataRefType;
+  refValue?: string;
+} {
+  if (!rawValue || typeof rawValue !== 'object') return {};
+  const obj = rawValue as Record<string, unknown>;
+  const refEditorUID = obj.refEditorUID !== undefined ? String(obj.refEditorUID).trim() : '';
+  if (!refEditorUID) return {};
+
+  const rawRefType = obj.refType !== undefined ? String(obj.refType).trim() : '';
+  const refType: CustomDataRefType | undefined =
+    rawRefType === 'baseData' || rawRefType === 'customData' ? rawRefType : undefined;
+  const refValue = obj.refValue !== undefined ? String(obj.refValue) : '';
+
+  return {
+    refEditorUID,
+    ...(refType ? { refType } : {}),
+    ...(obj.refValue !== undefined ? { refValue } : {}),
+  };
+}
+
 function parseCustomData(entityData: RawSceneEntityData | RawSceneEntityData[] | undefined): CustomDataVariable[] {
   const nestedEntity = firstNestedEntity(entityData);
   const customData = typeof nestedEntity?.CustomData === 'object' ? nestedEntity.CustomData : null;
@@ -110,6 +136,8 @@ function parseCustomData(entityData: RawSceneEntityData | RawSceneEntityData[] |
   return toArray(customData?.Variable).map(variable => {
     const type = String(variable.Type ?? '');
     const value = variable.Value;
+    const refMeta = extractCustomDataRefMetadata(value);
+
     if (
       (type === 'vector2' || type === 'vector3') &&
       value &&
@@ -123,13 +151,19 @@ function parseCustomData(entityData: RawSceneEntityData | RawSceneEntityData[] |
           y: Number(value.y ?? 0),
           ...(type === 'vector3' ? { z: Number(value.z ?? 0) } : {}),
         },
+        ...refMeta,
       };
     }
+
+    const scalarRaw = (value && typeof value === 'object')
+      ? (value as Record<string, unknown>)['#text'] ?? ''
+      : value;
 
     return {
       type,
       name: String(variable.Name ?? ''),
-      value: String(value ?? ''),
+      value: String(scalarRaw ?? ''),
+      ...refMeta,
     };
   });
 }

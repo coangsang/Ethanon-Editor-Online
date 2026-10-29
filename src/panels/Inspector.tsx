@@ -1,11 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '../components/Icon';
 import './Inspector.css';
-import type { CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityTemplate, SpriteAtlas } from '../types';
+import type { CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityTemplate, SpriteAtlas } from '../types';
 import { useSceneStore } from '../store/sceneStore';
 import { entityHasFileNameTag, getTemplateKey, resolveEntityTemplate, resolveExternalTemplate, unpackEntityInstance } from '../utils/entityTemplate';
+import {
+  buildCustomDataRefIndex,
+  isBaseDataFieldCompatibleWithType,
+  isVariableRef,
+  resolveCustomDataRefValue,
+} from '../utils/customDataRef';
 import { SpritePickerModal } from '../components/SpritePickerModal';
 import { ExportPrefabModal } from '../components/ExportPrefabModal';
+import { EntityRefPickerModal } from '../components/EntityRefPickerModal';
 import { ColorControl } from '../components/ColorControl';
 import { transformEventBus } from '../store/TransformEventBus';
 
@@ -92,18 +99,25 @@ function asVector(value: CustomDataValue): CustomDataVectorValue {
   return isVectorValue(value) ? value : { x: 0, y: 0, z: 0 };
 }
 
-function CustomDataInput({ variable, onChange }: {
+function CustomDataInput({ variable, onChange, disabled = false }: {
   variable: CustomDataVariable;
   onChange: (value: CustomDataValue) => void;
+  disabled?: boolean;
 }) {
+  const disabledClass = disabled ? 'opacity-70 cursor-not-allowed' : '';
+
   if (variable.type === 'float') {
     return (
       <input
         type="number"
+        disabled={disabled}
         value={asNumber(variable.value)}
         step="any"
-        onChange={e => onChange(String(parseFloat(e.target.value) || 0))}
-        className="w-full editor-input"
+        onChange={e => {
+          if (disabled) return;
+          onChange(String(parseFloat(e.target.value) || 0));
+        }}
+        className={`w-full editor-input ${disabledClass}`}
       />
     );
   }
@@ -112,14 +126,16 @@ function CustomDataInput({ variable, onChange }: {
     return (
       <input
         type="number"
+        disabled={disabled}
         value={asNumber(variable.value)}
         step={1}
         min={variable.type === 'uint' ? 0 : undefined}
         onChange={e => {
+          if (disabled) return;
           const parsed = Math.round(parseFloat(e.target.value) || 0);
           onChange(String(variable.type === 'uint' ? Math.max(0, parsed) : parsed));
         }}
-        className="w-full editor-input"
+        className={`w-full editor-input ${disabledClass}`}
       />
     );
   }
@@ -127,6 +143,7 @@ function CustomDataInput({ variable, onChange }: {
   if (variable.type === 'vector2' || variable.type === 'vector3') {
     const vector = asVector(variable.value);
     const updateAxis = (axis: 'x' | 'y' | 'z', value: number) => {
+      if (disabled) return;
       onChange({
         x: axis === 'x' ? value : vector.x,
         y: axis === 'y' ? value : vector.y,
@@ -139,27 +156,30 @@ function CustomDataInput({ variable, onChange }: {
         <input
           aria-label={`${variable.name} x`}
           type="number"
+          disabled={disabled}
           value={vector.x}
           step="any"
           onChange={e => updateAxis('x', parseFloat(e.target.value) || 0)}
-          className="editor-input min-w-0"
+          className={`editor-input min-w-0 ${disabledClass}`}
         />
         <input
           aria-label={`${variable.name} y`}
           type="number"
+          disabled={disabled}
           value={vector.y}
           step="any"
           onChange={e => updateAxis('y', parseFloat(e.target.value) || 0)}
-          className="editor-input min-w-0"
+          className={`editor-input min-w-0 ${disabledClass}`}
         />
         {variable.type === 'vector3' && (
           <input
             aria-label={`${variable.name} z`}
             type="number"
+            disabled={disabled}
             value={vector.z ?? 0}
             step="any"
             onChange={e => updateAxis('z', parseFloat(e.target.value) || 0)}
-            className="col-span-2 editor-input min-w-0"
+            className={`col-span-2 editor-input min-w-0 ${disabledClass}`}
           />
         )}
       </div>
@@ -169,9 +189,13 @@ function CustomDataInput({ variable, onChange }: {
   return (
     <input
       type="text"
+      disabled={disabled}
       value={asText(variable.value)}
-      onChange={e => onChange(e.target.value)}
-      className="w-full editor-input"
+      onChange={e => {
+        if (disabled) return;
+        onChange(e.target.value);
+      }}
+      className={`w-full editor-input ${disabledClass}`}
     />
   );
 }
@@ -822,13 +846,30 @@ function CustomDataSection({ entity, customData }: {
   entity: EntityInstance;
   customData: CustomDataVariable[];
 }) {
+  const allEntities = useSceneStore(s => s.scene.entities);
+  const refIndex = buildCustomDataRefIndex(allEntities);
+
   const [localCustomData, setLocalCustomData] = useState<CustomDataVariable[]>(customData);
   const [sourceCustomData, setSourceCustomData] = useState(customData);
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState('string');
   const [newValue, setNewValue] = useState<CustomDataValue>('');
+  const [isNewRef, setIsNewRef] = useState(false);
+  const [newRefEditorUID, setNewRefEditorUID] = useState('');
+  const [newRefType, setNewRefType] = useState<CustomDataRefType>('customData');
+  const [newRefValue, setNewRefValue] = useState('');
   const [error, setError] = useState('');
+
+  // Inline editing state for an existing variable's reference
+  const [editingRefIndex, setEditingRefIndex] = useState<number | null>(null);
+  const [editRefEditorUID, setEditRefEditorUID] = useState('');
+  const [editRefType, setEditRefType] = useState<CustomDataRefType>('customData');
+  const [editRefValue, setEditRefValue] = useState('');
+  const [editRefError, setEditRefError] = useState('');
+
+  // Modal state (shared between "Add New Variable" and "Edit Ref")
+  const [refPickerTarget, setRefPickerTarget] = useState<'new' | 'edit' | null>(null);
 
   if (sourceCustomData !== customData) {
     setSourceCustomData(customData);
@@ -841,12 +882,20 @@ function CustomDataSection({ entity, customData }: {
     latestRef.current = localCustomData;
   }, [localCustomData]);
 
-  const commitChanges = () => {
-    const customData = latestRef.current.map(value => ({ ...value }));
-    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'customData', current => ({ ...current, customData }));
+  const commitChanges = (flushImmediately = false) => {
+    const nextCustomData = latestRef.current.map(value => ({ ...value }));
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'customData', current => ({
+      ...current,
+      customData: nextCustomData,
+    }));
+    if (flushImmediately) {
+      useSceneStore.getState().flushInspectorEdits();
+    }
   };
 
   const updateCustomDataValue = (index: number, value: CustomDataValue) => {
+    const targetVar = localCustomData[index];
+    if (targetVar && isVariableRef(targetVar)) return;
     const next = localCustomData.map((variable, i) => (
       i === index ? { ...variable, value } : variable
     ));
@@ -855,18 +904,166 @@ function CustomDataSection({ entity, customData }: {
     commitChanges();
   };
 
+  const unlinkCustomDataRef = (index: number) => {
+    const next = localCustomData.map((variable, i) => {
+      if (i !== index) return variable;
+      const copy = { ...variable };
+      delete copy.refEditorUID;
+      delete copy.refType;
+      delete copy.refValue;
+      return copy;
+    });
+    setLocalCustomData(next);
+    latestRef.current = next;
+    if (editingRefIndex === index) {
+      setEditingRefIndex(null);
+    }
+    commitChanges(true);
+  };
+
+  const startEditingRef = (index: number) => {
+    const v = localCustomData[index];
+    if (!v) return;
+    setEditingRefIndex(index);
+    setEditRefEditorUID(v.refEditorUID ?? '');
+    setEditRefType(v.refType ?? 'customData');
+    setEditRefValue(v.refValue ?? '');
+    setEditRefError('');
+  };
+
+  const saveEditedRef = (index: number) => {
+    const v = localCustomData[index];
+    if (!v) return;
+    const trimmedUid = editRefEditorUID.trim();
+    if (!trimmedUid) {
+      setEditRefError('Target EID cannot be empty');
+      return;
+    }
+    if (trimmedUid === entity.editorEntityUID) {
+      setEditRefError('Cannot reference the same entity');
+      return;
+    }
+    const targetEntity = refIndex.byUid.get(trimmedUid);
+    if (!targetEntity) {
+      setEditRefError('Target entity EID not found in scene');
+      return;
+    }
+    if (!editRefValue) {
+      setEditRefError('Please select a reference value');
+      return;
+    }
+
+    let nextType = v.type;
+    if (editRefType === 'baseData') {
+      if (editRefValue === 'name' && nextType !== 'string') {
+        nextType = 'string';
+      } else if (editRefValue === 'id' && !isBaseDataFieldCompatibleWithType('id', nextType)) {
+        nextType = 'int';
+      }
+    } else if (editRefType === 'customData') {
+      const targetVar = (targetEntity.customData ?? []).find(item => item.name === editRefValue);
+      if (!targetVar) {
+        setEditRefError(`Variable "${editRefValue}" not found on target entity`);
+        return;
+      }
+      if (isVariableRef(targetVar)) {
+        setEditRefError(`Variable "${editRefValue}" is already a reference`);
+        return;
+      }
+      nextType = targetVar.type;
+    }
+
+    const candidateVar: CustomDataVariable = {
+      ...v,
+      type: nextType,
+      refEditorUID: trimmedUid,
+      refType: editRefType,
+      refValue: editRefValue,
+    };
+    const resolved = resolveCustomDataRefValue(candidateVar, refIndex, entity.editorEntityUID);
+    if (resolved.status === 'ok') {
+      candidateVar.value = resolved.value;
+    }
+
+    const next = localCustomData.map((item, i) => (i === index ? candidateVar : item));
+    setLocalCustomData(next);
+    latestRef.current = next;
+    setEditingRefIndex(null);
+    setEditRefError('');
+    commitChanges(true);
+  };
+
   const deleteCustomDataValue = (index: number) => {
     const next = localCustomData.filter((_, i) => i !== index);
     setLocalCustomData(next);
     latestRef.current = next;
+    if (editingRefIndex === index) {
+      setEditingRefIndex(null);
+    }
     commitChanges();
   };
 
   const handleTypeChange = (type: string) => {
     setNewType(type);
     setNewValue(getDefaultValueForType(type));
+    if (isNewRef && newRefType === 'baseData' && newRefValue && !isBaseDataFieldCompatibleWithType(newRefValue, type)) {
+      setNewRefValue('');
+    }
     setError('');
   };
+
+  const handleSelectNewTargetUid = (uid: string) => {
+    setNewRefEditorUID(uid);
+    setNewRefValue('');
+    setError('');
+  };
+
+  const handleNewRefTypeChange = (refType: CustomDataRefType) => {
+    setNewRefType(refType);
+    setNewRefValue('');
+    setError('');
+  };
+
+  const handleNewRefValueChange = (val: string, targetEntity?: EntityInstance) => {
+    setNewRefValue(val);
+    setError('');
+    if (!val) return;
+
+    if (newRefType === 'baseData') {
+      if (val === 'name' && newType !== 'string') {
+        setNewType('string');
+      } else if (val === 'id' && !isBaseDataFieldCompatibleWithType('id', newType)) {
+        setNewType('int');
+      }
+    } else if (newRefType === 'customData' && targetEntity) {
+      const targetVar = (targetEntity.customData ?? []).find(v => v.name === val);
+      if (targetVar && !isVariableRef(targetVar) && targetVar.type !== newType) {
+        setNewType(targetVar.type);
+      }
+    }
+  };
+
+  const newTargetEntity = newRefEditorUID.trim()
+    ? refIndex.byUid.get(newRefEditorUID.trim())
+    : undefined;
+
+  const previewNewVariable: CustomDataVariable = isNewRef
+    ? (() => {
+        const draft: CustomDataVariable = {
+          type: newType,
+          name: newName,
+          value: getDefaultValueForType(newType),
+          refEditorUID: newRefEditorUID.trim(),
+          refType: newRefType,
+          refValue: newRefValue,
+        };
+        const resolved = resolveCustomDataRefValue(draft, refIndex, entity.editorEntityUID);
+        return {
+          ...draft,
+          value: resolved.status === 'ok' ? resolved.value : getDefaultValueForType(newType),
+        };
+      })()
+    : { type: newType, name: newName, value: newValue };
 
   const handleAddVariable = () => {
     const trimmedName = newName.trim();
@@ -879,15 +1076,63 @@ function CustomDataSection({ entity, customData }: {
       return;
     }
 
-    const next = [...localCustomData, { type: newType, name: trimmedName, value: newValue }];
-    setLocalCustomData(next);
-    latestRef.current = next;
-    commitChanges();
+    if (isNewRef) {
+      const trimmedUid = newRefEditorUID.trim();
+      if (!trimmedUid) {
+        setError('Target entity EID cannot be empty');
+        return;
+      }
+      if (trimmedUid === entity.editorEntityUID) {
+        setError('Cannot reference the same entity');
+        return;
+      }
+      if (!newTargetEntity) {
+        setError('Target entity EID not found in scene');
+        return;
+      }
+      if (!newRefValue) {
+        setError('Please select a reference value');
+        return;
+      }
+      if (newRefType === 'customData') {
+        const targetVar = (newTargetEntity.customData ?? []).find(v => v.name === newRefValue);
+        if (!targetVar) {
+          setError(`Variable "${newRefValue}" not found on target entity`);
+          return;
+        }
+        if (isVariableRef(targetVar)) {
+          setError(`Variable "${newRefValue}" is a reference and cannot be selected`);
+          return;
+        }
+      }
+
+      const addedVar: CustomDataVariable = {
+        type: previewNewVariable.type,
+        name: trimmedName,
+        value: previewNewVariable.value,
+        refEditorUID: trimmedUid,
+        refType: newRefType,
+        refValue: newRefValue,
+      };
+      const next = [...localCustomData, addedVar];
+      setLocalCustomData(next);
+      latestRef.current = next;
+      commitChanges(true);
+    } else {
+      const next = [...localCustomData, { type: newType, name: trimmedName, value: newValue }];
+      setLocalCustomData(next);
+      latestRef.current = next;
+      commitChanges();
+    }
 
     // Reset form
     setNewName('');
     setNewType('string');
     setNewValue('');
+    setIsNewRef(false);
+    setNewRefEditorUID('');
+    setNewRefType('customData');
+    setNewRefValue('');
     setError('');
     setIsAdding(false);
   };
@@ -897,6 +1142,10 @@ function CustomDataSection({ entity, customData }: {
     setNewName('');
     setNewType('string');
     setNewValue('');
+    setIsNewRef(false);
+    setNewRefEditorUID('');
+    setNewRefType('customData');
+    setNewRefValue('');
     setError('');
   };
 
@@ -914,34 +1163,215 @@ function CustomDataSection({ entity, customData }: {
       {localCustomData.length === 0 && !isAdding ? (
         <div className="text-xs text-gray-600 italic py-1">No custom data variables</div>
       ) : (
-        localCustomData.map((variable, index) => (
-          <div key={`${variable.name}:${index}`} className="inspector-subsection flex flex-col gap-1 rounded border border-gray-800 bg-gray-950/40 p-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate text-xs font-mono font-medium text-gray-300" title={variable.name}>
-                {variable.name || '(unnamed)'}
-              </span>
-              <div className="flex items-center gap-1 shrink-0">
-                <span className="inspector-data-type-badge rounded border border-gray-700 bg-gray-900 px-1.5 py-0.5 font-mono text-[10px] text-gray-400">
-                  {variable.type || 'unknown'}
+        localCustomData.map((variable, index) => {
+          const hasRef = isVariableRef(variable);
+          const resolvedRef = hasRef
+            ? resolveCustomDataRefValue(variable, refIndex, entity.editorEntityUID)
+            : null;
+          const targetEntity = hasRef && variable.refEditorUID
+            ? refIndex.byUid.get(variable.refEditorUID.trim())
+            : undefined;
+          const isEditingThisRef = editingRefIndex === index;
+          const editTargetEntity = isEditingThisRef && editRefEditorUID.trim()
+            ? refIndex.byUid.get(editRefEditorUID.trim())
+            : undefined;
+
+          return (
+            <div key={`${variable.name}:${index}`} className="inspector-subsection flex flex-col gap-1.5 rounded border border-gray-800 bg-gray-950/40 p-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-xs font-mono font-medium text-gray-300" title={variable.name}>
+                  {variable.name || '(unnamed)'}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => deleteCustomDataValue(index)}
-                  className="inspector-icon-button inspector-danger-icon rounded p-0.5 text-gray-500 hover:bg-red-950/60 hover:text-red-400 transition-colors"
-                  title={`Delete variable '${variable.name}'`}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {hasRef && (
+                    <span
+                      className={`rounded border px-1 py-0.5 font-mono text-[9px] uppercase ${
+                        resolvedRef?.status === 'broken'
+                          ? 'border-amber-700/80 bg-amber-950/60 text-amber-300'
+                          : 'border-indigo-700/80 bg-indigo-950/60 text-indigo-300'
+                      }`}
+                      title={resolvedRef?.status === 'broken' ? resolvedRef.reason : 'Referenced value'}
+                    >
+                      {resolvedRef?.status === 'broken' ? 'ref!' : 'ref'}
+                    </span>
+                  )}
+                  <span className="inspector-data-type-badge rounded border border-gray-700 bg-gray-900 px-1.5 py-0.5 font-mono text-[10px] text-gray-400">
+                    {variable.type || 'unknown'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => (isEditingThisRef ? setEditingRefIndex(null) : startEditingRef(index))}
+                    className="inspector-button rounded border border-gray-700 bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                    title={hasRef ? `Edit reference for '${variable.name}'` : `Set reference for '${variable.name}'`}
+                  >
+                    {hasRef ? 'Edit Ref' : 'Ref'}
+                  </button>
+                  {hasRef && (
+                    <button
+                      type="button"
+                      onClick={() => unlinkCustomDataRef(index)}
+                      className="inspector-button rounded border border-amber-800/70 bg-amber-950/40 px-1.5 py-0.5 text-[10px] text-amber-300 hover:bg-amber-900/60 hover:text-amber-100 transition-colors"
+                      title={`Unlink reference for '${variable.name}' (keep current value)`}
+                    >
+                      Unlink
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => deleteCustomDataValue(index)}
+                    className="inspector-icon-button inspector-danger-icon rounded p-0.5 text-gray-500 hover:bg-red-950/60 hover:text-red-400 transition-colors"
+                    title={`Delete variable '${variable.name}'`}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </div>
+
+              {hasRef && (
+                <div
+                  className={`text-[10px] font-mono px-1.5 py-1 rounded border truncate ${
+                    resolvedRef?.status === 'broken'
+                      ? 'border-amber-800/60 bg-amber-950/30 text-amber-300'
+                      : 'border-indigo-900/50 bg-indigo-950/25 text-indigo-300'
+                  }`}
+                  title={
+                    resolvedRef?.status === 'broken'
+                      ? `Broken Ref: ${resolvedRef.reason ?? 'Target missing'}`
+                      : `Target EID: ${variable.refEditorUID} • ${variable.refType}.${variable.refValue}`
+                  }
+                >
+                  {resolvedRef?.status === 'broken' ? (
+                    <span>
+                      ⚠ Broken Ref: {resolvedRef.reason ?? 'Target missing'} ({variable.refType}.{variable.refValue})
+                    </span>
+                  ) : (
+                    <span>
+                      Ref: {targetEntity?.editorEntityName || targetEntity?.entityName || '(unnamed)'} (#{targetEntity?.id}) → {variable.refType}.{variable.refValue}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {isEditingThisRef && (
+                <div className="rounded border border-indigo-800/60 bg-indigo-950/30 p-2 flex flex-col gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-gray-400">Target Entity EID</label>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={editRefEditorUID}
+                        onChange={e => {
+                          setEditRefEditorUID(e.target.value);
+                          setEditRefValue('');
+                          setEditRefError('');
+                        }}
+                        placeholder="Enter EID..."
+                        aria-label={`Edit target EID for ${variable.name}`}
+                        className="flex-1 editor-input text-xs px-2 py-1 font-mono min-w-0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setRefPickerTarget('edit')}
+                        className="inspector-button rounded border border-indigo-700 bg-indigo-900/60 px-2 py-1 text-[10px] font-medium text-indigo-200 hover:bg-indigo-800 hover:text-white shrink-0"
+                      >
+                        Select...
+                      </button>
+                    </div>
+                    {editTargetEntity && (
+                      <div className="text-[10px] font-mono text-indigo-300 truncate">
+                        Target: {editTargetEntity.editorEntityName || editTargetEntity.entityName || '(unnamed)'} (ID: {editTargetEntity.id})
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className="block text-[10px] text-gray-400 mb-0.5">Ref Type</label>
+                      <select
+                        aria-label={`Edit refType for ${variable.name}`}
+                        value={editRefType}
+                        onChange={e => {
+                          setEditRefType(e.target.value as CustomDataRefType);
+                          setEditRefValue('');
+                          setEditRefError('');
+                        }}
+                        className="w-full editor-input text-xs px-1.5 py-1 font-mono"
+                      >
+                        <option value="baseData">baseData</option>
+                        <option value="customData">customData</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-gray-400 mb-0.5">Ref Value</label>
+                      <select
+                        aria-label={`Edit refValue for ${variable.name}`}
+                        value={editRefValue}
+                        disabled={!editTargetEntity}
+                        onChange={e => {
+                          setEditRefValue(e.target.value);
+                          setEditRefError('');
+                        }}
+                        className="w-full editor-input text-xs px-1.5 py-1 font-mono"
+                      >
+                        <option value="">-- Select --</option>
+                        {editRefType === 'baseData' && editTargetEntity && (
+                          <>
+                            <option value="name">name ({editTargetEntity.entityName || 'empty'})</option>
+                            <option value="id">id ({editTargetEntity.id})</option>
+                          </>
+                        )}
+                        {editRefType === 'customData' && editTargetEntity && (
+                          (editTargetEntity.customData ?? []).map(targetVar => {
+                            const isTargetRef = isVariableRef(targetVar);
+                            return (
+                              <option
+                                key={targetVar.name}
+                                value={targetVar.name}
+                                disabled={isTargetRef}
+                                className={isTargetRef ? 'text-gray-500 bg-gray-900' : ''}
+                              >
+                                {targetVar.name} ({targetVar.type}){isTargetRef ? ' (ref)' : ''}
+                              </option>
+                            );
+                          })
+                        )}
+                      </select>
+                    </div>
+                  </div>
+
+                  {editRefError && (
+                    <div className="text-[10px] text-red-400 font-medium">{editRefError}</div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setEditingRefIndex(null)}
+                      className="inspector-button rounded border border-gray-700 bg-gray-800 px-2 py-0.5 text-[10px] text-gray-300 hover:bg-gray-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => saveEditedRef(index)}
+                      className="inspector-button inspector-button-primary rounded border border-indigo-600 bg-indigo-600/80 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-indigo-500"
+                    >
+                      Apply Ref
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <CustomDataInput
+                variable={variable}
+                disabled={hasRef}
+                onChange={value => updateCustomDataValue(index, value)}
+              />
             </div>
-            <CustomDataInput
-              variable={variable}
-              onChange={value => updateCustomDataValue(index, value)}
-            />
-          </div>
-        ))
+          );
+        })
       )}
 
       {/* Add Custom Data Form / Trigger */}
@@ -962,6 +1392,7 @@ function CustomDataSection({ entity, customData }: {
             <div className="col-span-2">
               <label className="block text-[10px] text-gray-400 mb-0.5">Type</label>
               <select
+                aria-label="New variable type"
                 value={newType}
                 onChange={e => handleTypeChange(e.target.value)}
                 className="w-full editor-input text-xs px-1.5 py-1 font-mono"
@@ -994,10 +1425,111 @@ function CustomDataSection({ entity, customData }: {
             </div>
           </div>
 
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={isNewRef}
+              onChange={e => {
+                setIsNewRef(e.target.checked);
+                setError('');
+              }}
+              className="w-3.5 h-3.5"
+            />
+            <span className="text-xs text-indigo-200 font-medium">Reference Custom Data</span>
+          </label>
+
+          {isNewRef && (
+            <div className="rounded border border-indigo-800/50 bg-gray-900/70 p-2 flex flex-col gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-gray-400">Target Entity EID</label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    aria-label="Reference Target EID"
+                    value={newRefEditorUID}
+                    onChange={e => handleSelectNewTargetUid(e.target.value)}
+                    placeholder="Enter or select EID..."
+                    className="flex-1 editor-input text-xs px-2 py-1 font-mono min-w-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setRefPickerTarget('new')}
+                    className="inspector-button rounded border border-indigo-700 bg-indigo-900/60 px-2 py-1 text-[10px] font-semibold text-indigo-200 hover:bg-indigo-800 hover:text-white shrink-0"
+                  >
+                    Select EID
+                  </button>
+                </div>
+                {newRefEditorUID.trim() && (
+                  newTargetEntity ? (
+                    <div className="text-[10px] font-mono text-indigo-300 truncate">
+                      Target: {newTargetEntity.editorEntityName || newTargetEntity.entityName || '(unnamed)'} (ID: {newTargetEntity.id})
+                    </div>
+                  ) : (
+                    <div className="text-[10px] font-mono text-amber-400">
+                      Entity with this EID was not found in scene
+                    </div>
+                  )
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <div>
+                  <label className="block text-[10px] text-gray-400 mb-0.5">Ref Type</label>
+                  <select
+                    aria-label="Reference Type"
+                    value={newRefType}
+                    onChange={e => handleNewRefTypeChange(e.target.value as CustomDataRefType)}
+                    className="w-full editor-input text-xs px-1.5 py-1 font-mono"
+                  >
+                    <option value="baseData">baseData</option>
+                    <option value="customData">customData</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-gray-400 mb-0.5">Ref Value</label>
+                  <select
+                    aria-label="Reference Value"
+                    value={newRefValue}
+                    disabled={!newTargetEntity}
+                    onChange={e => handleNewRefValueChange(e.target.value, newTargetEntity)}
+                    className="w-full editor-input text-xs px-1.5 py-1 font-mono"
+                  >
+                    <option value="">-- Select --</option>
+                    {newRefType === 'baseData' && newTargetEntity && (
+                      <>
+                        <option value="name">name ({newTargetEntity.entityName || 'empty'})</option>
+                        <option value="id">id ({newTargetEntity.id})</option>
+                      </>
+                    )}
+                    {newRefType === 'customData' && newTargetEntity && (
+                      (newTargetEntity.customData ?? []).map(targetVar => {
+                        const isTargetRef = isVariableRef(targetVar);
+                        return (
+                          <option
+                            key={targetVar.name}
+                            value={targetVar.name}
+                            disabled={isTargetRef}
+                            className={isTargetRef ? 'text-gray-500 bg-gray-900' : ''}
+                          >
+                            {targetVar.name} ({targetVar.type}){isTargetRef ? ' (ref)' : ''}
+                          </option>
+                        );
+                      })
+                    )}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div>
-            <label className="block text-[10px] text-gray-400 mb-0.5">Initial Value</label>
+            <label className="block text-[10px] text-gray-400 mb-0.5">
+              {isNewRef ? 'Resolved Value (Read-only)' : 'Initial Value'}
+            </label>
             <CustomDataInput
-              variable={{ type: newType, name: newName, value: newValue }}
+              variable={previewNewVariable}
+              disabled={isNewRef}
               onChange={val => setNewValue(val)}
             />
           </div>
@@ -1031,6 +1563,10 @@ function CustomDataSection({ entity, customData }: {
             setNewName('');
             setNewType('string');
             setNewValue('');
+            setIsNewRef(false);
+            setNewRefEditorUID('');
+            setNewRefType('customData');
+            setNewRefValue('');
             setError('');
           }}
           className="inspector-add-button w-full mt-1 border border-dashed border-gray-700/80 hover:border-indigo-500/80 bg-gray-900/40 hover:bg-gray-800/60 text-gray-400 hover:text-indigo-300 text-xs py-1.5 px-3 rounded flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
@@ -1038,6 +1574,23 @@ function CustomDataSection({ entity, customData }: {
           <span className="text-sm font-bold text-indigo-400">+</span> Add Custom Data
         </button>
       )}
+
+      <EntityRefPickerModal
+        isOpen={refPickerTarget !== null}
+        entities={allEntities}
+        excludeEntityUid={entity.editorEntityUID}
+        selectedEntityUid={refPickerTarget === 'new' ? newRefEditorUID.trim() : editRefEditorUID.trim()}
+        onSelect={(selectedUid) => {
+          if (refPickerTarget === 'new') {
+            handleSelectNewTargetUid(selectedUid);
+          } else if (refPickerTarget === 'edit') {
+            setEditRefEditorUID(selectedUid);
+            setEditRefValue('');
+            setEditRefError('');
+          }
+        }}
+        onClose={() => setRefPickerTarget(null)}
+      />
     </div>
   );
 }

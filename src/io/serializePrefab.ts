@@ -2,8 +2,9 @@ import { XMLBuilder } from 'fast-xml-parser';
 import type { EntityInstance, EntityTemplate, PrefabExportOptions } from '../types';
 import { getAllDescendantIds } from '../utils/sceneHierarchy';
 import { unpackEntityInstance } from '../utils/entityTemplate';
+import { syncEntitiesCustomDataRefs } from '../utils/customDataRef';
 
-import { SCENE_XML_BUILDER_OPTIONS, serializePreservedNode } from './serializeScene';
+import { SCENE_XML_BUILDER_OPTIONS, serializeCustomDataVariables, serializePreservedNode } from './serializeScene';
 
 // Helper to serialize nested entity data matching scene serializer format
 function serializeNestedEntityData(entity: EntityInstance) {
@@ -30,7 +31,7 @@ function serializeNestedEntityData(entity: EntityInstance) {
     return {
       ...(fileNameToUse ? { FileName: fileNameToUse } : {}),
       ...diffuseColorNode,
-      CustomData: entity.customData && entity.customData.length > 0 ? serializeCustomData(entity.customData) : '',
+      CustomData: entity.customData && entity.customData.length > 0 ? serializeCustomDataVariables(entity.customData) : '',
     };
   }
 
@@ -50,30 +51,7 @@ function serializeNestedEntityData(entity: EntityInstance) {
 
   return {
     ...preserved,
-    CustomData: entity.customData && entity.customData.length > 0 ? serializeCustomData(entity.customData) : '',
-  };
-}
-
-function serializeCustomData(variables: EntityInstance['customData']) {
-  if (!variables || variables.length === 0) return '';
-
-  return {
-    Variable: variables.map(variable => {
-      const isVector = variable.type === 'vector2' || variable.type === 'vector3';
-      const value = variable.value;
-
-      return {
-        Type: variable.type,
-        Name: variable.name,
-        Value: isVector && typeof value === 'object' && value !== null
-          ? {
-              '@_x': value.x,
-              '@_y': value.y,
-              ...(variable.type === 'vector3' ? { '@_z': value.z ?? 0 } : {}),
-            }
-          : String(value ?? ''),
-      };
-    }),
+    CustomData: entity.customData && entity.customData.length > 0 ? serializeCustomDataVariables(entity.customData) : '',
   };
 }
 
@@ -83,8 +61,9 @@ export function serializePrefab(
   options: PrefabExportOptions,
   templates: Record<string, EntityTemplate> = {},
 ): string {
-  const descendantIds = getAllDescendantIds(allEntities, new Set([rootEntity.id]));
-  const prefabEntities = allEntities.filter(e => descendantIds.has(e.id));
+  const syncedEntities = syncEntitiesCustomDataRefs(allEntities);
+  const descendantIds = getAllDescendantIds(syncedEntities, new Set([rootEntity.id]));
+  const prefabEntities = syncedEntities.filter(e => descendantIds.has(e.id));
 
   // Base coordinate origin is rootEntity's world position
   const originX = rootEntity.position.x;
@@ -156,5 +135,4 @@ export function serializePrefab(
   const builder = new XMLBuilder(SCENE_XML_BUILDER_OPTIONS as any);
 
   return builder.build(xmlObj);
-
 }

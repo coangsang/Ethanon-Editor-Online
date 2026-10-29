@@ -38,10 +38,15 @@ export type CustomDataVectorValue = {
 
 export type CustomDataValue = string | CustomDataVectorValue;
 
+export type CustomDataRefType = 'baseData' | 'customData';
+
 export interface CustomDataVariable {
   type: string;
   name: string;
   value: CustomDataValue;
+  refEditorUID?: string;
+  refType?: CustomDataRefType;
+  refValue?: string;
 }
 
 export interface ParticleSystemConfig {
@@ -143,4 +148,3 @@ export interface SceneData {
   properties: SceneProperties;
   entities: EntityInstance[];
 }
-

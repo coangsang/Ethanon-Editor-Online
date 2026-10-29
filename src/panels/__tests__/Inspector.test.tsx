@@ -174,4 +174,103 @@ describe('Inspector pending edit interactions', () => {
     expect(entityHasFileNameTag(unpacked)).toBe(false);
     expect(unpacked.customData).toEqual([{ type: 'int', name: 'health', value: '25' }]);
   });
+
+  it('creates referenced custom data via modal, disables chained (ref) options, syncs on updates, and supports unlink', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-origin" editorEntityName="Origin">
+          <EntityName>origin.ent</EntityName>
+          <Position x="0" y="0" z="0" angle="0" />
+          <Entity>
+            <FileName>origin.ent</FileName>
+            <CustomData>
+              <Variable><Type>string</Type><Name>baseMat</Name><Value>obsidian</Value></Variable>
+            </CustomData>
+          </Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-middle" editorEntityName="Middle">
+          <EntityName>middle.ent</EntityName>
+          <Position x="10" y="0" z="0" angle="0" />
+          <Entity>
+            <FileName>middle.ent</FileName>
+            <CustomData>
+              <Variable><Type>string</Type><Name>normalVar</Name><Value>iron</Value></Variable>
+              <Variable>
+                <Type>string</Type>
+                <Name>alreadyRef</Name>
+                <Value refEditorUID="uid-origin" refType="customData" refValue="baseMat">obsidian</Value>
+              </Variable>
+            </CustomData>
+          </Entity>
+        </Entity>
+        <Entity id="9" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName>
+          <Position x="20" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    // Open Add Custom Data form
+    fireEvent.click(screen.getByRole('button', { name: /\+ Add Custom Data/i }));
+    fireEvent.change(screen.getByPlaceholderText('Variable name...'), { target: { value: 'linkedMat' } });
+    fireEvent.click(screen.getByLabelText('Reference Custom Data'));
+
+    // Open Entity Picker Modal and select "Middle"
+    fireEvent.click(screen.getByRole('button', { name: 'Select EID' }));
+    expect(screen.getByRole('dialog', { name: 'Select Reference Entity' })).toBeTruthy();
+    expect(screen.getByText('uid-middle')).toBeTruthy();
+    fireEvent.click(screen.getByText('uid-middle'));
+
+    // Check refValue dropdown options on Middle entity: alreadyRef must be disabled and labeled (ref)
+    const refValueSelect = screen.getByLabelText('Reference Value') as HTMLSelectElement;
+    const alreadyRefOption = Array.from(refValueSelect.options).find(opt => opt.value === 'alreadyRef');
+    const normalVarOption = Array.from(refValueSelect.options).find(opt => opt.value === 'normalVar');
+    expect(alreadyRefOption?.disabled).toBe(true);
+    expect(alreadyRefOption?.textContent).toContain('(ref)');
+    expect(normalVarOption?.disabled).toBe(false);
+
+    // Select normalVar and add variable
+    fireEvent.change(refValueSelect, { target: { value: 'normalVar' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Variable' }));
+
+    const consumerAfterAdd = useSceneStore.getState().scene.entities.find(e => e.editorEntityUID === 'uid-consumer')!;
+    expect(consumerAfterAdd.customData).toEqual([
+      {
+        type: 'string',
+        name: 'linkedMat',
+        value: 'iron',
+        refEditorUID: 'uid-middle',
+        refType: 'customData',
+        refValue: 'normalVar',
+      },
+    ]);
+
+    // When source entity (uid-middle) updates normalVar -> consumer updates immediately
+    act(() => {
+      useSceneStore.getState().updateEntity('uid-middle', {
+        customData: [
+          { type: 'string', name: 'normalVar', value: 'steel' },
+          consumerAfterAdd.customData[0],
+        ],
+      });
+    });
+
+    const consumerAfterSourceUpdate = useSceneStore.getState().scene.entities.find(e => e.editorEntityUID === 'uid-consumer')!;
+    expect(consumerAfterSourceUpdate.customData[0].value).toBe('steel');
+    expect((screen.getByDisplayValue('steel') as HTMLInputElement).disabled).toBe(true);
+
+    // Unlink reference -> keeps current value ('steel') and removes ref metadata
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink' }));
+    const consumerAfterUnlink = useSceneStore.getState().scene.entities.find(e => e.editorEntityUID === 'uid-consumer')!;
+    expect(consumerAfterUnlink.customData[0]).toEqual({
+      type: 'string',
+      name: 'linkedMat',
+      value: 'steel',
+    });
+    expect((screen.getByDisplayValue('steel') as HTMLInputElement).disabled).toBe(false);
+  });
 });
