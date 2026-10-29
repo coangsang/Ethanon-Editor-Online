@@ -120,7 +120,7 @@ interface SceneStore {
   recentProjects: string[];
   camera: { x: number; y: number; zoom: number };
   focusEntityRequest: { uid: string; nonce: number } | null;
-  scrollHierarchyRequest: { uid: string; nonce: number } | null;
+  scrollHierarchyRequest: { uid: string; nonce: number; highlight?: boolean } | null;
   pingTemplateRequest: { name: string; nonce: number } | null;
   pingSpriteRequest: { name: string; nonce: number } | null;
   tool: 'select' | 'grab' | 'move' | 'rotate';
@@ -173,6 +173,7 @@ interface SceneStore {
   toggleSelection: (uid: string) => void;
   focusEntity: (uid: string) => void;
   scrollHierarchyToEntity: (uid: string) => void;
+  pingHierarchyEntity: (uid: string) => void;
   pingTemplate: (name: string) => void;
   pingSprite: (name: string) => void;
 
@@ -1085,6 +1086,13 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   scrollHierarchyToEntity: (uid) => set(state => ({
     scrollHierarchyRequest: {
       uid,
+      nonce: (state.scrollHierarchyRequest?.nonce ?? 0) + 1,
+    },
+  })),
+  pingHierarchyEntity: (uid) => set(state => ({
+    scrollHierarchyRequest: {
+      uid,
+      highlight: true,
       nonce: (state.scrollHierarchyRequest?.nonce ?? 0) + 1,
     },
   })),

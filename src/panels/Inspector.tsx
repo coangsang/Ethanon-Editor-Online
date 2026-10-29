@@ -847,6 +847,7 @@ function CustomDataSection({ entity, customData }: {
   customData: CustomDataVariable[];
 }) {
   const allEntities = useSceneStore(s => s.scene.entities);
+  const pingHierarchyEntity = useSceneStore(s => s.pingHierarchyEntity);
   const refIndex = buildCustomDataRefIndex(allEntities);
 
   const [localCustomData, setLocalCustomData] = useState<CustomDataVariable[]>(customData);
@@ -1171,6 +1172,7 @@ function CustomDataSection({ entity, customData }: {
           const targetEntity = hasRef && variable.refEditorUID
             ? refIndex.byUid.get(variable.refEditorUID.trim())
             : undefined;
+          const targetDisplayName = targetEntity?.editorEntityName || targetEntity?.entityName || '(unnamed)';
           const isEditingThisRef = editingRefIndex === index;
           const editTargetEntity = isEditingThisRef && editRefEditorUID.trim()
             ? refIndex.byUid.get(editRefEditorUID.trim())
@@ -1178,42 +1180,22 @@ function CustomDataSection({ entity, customData }: {
 
           return (
             <div key={`${variable.name}:${index}`} className="inspector-subsection flex flex-col gap-1.5 rounded border border-gray-800 bg-gray-950/40 p-2">
-              <div className="flex items-center justify-between gap-2">
+              <div className="custom-data-variable-header flex items-center justify-between gap-2">
                 <span className="min-w-0 truncate text-xs font-mono font-medium text-gray-300" title={variable.name}>
                   {variable.name || '(unnamed)'}
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
-                  {hasRef && (
-                    <span
-                      className={`rounded border px-1 py-0.5 font-mono text-[9px] uppercase ${
-                        resolvedRef?.status === 'broken'
-                          ? 'border-amber-700/80 bg-amber-950/60 text-amber-300'
-                          : 'border-indigo-700/80 bg-indigo-950/60 text-indigo-300'
-                      }`}
-                      title={resolvedRef?.status === 'broken' ? resolvedRef.reason : 'Referenced value'}
-                    >
-                      {resolvedRef?.status === 'broken' ? 'ref!' : 'ref'}
-                    </span>
-                  )}
                   <span className="inspector-data-type-badge rounded border border-gray-700 bg-gray-900 px-1.5 py-0.5 font-mono text-[10px] text-gray-400">
                     {variable.type || 'unknown'}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => (isEditingThisRef ? setEditingRefIndex(null) : startEditingRef(index))}
-                    className="inspector-button rounded border border-gray-700 bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
-                    title={hasRef ? `Edit reference for '${variable.name}'` : `Set reference for '${variable.name}'`}
-                  >
-                    {hasRef ? 'Edit Ref' : 'Ref'}
-                  </button>
-                  {hasRef && (
+                  {!hasRef && (
                     <button
                       type="button"
-                      onClick={() => unlinkCustomDataRef(index)}
-                      className="inspector-button rounded border border-amber-800/70 bg-amber-950/40 px-1.5 py-0.5 text-[10px] text-amber-300 hover:bg-amber-900/60 hover:text-amber-100 transition-colors"
-                      title={`Unlink reference for '${variable.name}' (keep current value)`}
+                      onClick={() => (isEditingThisRef ? setEditingRefIndex(null) : startEditingRef(index))}
+                      className="inspector-button rounded border border-gray-700 bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                      title={`Set reference for '${variable.name}'`}
                     >
-                      Unlink
+                      Ref
                     </button>
                   )}
                   <button
@@ -1231,7 +1213,7 @@ function CustomDataSection({ entity, customData }: {
 
               {hasRef && (
                 <div
-                  className={`text-[10px] font-mono px-1.5 py-1 rounded border truncate ${
+                  className={`custom-data-reference-row flex min-w-0 items-center gap-1.5 rounded border px-1.5 py-1 text-[10px] font-mono ${
                     resolvedRef?.status === 'broken'
                       ? 'border-amber-800/60 bg-amber-950/30 text-amber-300'
                       : 'border-indigo-900/50 bg-indigo-950/25 text-indigo-300'
@@ -1242,15 +1224,46 @@ function CustomDataSection({ entity, customData }: {
                       : `Target EID: ${variable.refEditorUID} • ${variable.refType}.${variable.refValue}`
                   }
                 >
+                  <span
+                    className={`custom-data-reference-badge shrink-0 rounded border px-1 py-0.5 font-mono text-[9px] uppercase ${
+                      resolvedRef?.status === 'broken'
+                        ? 'border-amber-700/80 bg-amber-950/60 text-amber-300'
+                        : 'border-indigo-700/80 bg-indigo-950/60 text-indigo-300'
+                    }`}
+                  >
+                    {resolvedRef?.status === 'broken' ? 'ref!' : 'ref'}
+                  </span>
                   {resolvedRef?.status === 'broken' ? (
-                    <span>
-                      ⚠ Broken Ref: {resolvedRef.reason ?? 'Target missing'} ({variable.refType}.{variable.refValue})
+                    <span className="custom-data-reference-name min-w-0 flex-1 truncate">
+                      ⚠ Broken Ref
                     </span>
                   ) : (
-                    <span>
-                      Ref: {targetEntity?.editorEntityName || targetEntity?.entityName || '(unnamed)'} (#{targetEntity?.id}) → {variable.refType}.{variable.refValue}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => targetEntity && pingHierarchyEntity(targetEntity.editorEntityUID)}
+                      className="custom-data-reference-name min-w-0 flex-1 truncate rounded text-left text-indigo-300 hover:text-indigo-100 hover:underline focus-visible:outline focus-visible:outline-1 focus-visible:outline-indigo-300"
+                      aria-label={`Ping ${targetDisplayName} in Hierarchy`}
+                      title={`Ping ${targetDisplayName} in Hierarchy (${variable.refType}.${variable.refValue})`}
+                    >
+                      {targetDisplayName}
+                    </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => (isEditingThisRef ? setEditingRefIndex(null) : startEditingRef(index))}
+                    className="custom-data-reference-edit inspector-button shrink-0 rounded border border-gray-700 bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                    title={`Edit reference for '${variable.name}'`}
+                  >
+                    Edit Ref
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => unlinkCustomDataRef(index)}
+                    className="custom-data-reference-unlink inspector-button shrink-0 rounded border border-amber-800/70 bg-amber-950/40 px-1.5 py-0.5 text-[10px] text-amber-300 hover:bg-amber-900/60 hover:text-amber-100 transition-colors"
+                    title={`Unlink reference for '${variable.name}' (keep current value)`}
+                  >
+                    Unlink
+                  </button>
                 </div>
               )}
 

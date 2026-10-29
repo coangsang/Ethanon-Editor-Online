@@ -43,6 +43,50 @@ describe('Inspector pending edit interactions', () => {
     expect((screen.getByRole('spinbutton', { name: 'Position X' }) as HTMLInputElement).value).toBe('10');
   });
 
+  it('falls back to entityName on reference ping button when editorEntityName is not set', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping target.ent in Hierarchy' });
+    expect(targetButton.textContent).toBe('target.ent');
+    expect(targetButton.getAttribute('title')).toBe('Ping target.ent in Hierarchy (customData.material)');
+
+    fireEvent.click(targetButton);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('renders broken reference status without ping button when target is missing', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-missing" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    expect(screen.getByText('⚠ Broken Ref')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ping/ })).toBeNull();
+    const referenceRow = screen.getByText('⚠ Broken Ref').closest('.custom-data-reference-row')!;
+    expect(referenceRow.querySelector('.custom-data-reference-badge')?.textContent).toBe('ref!');
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
+  });
+
   it('refreshes selected values from external edits without clearing a pending local edit on unrelated renders', () => {
     vi.useFakeTimers();
     useSceneStore.getState().loadScene(`
@@ -79,6 +123,50 @@ describe('Inspector pending edit interactions', () => {
     expect(useSceneStore.getState().scene.entities[0].spriteFrame).toBe(1);
   });
 
+  it('falls back to entityName on reference ping button when editorEntityName is not set', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping target.ent in Hierarchy' });
+    expect(targetButton.textContent).toBe('target.ent');
+    expect(targetButton.getAttribute('title')).toBe('Ping target.ent in Hierarchy (customData.material)');
+
+    fireEvent.click(targetButton);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('renders broken reference status without ping button when target is missing', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-missing" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    expect(screen.getByText('⚠ Broken Ref')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ping/ })).toBeNull();
+    const referenceRow = screen.getByText('⚠ Broken Ref').closest('.custom-data-reference-row')!;
+    expect(referenceRow.querySelector('.custom-data-reference-badge')?.textContent).toBe('ref!');
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
+  });
+
   it('keeps rapid Sprite Cut wheel edits visible and commits the final value once', () => {
     vi.useFakeTimers();
     useSceneStore.getState().loadScene(`
@@ -109,6 +197,50 @@ describe('Inspector pending edit interactions', () => {
     expect(useSceneStore.getState().history).toHaveLength(historyLength + 1);
   });
 
+  it('falls back to entityName on reference ping button when editorEntityName is not set', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping target.ent in Hierarchy' });
+    expect(targetButton.textContent).toBe('target.ent');
+    expect(targetButton.getAttribute('title')).toBe('Ping target.ent in Hierarchy (customData.material)');
+
+    fireEvent.click(targetButton);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('renders broken reference status without ping button when target is missing', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-missing" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    expect(screen.getByText('⚠ Broken Ref')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ping/ })).toBeNull();
+    const referenceRow = screen.getByText('⚠ Broken Ref').closest('.custom-data-reference-row')!;
+    expect(referenceRow.querySelector('.custom-data-reference-badge')?.textContent).toBe('ref!');
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
+  });
+
   it('uses the shared color control for diffuse RGBA edits, presets, and reset', () => {
     vi.useFakeTimers();
     useSceneStore.getState().loadScene(`
@@ -136,6 +268,50 @@ describe('Inspector pending edit interactions', () => {
     fireEvent.change(screen.getByLabelText('Diffuse Color A'), { target: { value: '128' } });
     act(() => vi.advanceTimersByTime(250));
     expect(useSceneStore.getState().scene.entities[0].diffuseColor?.a).toBeCloseTo(0.502, 3);
+  });
+
+  it('falls back to entityName on reference ping button when editorEntityName is not set', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping target.ent in Hierarchy' });
+    expect(targetButton.textContent).toBe('target.ent');
+    expect(targetButton.getAttribute('title')).toBe('Ping target.ent in Hierarchy (customData.material)');
+
+    fireEvent.click(targetButton);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('renders broken reference status without ping button when target is missing', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-missing" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    expect(screen.getByText('⚠ Broken Ref')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ping/ })).toBeNull();
+    const referenceRow = screen.getByText('⚠ Broken Ref').closest('.custom-data-reference-row')!;
+    expect(referenceRow.querySelector('.custom-data-reference-badge')?.textContent).toBe('ref!');
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
   });
 
   it('unpacks the entity from refreshed state after flushing pending custom data', () => {
@@ -173,6 +349,50 @@ describe('Inspector pending edit interactions', () => {
     const unpacked = useSceneStore.getState().scene.entities[0];
     expect(entityHasFileNameTag(unpacked)).toBe(false);
     expect(unpacked.customData).toEqual([{ type: 'int', name: 'health', value: '25' }]);
+  });
+
+  it('falls back to entityName on reference ping button when editorEntityName is not set', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping target.ent in Hierarchy' });
+    expect(targetButton.textContent).toBe('target.ent');
+    expect(targetButton.getAttribute('title')).toBe('Ping target.ent in Hierarchy (customData.material)');
+
+    fireEvent.click(targetButton);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('renders broken reference status without ping button when target is missing', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-missing" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    expect(screen.getByText('⚠ Broken Ref')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ping/ })).toBeNull();
+    const referenceRow = screen.getByText('⚠ Broken Ref').closest('.custom-data-reference-row')!;
+    expect(referenceRow.querySelector('.custom-data-reference-badge')?.textContent).toBe('ref!');
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
   });
 
   it('creates referenced custom data via modal, disables chained (ref) options, syncs on updates, and supports unlink', () => {
@@ -257,7 +477,95 @@ describe('Inspector pending edit interactions', () => {
           consumerAfterAdd.customData[0],
         ],
       });
+
+  it('falls back to entityName on reference ping button when editorEntityName is not set', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping target.ent in Hierarchy' });
+    expect(targetButton.textContent).toBe('target.ent');
+    expect(targetButton.getAttribute('title')).toBe('Ping target.ent in Hierarchy (customData.material)');
+
+    fireEvent.click(targetButton);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('renders broken reference status without ping button when target is missing', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-missing" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    expect(screen.getByText('⚠ Broken Ref')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ping/ })).toBeNull();
+    const referenceRow = screen.getByText('⚠ Broken Ref').closest('.custom-data-reference-row')!;
+    expect(referenceRow.querySelector('.custom-data-reference-badge')?.textContent).toBe('ref!');
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
+  });
     });
+
+  it('falls back to entityName on reference ping button when editorEntityName is not set', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping target.ent in Hierarchy' });
+    expect(targetButton.textContent).toBe('target.ent');
+    expect(targetButton.getAttribute('title')).toBe('Ping target.ent in Hierarchy (customData.material)');
+
+    fireEvent.click(targetButton);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('renders broken reference status without ping button when target is missing', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-missing" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    expect(screen.getByText('⚠ Broken Ref')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ping/ })).toBeNull();
+    const referenceRow = screen.getByText('⚠ Broken Ref').closest('.custom-data-reference-row')!;
+    expect(referenceRow.querySelector('.custom-data-reference-badge')?.textContent).toBe('ref!');
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
+  });
 
     const consumerAfterSourceUpdate = useSceneStore.getState().scene.entities.find(e => e.editorEntityUID === 'uid-consumer')!;
     expect(consumerAfterSourceUpdate.customData[0].value).toBe('steel');
@@ -271,6 +579,224 @@ describe('Inspector pending edit interactions', () => {
       name: 'linkedMat',
       value: 'steel',
     });
+
+  it('falls back to entityName on reference ping button when editorEntityName is not set', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping target.ent in Hierarchy' });
+    expect(targetButton.textContent).toBe('target.ent');
+    expect(targetButton.getAttribute('title')).toBe('Ping target.ent in Hierarchy (customData.material)');
+
+    fireEvent.click(targetButton);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('renders broken reference status without ping button when target is missing', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-missing" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    expect(screen.getByText('⚠ Broken Ref')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ping/ })).toBeNull();
+    const referenceRow = screen.getByText('⚠ Broken Ref').closest('.custom-data-reference-row')!;
+    expect(referenceRow.querySelector('.custom-data-reference-badge')?.textContent).toBe('ref!');
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
+  });
     expect((screen.getByDisplayValue('steel') as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it('falls back to entityName on reference ping button when editorEntityName is not set', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping target.ent in Hierarchy' });
+    expect(targetButton.textContent).toBe('target.ent');
+    expect(targetButton.getAttribute('title')).toBe('Ping target.ent in Hierarchy (customData.material)');
+
+    fireEvent.click(targetButton);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('renders broken reference status without ping button when target is missing', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-missing" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    expect(screen.getByText('⚠ Broken Ref')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ping/ })).toBeNull();
+    const referenceRow = screen.getByText('⚠ Broken Ref').closest('.custom-data-reference-row')!;
+    expect(referenceRow.querySelector('.custom-data-reference-badge')?.textContent).toBe('ref!');
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
+  });
+
+  it('renders a compact reference target button and pings the hierarchy without changing selection', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target" editorEntityName="Target Editor Name">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping Target Editor Name in Hierarchy' });
+    expect(targetButton.textContent).toBe('Target Editor Name');
+    expect(screen.queryByText(/Ref: Target Editor Name/)).toBeNull();
+    expect(screen.queryByText(/#7/)).toBeNull();
+    const referenceRow = targetButton.closest('.custom-data-reference-row')!;
+    expect(Array.from(referenceRow.children).map(element => element.textContent)).toEqual([
+      'ref',
+      'Target Editor Name',
+      'Edit Ref',
+      'Unlink',
+    ]);
+    expect(referenceRow.querySelector('.custom-data-reference-badge')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
+    expect(targetButton.closest('.inspector-subsection')?.querySelector('.custom-data-variable-header')?.textContent)
+      .not.toContain('Edit Ref');
+    expect(targetButton.closest('.inspector-subsection')?.querySelector('.custom-data-variable-header')?.textContent)
+      .not.toContain('Unlink');
+
+    expect(targetButton.getAttribute('title')).toBe('Ping Target Editor Name in Hierarchy (customData.material)');
+    fireEvent.click(targetButton);
+
+    expect(useSceneStore.getState().selectedUIDs).toEqual(['uid-consumer']);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('falls back to entityName on reference ping button when editorEntityName is not set', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping target.ent in Hierarchy' });
+    expect(targetButton.textContent).toBe('target.ent');
+    expect(targetButton.getAttribute('title')).toBe('Ping target.ent in Hierarchy (customData.material)');
+
+    fireEvent.click(targetButton);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('renders broken reference status without ping button when target is missing', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-missing" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    expect(screen.getByText('⚠ Broken Ref')).toBeTruthy();
+    const referenceRow = screen.getByText('⚠ Broken Ref').closest('.custom-data-reference-row');
+    expect(referenceRow.querySelector('button.custom-data-reference-name')).toBeNull();
+    expect(referenceRow.querySelector('.custom-data-reference-badge')?.textContent).toBe('ref!');
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
+  });
+
+  it('falls back to entityName on reference ping button when editorEntityName is not set', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="7" spriteFrame="0" editorEntityUID="uid-target">
+          <EntityName>target.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>target.ent</FileName><CustomData><Variable><Type>string</Type><Name>material</Name><Value>iron</Value></Variable></CustomData></Entity>
+        </Entity>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-target" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    const targetButton = screen.getByRole('button', { name: 'Ping target.ent in Hierarchy' });
+    expect(targetButton.textContent).toBe('target.ent');
+    expect(targetButton.getAttribute('title')).toBe('Ping target.ent in Hierarchy (customData.material)');
+
+    fireEvent.click(targetButton);
+    expect(useSceneStore.getState().scrollHierarchyRequest).toMatchObject({ uid: 'uid-target', highlight: true });
+  });
+
+  it('renders broken reference status without ping button when target is missing', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="8" spriteFrame="0" editorEntityUID="uid-consumer" editorEntityName="Consumer">
+          <EntityName>consumer.ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity><FileName>consumer.ent</FileName><CustomData><Variable><Type>string</Type><Name>linked</Name><Value refEditorUID="uid-missing" refType="customData" refValue="material">iron</Value></Variable></CustomData></Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('uid-consumer');
+    render(<Inspector />);
+
+    expect(screen.getByText('⚠ Broken Ref')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ping/ })).toBeNull();
+    const referenceRow = screen.getByText('⚠ Broken Ref').closest('.custom-data-reference-row')!;
+    expect(referenceRow.querySelector('.custom-data-reference-badge')?.textContent).toBe('ref!');
+    expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
+    expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
   });
 });

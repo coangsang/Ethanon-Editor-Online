@@ -209,6 +209,13 @@
   outline-color: var(--workspace-text-secondary);
 }
 
+.hierarchy-ui .hierarchy-row-ping {
+  background: #3a3c40;
+  border-left-color: var(--workspace-text-secondary);
+  box-shadow: inset 0 0 0 1px var(--workspace-text-secondary);
+  color: var(--workspace-text);
+}
+
 .hierarchy-ui .hierarchy-row .border-l { border-color: var(--workspace-border); }
 
 .hierarchy-ui :is(button:hover, .hierarchy-row button:hover) { background-color: var(--workspace-hover); color: var(--workspace-text); }

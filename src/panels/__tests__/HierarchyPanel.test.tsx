@@ -39,6 +39,7 @@ beforeAll(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   useSceneStore.getState().loadScene(HIERARCHY_XML);
   vi.restoreAllMocks();
 });
@@ -107,7 +108,8 @@ describe('HierarchyPanel interactions', () => {
 
     act(() => useSceneStore.getState().scrollHierarchyToEntity('grandchild'));
 
-    await waitFor(() => expect(screen.getByText('Grandchild')).toBeTruthy());
+    await act(async () => {});
+    expect(screen.getByText('Grandchild')).toBeTruthy();
     await waitFor(() => expect(scrollTo).toHaveBeenCalledOnce());
     expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }));
   });
@@ -125,5 +127,27 @@ describe('HierarchyPanel interactions', () => {
     await waitFor(() => expect(search.value).toBe(''));
     await waitFor(() => expect(screen.getByText('Grandchild')).toBeTruthy());
     await waitFor(() => expect(scrollTo).toHaveBeenCalled());
+  });
+
+  it('pings a hidden descendant without changing selection and clears the highlight after 1.2 seconds', async () => {
+    vi.useFakeTimers();
+    const { scroller } = renderHierarchy();
+    const scrollTo = vi.fn();
+    scroller.scrollTo = scrollTo;
+    act(() => useSceneStore.getState().selectEntity('parent'));
+    fireEvent.click(screen.getAllByTitle('Collapse children')[0]);
+    expect(screen.queryByText('Grandchild')).toBeNull();
+
+    act(() => useSceneStore.getState().pingHierarchyEntity('grandchild'));
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByText('Grandchild')).toBeTruthy();
+    const grandchildRow = screen.getByText('Grandchild').closest('.hierarchy-row');
+    expect(grandchildRow?.classList.contains('hierarchy-row-ping')).toBe(true);
+    expect(useSceneStore.getState().selectedUIDs).toEqual(['parent']);
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }));
+
+    act(() => vi.advanceTimersByTime(1200));
+    expect(grandchildRow?.classList.contains('hierarchy-row-ping')).toBe(false);
   });
 });

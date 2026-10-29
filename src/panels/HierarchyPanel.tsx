@@ -4,6 +4,7 @@ import type { EntityInstance } from '../types';
 
 const ROW_HEIGHT = 28;
 const BUFFER_ROWS = 4;
+const PING_HIGHLIGHT_MS = 1200;
 
 interface HierarchyPanelProps {
   onToggleCollapse?: () => void;
@@ -18,6 +19,7 @@ interface HierarchyItemProps {
   posZ: number;
   hide?: boolean;
   isSelected: boolean;
+  isPingHighlighted?: boolean;
   depth: number;
   hasChildren: boolean;
   isCollapsed: boolean;
@@ -104,6 +106,7 @@ const HierarchyItem = React.memo(function HierarchyItem({
   posZ,
   hide,
   isSelected,
+  isPingHighlighted,
   depth,
   hasChildren,
   isCollapsed,
@@ -151,7 +154,7 @@ const HierarchyItem = React.memo(function HierarchyItem({
           : isSelected
           ? 'hierarchy-row-selected bg-indigo-600/35 text-white font-medium border-l-2 border-l-indigo-400'
           : 'hierarchy-row-idle text-gray-300 hover:bg-gray-800/60'
-      }`}
+      } ${isPingHighlighted ? 'hierarchy-row-ping' : ''}`}
       style={{
         ...style,
         paddingLeft: `${indentPadding}px`,
@@ -288,6 +291,14 @@ export function HierarchyPanel({ onToggleCollapse }: HierarchyPanelProps = {}) {
   const [selectionAnchorUid, setSelectionAnchorUid] = useState<string | null>(null);
   const [selectionCaretUid, setSelectionCaretUid] = useState<string | null>(null);
   const [collapsedUIDs, setCollapsedUIDs] = useState<Set<string>>(new Set());
+  const [pingHighlightedUid, setPingHighlightedUid] = useState<string | null>(null);
+  const pingHighlightTimerRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (pingHighlightTimerRef.current !== null) {
+      window.clearTimeout(pingHighlightTimerRef.current);
+    }
+  }, []);
 
   /* ResizeObserver to measure container viewport height */
   useEffect(() => {
@@ -455,6 +466,16 @@ export function HierarchyPanel({ onToggleCollapse }: HierarchyPanelProps = {}) {
       top: targetScroll,
       behavior: 'smooth',
     });
+    if (scrollHierarchyRequest.highlight) {
+      setPingHighlightedUid(target.editorEntityUID);
+      if (pingHighlightTimerRef.current !== null) {
+        window.clearTimeout(pingHighlightTimerRef.current);
+      }
+      pingHighlightTimerRef.current = window.setTimeout(() => {
+        setPingHighlightedUid(current => current === target.editorEntityUID ? null : current);
+        pingHighlightTimerRef.current = null;
+      }, PING_HIGHLIGHT_MS);
+    }
     handledScrollNonceRef.current = scrollHierarchyRequest.nonce;
   }, [scrollHierarchyRequest, entities, flatEntities, containerBounds.height, collapsedUIDs, searchQuery]);
 
@@ -720,6 +741,7 @@ export function HierarchyPanel({ onToggleCollapse }: HierarchyPanelProps = {}) {
             {visibleEntities.map(({ index: i, flatNode }) => {
               const { entity, depth, hasChildren } = flatNode;
               const isSelected = selectedUIDs.includes(entity.editorEntityUID);
+              const isPingHighlighted = pingHighlightedUid === entity.editorEntityUID;
               const top = i * ROW_HEIGHT;
               const isDragTarget = dragTargetUid === entity.editorEntityUID;
               const isCollapsed = collapsedUIDs.has(entity.editorEntityUID);
@@ -736,6 +758,7 @@ export function HierarchyPanel({ onToggleCollapse }: HierarchyPanelProps = {}) {
                   posZ={entity.position.z}
                   hide={entity.hide}
                   isSelected={isSelected}
+                  isPingHighlighted={isPingHighlighted}
                   depth={depth}
                   hasChildren={hasChildren}
                   isCollapsed={isCollapsed}
