@@ -85,10 +85,7 @@ Build a `.dmg` for the Mac you are on. The macOS configuration (`src-tauri/tauri
 pnpm tauri build
 ```
 
-The output is in `src-tauri/target/release/bundle/`:
-
-- `macos/Unofficial Magic Rampage Scene Editor.app`
-- `dmg/Unofficial Magic Rampage Scene Editor_<version>_aarch64.dmg` (or `_x64` on an Intel Mac)
+The disk image is written to `src-tauri/target/release/bundle/dmg/Unofficial Magic Rampage Scene Editor_<version>_aarch64.dmg` (or `_x64` on an Intel Mac). The intermediate `.app` is removed after packaging; to keep it in `bundle/macos/`, run `pnpm tauri build --bundles app,dmg`.
 
 ### Match a release build
 
