@@ -20,7 +20,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-To start the Tauri desktop version, first install the [desktop development prerequisites](../README.md#desktop-development) for Windows, Linux, or macOS:
+To start the Tauri desktop version, first install the [desktop development prerequisites](../README.md#desktop-development) for Windows, Linux, or macOS (on macOS, see also [Running and building on macOS](macos.md)):
 
 ```powershell
 pnpm tauri dev
