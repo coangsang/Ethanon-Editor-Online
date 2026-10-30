@@ -3194,7 +3194,7 @@
   },
   {
     "id": "lock:src-tauri/Cargo.lock",
-    "license": "sha256:ecca9f3821bb65725b4c572990784f0c8b4921fbbfffae70090cae24c65057b3",
+    "license": "sha256:87f4db3300e6006ca9198e7562ef6f27fea2ef9de82da5f08afe72c5a8a83125",
     "files": []
   }
 ]
