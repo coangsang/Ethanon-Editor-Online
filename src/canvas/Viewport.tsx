@@ -7,6 +7,7 @@ import { useViewportRefs } from './useViewportRefs';
 import { useViewportSelection } from './useViewportSelection';
 import { ViewportStatsOverlay } from './ViewportStatsOverlay';
 import { ViewportRuntimeOverlay } from './ViewportRuntimeOverlay';
+import { ViewportZoomControls } from './ViewportZoomControls';
 import { useViewportTextures } from './useViewportTextures';
 
 export function Viewport() {
@@ -15,6 +16,7 @@ export function Viewport() {
 
   const camera = useSceneStore(s => s.camera);
   const focusEntityRequest = useSceneStore(s => s.focusEntityRequest);
+  const fitSceneRequest = useSceneStore(s => s.fitSceneRequest);
   const scene = useSceneStore(s => s.scene);
   const selectedUIDs = useSceneStore(s => s.selectedUIDs);
   const tool = useSceneStore(s => s.tool);
@@ -42,7 +44,7 @@ export function Viewport() {
     templateImageUrls,
     placingTemplate,
   });
-  const { onEntityPointerDown, onStartGizmoDrag, onViewportClick } = useViewportInteractions({
+  const { onEntityPointerDown, onStartGizmoDrag, onViewportClick, zoomIn, zoomOut } = useViewportInteractions({
     refs,
     appReadyRevision,
     setCamera,
@@ -85,6 +87,7 @@ export function Viewport() {
     refs,
     camera,
     focusEntityRequest,
+    fitSceneRequest,
     scene,
     selectedUIDs,
     tool,
@@ -111,6 +114,7 @@ export function Viewport() {
         style={{ cursor: cursorStyle }}
         onClick={onViewportClick}
       />
+      <ViewportZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
       <ViewportStatsOverlay refs={refs} />
       <ViewportRuntimeOverlay runtimeState={runtimeState} onRetry={retryViewport} />
     </div>

@@ -66,6 +66,8 @@ export function ToolbarSettingsPopover() {
   const togglePlacementProfiler = useSceneStore((s) => s.togglePlacementProfiler);
   const cleanSceneFile = useSceneStore((s) => s.cleanSceneFile);
   const toggleCleanSceneFile = useSceneStore((s) => s.toggleCleanSceneFile);
+  const clampZoomToScene = useSceneStore((s) => s.clampZoomToScene);
+  const toggleClampZoomToScene = useSceneStore((s) => s.toggleClampZoomToScene);
 
   // Close when clicking outside
   useEffect(() => {
@@ -100,6 +102,7 @@ export function ToolbarSettingsPopover() {
     showParticleFps,
     showPlacementProfiler,
     cleanSceneFile,
+    clampZoomToScene,
   ].filter(Boolean).length;
 
   return (
@@ -161,6 +164,13 @@ export function ToolbarSettingsPopover() {
               description="Render live particle emitters"
               checked={showParticles}
               onChange={toggleParticles}
+            />
+            <ToggleItem
+              icon="🔍"
+              label="Clamp Zoom to Scene"
+              description="Limit maximum zoom-out to fit the scene bounds"
+              checked={clampZoomToScene}
+              onChange={toggleClampZoomToScene}
             />
             <ToggleItem
               icon="↔"
