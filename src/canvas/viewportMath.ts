@@ -409,3 +409,94 @@ export function getAtlasForTemplate(template: EntityTemplate, atlases: Record<st
     || atlases[basename]
     || null;
 }
+
+
+export const DEFAULT_SCENE_BOUNDS: Bounds = { x: 0, y: 0, width: 1920, height: 1080 };
+export const DEFAULT_SCENE_PADDING = 64;
+export const MIN_ZOOM_ABSOLUTE = 0.005;
+export const MIN_ZOOM_FALLBACK = 0.1;
+export const MAX_ZOOM = 10;
+
+export function calculateSceneBounds(
+  entities: EntityInstance[],
+  boundsMap?: Map<string, Bounds> | null
+): Bounds {
+  if (!entities || entities.length === 0) {
+    return { ...DEFAULT_SCENE_BOUNDS };
+  }
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let validCount = 0;
+
+  for (const entity of entities) {
+    const cached = boundsMap?.get(entity.editorEntityUID);
+    if (cached && Number.isFinite(cached.x) && Number.isFinite(cached.y) && cached.width > 0 && cached.height > 0) {
+      minX = Math.min(minX, cached.x);
+      minY = Math.min(minY, cached.y);
+      maxX = Math.max(maxX, cached.x + cached.width);
+      maxY = Math.max(maxY, cached.y + cached.height);
+      validCount++;
+    } else if (Number.isFinite(entity.position.x) && Number.isFinite(entity.position.y)) {
+      minX = Math.min(minX, entity.position.x - 32);
+      minY = Math.min(minY, entity.position.y - 32);
+      maxX = Math.max(maxX, entity.position.x + 32);
+      maxY = Math.max(maxY, entity.position.y + 32);
+      validCount++;
+    }
+  }
+
+  if (validCount === 0 || !Number.isFinite(minX) || !Number.isFinite(minY)) {
+    return { ...DEFAULT_SCENE_BOUNDS };
+  }
+
+  const width = Math.max(64, maxX - minX);
+  const height = Math.max(64, maxY - minY);
+  return { x: minX, y: minY, width, height };
+}
+
+export function computeSceneMinZoom(
+  sceneBounds: Bounds,
+  viewportSize: { width: number; height: number },
+  padding: number = DEFAULT_SCENE_PADDING
+): number {
+  if (viewportSize.width <= 0 || viewportSize.height <= 0 || sceneBounds.width <= 0 || sceneBounds.height <= 0) {
+    return MIN_ZOOM_FALLBACK;
+  }
+  const availW = Math.max(20, viewportSize.width - padding * 2);
+  const availH = Math.max(20, viewportSize.height - padding * 2);
+
+  const fitZoom = Math.min(availW / sceneBounds.width, availH / sceneBounds.height);
+  // Clamping zoom-out to scene bounds should never prevent zooming out to 1:1 view (1.0)
+  const sceneMinZoom = Math.min(fitZoom, 1.0);
+  return Math.max(MIN_ZOOM_ABSOLUTE, Math.min(MAX_ZOOM, sceneMinZoom));
+}
+
+export function computeSceneFitCamera(
+  sceneBounds: Bounds,
+  viewportSize: { width: number; height: number },
+  padding: number = DEFAULT_SCENE_PADDING
+): { x: number; y: number; zoom: number } {
+  if (viewportSize.width <= 0 || viewportSize.height <= 0) {
+    return { x: 0, y: 0, zoom: 1 };
+  }
+
+  const availW = Math.max(20, viewportSize.width - padding * 2);
+  const availH = Math.max(20, viewportSize.height - padding * 2);
+  const rawFitZoom = sceneBounds.width > 0 && sceneBounds.height > 0
+    ? Math.min(availW / sceneBounds.width, availH / sceneBounds.height)
+    : 1;
+
+  // For small scenes, frame naturally without magnifying past 100% (1.0).
+  const fitZoom = Math.max(MIN_ZOOM_ABSOLUTE, Math.min(1.0, rawFitZoom));
+  const centerX = sceneBounds.x + sceneBounds.width / 2;
+  const centerY = sceneBounds.y + sceneBounds.height / 2;
+
+  return {
+    zoom: fitZoom,
+    x: viewportSize.width / 2 - centerX * fitZoom,
+    y: viewportSize.height / 2 - centerY * fitZoom,
+  };
+}

@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Hand,
   MousePointer2,
+  Maximize,
   Move,
   RotateCw,
   Save,
@@ -17,6 +18,7 @@ export type IconName =
   | 'chevron-down'
   | 'chevron-up'
   | 'cursor'
+  | 'fit-view'
   | 'hand'
   | 'move'
   | 'prefab'
@@ -37,6 +39,7 @@ const ICONS: Record<IconName, LucideIcon> = {
   'chevron-down': ChevronDown,
   'chevron-up': ChevronUp,
   cursor: MousePointer2,
+  'fit-view': Maximize,
   hand: Hand,
   move: Move,
   prefab: Boxes,

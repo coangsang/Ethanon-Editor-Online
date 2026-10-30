@@ -42,6 +42,7 @@ export function useViewportRefs(): ViewportRefs {
   const pendingLiveUpdatesRef = useRef(null);
   const latestDragUpdatesRef = useRef(null);
   const handledFocusNonceRef = useRef<number | null>(null);
+  const handledFitNonceRef = useRef<number | null>(null);
   const isDraggingEntityRef = useRef(false);
   const dragStartMouseRef = useRef({ x: 0, y: 0 });
   const dragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -94,6 +95,7 @@ export function useViewportRefs(): ViewportRefs {
     pendingLiveUpdatesRef,
     latestDragUpdatesRef,
     handledFocusNonceRef,
+    handledFitNonceRef,
     isDraggingEntityRef,
     dragStartMouseRef,
     dragStartPositionsRef,

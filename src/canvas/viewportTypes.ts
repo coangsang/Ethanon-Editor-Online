@@ -77,6 +77,7 @@ export type ViewportRefs = {
   pendingLiveUpdatesRef: { current: LiveUpdate[] | null };
   latestDragUpdatesRef: { current: LiveUpdate[] | null };
   handledFocusNonceRef: { current: number | null };
+  handledFitNonceRef: { current: number | null };
   isDraggingEntityRef: { current: boolean };
   dragStartMouseRef: { current: { x: number; y: number } };
   dragStartPositionsRef: { current: Map<string, { x: number; y: number }> };

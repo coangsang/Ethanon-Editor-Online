@@ -65,6 +65,16 @@ type FileWithRelativePath = File & { webkitRelativePath?: string };
 
 const RECENT_PROJECTS_KEY = 'ethanon_editor_recent_projects';
 const CLEAN_SCENE_FILE_KEY = 'ethanon_clean_scene_file';
+const CLAMP_ZOOM_TO_SCENE_KEY = 'ethanon_clamp_zoom_to_scene';
+
+function getClampZoomToSceneFromStorage(): boolean {
+  try {
+    const val = localStorage.getItem(CLAMP_ZOOM_TO_SCENE_KEY);
+    return val === null ? true : val === 'true';
+  } catch {
+    return true;
+  }
+}
 
 function getCleanSceneFileFromStorage(): boolean {
   try {
@@ -128,6 +138,7 @@ interface SceneStore {
   placingPrefab: { name: string; entities: EntityInstance[] } | null;
   axisConstraint: 'free' | 'x' | 'y';
   showGrid: boolean;
+  showCursorCoordinates: boolean;
   gridSize: number;
   snapToGrid: boolean;
   showParticles: boolean;
@@ -136,6 +147,10 @@ interface SceneStore {
   showParticleFps: boolean;
   showPlacementProfiler: boolean;
   cleanSceneFile: boolean;
+  clampZoomToScene: boolean;
+  fitSceneRequest: { nonce: number } | null;
+  toggleClampZoomToScene: () => void;
+  fitViewToScene: () => void;
   parallaxOriginNormalized: { x: number; y: number };
   parallaxPreviewActive: boolean;
   history: HistoryEntry[];
@@ -186,6 +201,7 @@ interface SceneStore {
   setPlacingPrefab: (prefab: { name: string; entities: EntityInstance[] } | null) => void;
   instantiatePlacingPrefab: (x: number, y: number) => void;
   toggleGrid: () => void;
+  toggleCursorCoordinates: () => void;
   setGridSize: (size: number) => void;
   toggleSnap: () => void;
   toggleParticles: () => void;
@@ -259,6 +275,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   clipboard: null,
   axisConstraint: 'free',
   showGrid: true,
+  showCursorCoordinates: true,
   gridSize: 16,
   snapToGrid: false,
   showParticles: true,
@@ -267,6 +284,8 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   showParticleFps: false,
   showPlacementProfiler: false,
   cleanSceneFile: getCleanSceneFileFromStorage(),
+  clampZoomToScene: getClampZoomToSceneFromStorage(),
+  fitSceneRequest: null,
   parallaxOriginNormalized: { x: 0.5, y: 0.5 },
   parallaxPreviewActive: false,
   history: [{ entities: [] }],
@@ -1218,6 +1237,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
     });
   },
   toggleGrid: () => set(state => ({ showGrid: !state.showGrid })),
+  toggleCursorCoordinates: () => set(state => ({ showCursorCoordinates: !state.showCursorCoordinates })),
   setGridSize: (size) => set({ gridSize: size }),
   toggleSnap: () => set(state => ({ snapToGrid: !state.snapToGrid })),
   toggleParticles: () => set(state => ({ showParticles: !state.showParticles })),
@@ -1237,6 +1257,20 @@ export const useSceneStore = create<SceneStore>((set, get) => {
       // ignore
     }
     set({ cleanSceneFile: next });
+  },
+  toggleClampZoomToScene: () => {
+    const next = !get().clampZoomToScene;
+    try {
+      localStorage.setItem(CLAMP_ZOOM_TO_SCENE_KEY, String(next));
+    } catch {
+      // ignore
+    }
+    set({ clampZoomToScene: next });
+  },
+  fitViewToScene: () => {
+    set(state => ({
+      fitSceneRequest: { nonce: (state.fitSceneRequest?.nonce ?? 0) + 1 },
+    }));
   },
   setParallaxOriginNormalized: (origin) => set({ parallaxOriginNormalized: origin }),
   setParallaxPreviewActive: (active) => set({ parallaxPreviewActive: active }),

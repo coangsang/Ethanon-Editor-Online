@@ -2,13 +2,14 @@
 import { useCallback, useEffect } from 'react';
 import * as PIXI from 'pixi.js';
 import type { SceneData } from '../types';
-import { transformBounds } from './viewportMath';
+import { calculateSceneBounds, computeSceneFitCamera, transformBounds } from './viewportMath';
 import type { AxisConstraint, ViewportRefs } from './viewportTypes';
 
 type UseViewportSelectionParams = {
   refs: ViewportRefs;
   camera: { x: number; y: number; zoom: number };
   focusEntityRequest: { uid: string; nonce: number } | null;
+  fitSceneRequest?: { nonce: number } | null;
   scene: SceneData;
   selectedUIDs: string[];
   tool: 'select' | 'grab' | 'move' | 'rotate';
@@ -24,6 +25,7 @@ export function useViewportSelection({
   refs,
   camera,
   focusEntityRequest,
+  fitSceneRequest,
   scene,
   selectedUIDs,
   tool,
@@ -210,7 +212,23 @@ export function useViewportSelection({
       x: app.renderer.width / 2 - targetX * camera.zoom,
       y: app.renderer.height / 2 - targetY * camera.zoom,
     });
-  }, [refs, camera.zoom, focusEntityRequest, scene.entities, setCamera]);
+  }, [refs, camera.zoom, focusEntityRequest, scene.entities, appReadyRevision, setCamera]);
+
+  // Fit camera to full scene size
+  useEffect(() => {
+    if (!fitSceneRequest || refs.handledFitNonceRef.current === fitSceneRequest.nonce) return;
+
+    const app = refs.appRef.current;
+    if (!app) return;
+
+    refs.handledFitNonceRef.current = fitSceneRequest.nonce;
+    const vpSize = viewportSize.width > 0 && viewportSize.height > 0
+      ? viewportSize
+      : { width: app.renderer.width, height: app.renderer.height };
+    const bounds = calculateSceneBounds(scene.entities, refs.boundsMapRef.current);
+    const targetCam = computeSceneFitCamera(bounds, vpSize);
+    setCamera(targetCam);
+  }, [refs, fitSceneRequest, scene.entities, viewportSize, appReadyRevision, setCamera]);
 
   return { updateSelectionOutlines };
 }
