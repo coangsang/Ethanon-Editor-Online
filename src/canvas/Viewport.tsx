@@ -8,6 +8,7 @@ import { useViewportSelection } from './useViewportSelection';
 import { ViewportStatsOverlay } from './ViewportStatsOverlay';
 import { ViewportRuntimeOverlay } from './ViewportRuntimeOverlay';
 import { ViewportZoomControls } from './ViewportZoomControls';
+import { ViewportCursorCoordinates } from './ViewportCursorCoordinates';
 import { useViewportTextures } from './useViewportTextures';
 
 export function Viewport() {
@@ -115,6 +116,7 @@ export function Viewport() {
         onClick={onViewportClick}
       />
       <ViewportZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
+      <ViewportCursorCoordinates refs={refs} appReadyRevision={appReadyRevision} />
       <ViewportStatsOverlay refs={refs} />
       <ViewportRuntimeOverlay runtimeState={runtimeState} onRetry={retryViewport} />
     </div>

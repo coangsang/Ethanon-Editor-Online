@@ -8,6 +8,7 @@ describe('ToolbarSettingsPopover', () => {
   beforeEach(() => {
     useSceneStore.setState({
       showGrid: false,
+      showCursorCoordinates: false,
       snapToGrid: false,
       gridSize: 32,
       showParticles: false,
@@ -71,6 +72,23 @@ describe('ToolbarSettingsPopover', () => {
 
     fireEvent.click(cleanToggle!);
     expect(useSceneStore.getState().cleanSceneFile).toBe(true);
+  });
+
+  it('toggles the cursor coordinate readout and includes it in the active count', () => {
+    render(<ToolbarSettingsPopover />);
+
+    fireEvent.click(screen.getByRole('button', { name: /settings/i }));
+    expect(screen.getByText('0 active settings')).toBeDefined();
+
+    const coordinateToggle = screen
+      .getByText('Live Cursor Coordinates')
+      .closest('label')
+      ?.querySelector('button[role="switch"]');
+    expect(coordinateToggle).not.toBeNull();
+
+    fireEvent.click(coordinateToggle!);
+    expect(useSceneStore.getState().showCursorCoordinates).toBe(true);
+    expect(screen.getByText('1 active settings')).toBeDefined();
   });
 
   it('closes popover on Escape key', () => {

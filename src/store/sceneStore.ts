@@ -138,6 +138,7 @@ interface SceneStore {
   placingPrefab: { name: string; entities: EntityInstance[] } | null;
   axisConstraint: 'free' | 'x' | 'y';
   showGrid: boolean;
+  showCursorCoordinates: boolean;
   gridSize: number;
   snapToGrid: boolean;
   showParticles: boolean;
@@ -200,6 +201,7 @@ interface SceneStore {
   setPlacingPrefab: (prefab: { name: string; entities: EntityInstance[] } | null) => void;
   instantiatePlacingPrefab: (x: number, y: number) => void;
   toggleGrid: () => void;
+  toggleCursorCoordinates: () => void;
   setGridSize: (size: number) => void;
   toggleSnap: () => void;
   toggleParticles: () => void;
@@ -273,6 +275,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   clipboard: null,
   axisConstraint: 'free',
   showGrid: true,
+  showCursorCoordinates: true,
   gridSize: 16,
   snapToGrid: false,
   showParticles: true,
@@ -1234,6 +1237,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
     });
   },
   toggleGrid: () => set(state => ({ showGrid: !state.showGrid })),
+  toggleCursorCoordinates: () => set(state => ({ showCursorCoordinates: !state.showCursorCoordinates })),
   setGridSize: (size) => set({ gridSize: size }),
   toggleSnap: () => set(state => ({ snapToGrid: !state.snapToGrid })),
   toggleParticles: () => set(state => ({ showParticles: !state.showParticles })),

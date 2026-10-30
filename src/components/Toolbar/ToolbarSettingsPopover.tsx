@@ -6,6 +6,7 @@ import {
   Gauge,
   Grid3X3,
   Magnet,
+  MousePointer2,
   MoveHorizontal,
   RotateCcw,
   Ruler,
@@ -64,6 +65,8 @@ export function ToolbarSettingsPopover() {
 
   const showGrid = useSceneStore((s) => s.showGrid);
   const toggleGrid = useSceneStore((s) => s.toggleGrid);
+  const showCursorCoordinates = useSceneStore((s) => s.showCursorCoordinates);
+  const toggleCursorCoordinates = useSceneStore((s) => s.toggleCursorCoordinates);
   const gridSize = useSceneStore((s) => s.gridSize);
   const setGridSize = useSceneStore((s) => s.setGridSize);
   const snapToGrid = useSceneStore((s) => s.snapToGrid);
@@ -109,6 +112,7 @@ export function ToolbarSettingsPopover() {
 
   const activeCount = [
     showGrid,
+    showCursorCoordinates,
     snapToGrid,
     showParticles,
     updateParticlesWhileMoving,
@@ -144,6 +148,13 @@ export function ToolbarSettingsPopover() {
               description="Show canvas alignment grid"
               checked={showGrid}
               onChange={toggleGrid}
+            />
+            <ToggleItem
+              icon={<MousePointer2 size={14} className="text-indigo-400/80 group-hover:text-indigo-300" />}
+              label="Live Cursor Coordinates"
+              description="Show scene X/Y coordinates beside the pointer"
+              checked={showCursorCoordinates}
+              onChange={toggleCursorCoordinates}
             />
             <ToggleItem
               icon={<Magnet size={14} className="text-indigo-400/80 group-hover:text-indigo-300" />}

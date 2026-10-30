@@ -42,7 +42,7 @@ If there are no `.esc` files, no scene is active; use **Save As** to create one 
 - To select multiple entities, `Shift`-click a range in **Hierarchy**, or `Ctrl`/`Cmd`-click individual rows to toggle them. In the **Viewport**, `Shift`-click toggles one entity at a time.
 - **Project** provides **Scenes**, **Entities**, **Sprites**, and **Prefabs** tabs. Select an entity template in **Entities**, then click in the viewport to place it.
 - In the **Viewport**, scroll to zoom around the pointer. Drag with the middle mouse button to pan, or press `Q` and drag with the left button. Press `S` to select, `W` to move, or `E` to rotate. The same tools are available in the toolbar.
-- Use **Settings** to show the grid (`G` toggles it), enable **Snap to Grid**, and choose the snap step. The toolbar also has a **Snap** toggle.
+- Use **Settings** to show the grid (`G` toggles it), enable **Snap to Grid**, choose the snap step, and toggle the live scene-coordinate readout beside the viewport cursor. When snapping is enabled, the readout shows the nearest grid point. The toolbar also has a **Snap** toggle.
 
 Use `Ctrl+Z` and `Ctrl+Y` on Windows/Linux, or `Cmd+Z` and `Cmd+Y` on macOS, to undo and redo entity edits. The same platform modifier with `D`, `C`, and `V` duplicates, copies, and pastes the selection; `Delete` or `Backspace` removes it. Editor shortcuts do not run while focus is in a text input or textarea. They may still run while a dropdown is focused; this input-handling issue remains unresolved. Panel sizes and collapsed states are stored locally in the current browser profile.
 
