@@ -44,6 +44,8 @@ Version `0.1.0` is intended as an experimental desktop release for Windows x64, 
 - Rust stable with the native target for your operating system
 - The platform-specific system dependencies from the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/): Microsoft C++ Build Tools and WebView2 on Windows, WebKitGTK and the Linux build tools on Linux, or Xcode Command Line Tools on macOS
 
+For step-by-step macOS setup, building a DMG, and opening an unsigned release, see [Running and building on macOS](docs/macos.md).
+
 ## Quick start
 
 From a local checkout of this repository, run:
@@ -116,7 +118,7 @@ For an overview of the codebase, see [Architecture](docs/architecture.md).
 
 ## Known limitations
 
-- Desktop installers are not code-signed or notarized. macOS users may need to explicitly allow the downloaded application in system security settings.
+- Desktop installers are not code-signed or notarized. macOS users may need to explicitly allow the downloaded application in system security settings; see [Open an unsigned build](docs/macos.md#5-open-an-unsigned-build).
 - Linux AppImage compatibility varies by distribution; the release build uses Ubuntu 22.04 as its baseline, while the deb package targets Debian/Ubuntu-style systems.
 - The browser build requires a browser that supports directory picking with read/write access.
 - Editor shortcuts may still run while a dropdown is focused; input handling for these controls remains unresolved.
