@@ -20,11 +20,13 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-To start the Tauri desktop version, first install the [Windows desktop development prerequisites](../README.md#windows-desktop-development):
+To start the Tauri desktop version, first install the [desktop development prerequisites](../README.md#desktop-development) for Windows, Linux, or macOS:
 
 ```powershell
 pnpm tauri dev
 ```
+
+To create an unsigned package for the current operating system, run `pnpm tauri build`. The default platform configuration produces an NSIS installer on Windows, AppImage and deb packages on Linux, or a DMG image on macOS. Release DMGs are built separately for Intel and Apple Silicon. Because the packages are unsigned, Windows SmartScreen or macOS Gatekeeper may display a warning; verify the published SHA-256 checksum before installing a release download.
 
 ## Open a project and scene
 
@@ -42,7 +44,7 @@ If there are no `.esc` files, no scene is active; use **Save As** to create one 
 - In the **Viewport**, scroll to zoom around the pointer. Drag with the middle mouse button to pan, or press `Q` and drag with the left button. Press `S` to select, `W` to move, or `E` to rotate. The same tools are available in the toolbar.
 - Use **Settings** to show the grid (`G` toggles it), enable **Snap to Grid**, and choose the snap step. The toolbar also has a **Snap** toggle.
 
-Use `Ctrl+Z` and `Ctrl+Y` to undo and redo entity edits. `Ctrl+D` duplicates the selection; `Ctrl+C` and `Ctrl+V` copy and paste it; `Delete` or `Backspace` removes it. Editor shortcuts do not run while focus is in a text input or textarea. They may still run while a dropdown is focused; this input-handling issue remains unresolved. Panel sizes and collapsed states are stored locally in the current browser profile.
+Use `Ctrl+Z` and `Ctrl+Y` on Windows/Linux, or `Cmd+Z` and `Cmd+Y` on macOS, to undo and redo entity edits. The same platform modifier with `D`, `C`, and `V` duplicates, copies, and pastes the selection; `Delete` or `Backspace` removes it. Editor shortcuts do not run while focus is in a text input or textarea. They may still run while a dropdown is focused; this input-handling issue remains unresolved. Panel sizes and collapsed states are stored locally in the current browser profile.
 
 ## Save the scene
 

@@ -1,5 +1,5 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Unofficial Magic Rampage Scene Editor",
   "version": "0.1.0",
   "identifier": "io.github.coangsang.magic-rampage-scene-editor",
@@ -27,13 +27,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
     "resources": {
       "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
       "../THIRD_PARTY_LICENSES.md": "THIRD_PARTY_LICENSES.md"
-    },
-    "icon": [
-      "icons/icon.ico"
-    ]
+    }
   }
 }

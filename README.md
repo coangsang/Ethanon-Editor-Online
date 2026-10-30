@@ -2,7 +2,7 @@
 
 An experimental, community-built scene editor for Ethanon projects used by Magic Rampage. It is a modern alternative to the scene editor in the open-source [Ethanon engine](https://github.com/asantee/ethanon), developed with reference to its editor concepts and scene format. This is an independent project, not an official Ethanon release.
 
-The editor aims to make scene creation easier and faster through a more approachable interface and tools such as reusable prefabs. It runs as a web application in supported browsers and also has a Tauri desktop wrapper. The current desktop release target is Windows x64; see [Status](#status) for the platform and compatibility limits.
+The editor aims to make scene creation easier and faster through a more approachable interface and tools such as reusable prefabs. It runs as a web application in supported browsers and also has a Tauri desktop wrapper for Windows, Linux, and macOS; see [Status](#status) for the platform and compatibility limits.
 
 ![Editor workspace with an empty synthetic scene](docs/images/editor-overview.png)
 
@@ -16,7 +16,7 @@ The repository and release packages do **not** include game assets. You must pro
 
 ## Status
 
-Version `0.1.0` is intended as an experimental Windows x64 desktop release. The web editor can run on platforms with a Chromium-based browser that supports the File System Access API; desktop packages for other platforms are not currently provided. File-format support is based on the parser, serializer, and synthetic compatibility tests in this repository; it is not a guarantee that every game or Ethanon format variant is supported.
+Version `0.1.0` is intended as an experimental desktop release for Windows x64, Linux x64, macOS Intel, and macOS Apple Silicon. Tagged releases provide an NSIS installer for Windows, AppImage and deb packages for Linux, and DMG images for macOS. The web editor can run on platforms with a Chromium-based browser that supports the File System Access API. File-format support is based on the parser, serializer, and synthetic compatibility tests in this repository; it is not a guarantee that every game or Ethanon format variant is supported.
 
 ## Features
 
@@ -38,11 +38,11 @@ Version `0.1.0` is intended as an experimental Windows x64 desktop release. The 
 - pnpm 10.33.2
 - A Chromium-based browser with the File System Access API, such as current Chrome or Edge, for opening project folders
 
-### Windows desktop development
+### Desktop development
 
 - The web-development requirements above
-- Rust stable with the MSVC toolchain
-- Microsoft C++ Build Tools and WebView2 as required by [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/)
+- Rust stable with the native target for your operating system
+- The platform-specific system dependencies from the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/): Microsoft C++ Build Tools and WebView2 on Windows, WebKitGTK and the Linux build tools on Linux, or Xcode Command Line Tools on macOS
 
 ## Quick start
 
@@ -82,10 +82,10 @@ The editor asks for read/write access to the selected folder. It does not create
 | `W` | Move tool |
 | `E` | Rotate tool |
 | `G` | Toggle the grid |
-| `Ctrl+Z` | Undo |
-| `Ctrl+Y` | Redo |
-| `Ctrl+D` | Duplicate selection |
-| `Ctrl+C` / `Ctrl+V` | Copy/paste selection |
+| `Ctrl/Cmd+Z` | Undo |
+| `Ctrl/Cmd+Y` | Redo |
+| `Ctrl/Cmd+D` | Duplicate selection |
+| `Ctrl/Cmd+C` / `Ctrl/Cmd+V` | Copy/paste selection |
 | `Delete` or `Backspace` | Delete selection |
 
 Editor shortcuts are ignored while focus is in a text input or textarea. See [Getting started](docs/getting-started.md#edit-the-scene) for selection gestures and other editing steps.
@@ -98,19 +98,26 @@ pnpm lint
 pnpm build
 ```
 
-Build the unsigned Windows x64 installer with:
+Build unsigned desktop packages for the current operating system with:
+
+```powershell
+pnpm tauri build
+```
+
+The platform-specific bundle configuration produces NSIS on Windows, AppImage and deb on Linux, and DMG on macOS. To match one of the release jobs exactly, pass its target explicitly, for example:
 
 ```powershell
 pnpm tauri build --bundles nsis --target x86_64-pc-windows-msvc
 ```
 
-Unsigned development releases may trigger Microsoft Defender SmartScreen. Verify the release checksum before running an installer.
+Tagged releases also build `x86_64-unknown-linux-gnu`, `x86_64-apple-darwin`, and `aarch64-apple-darwin` on native GitHub-hosted runners. All current desktop packages are unsigned: Windows may show Microsoft Defender SmartScreen and macOS may block the app with Gatekeeper. Verify the adjacent SHA-256 checksum before installing a downloaded package.
 
 For an overview of the codebase, see [Architecture](docs/architecture.md).
 
 ## Known limitations
 
-- Desktop installers are not code-signed.
+- Desktop installers are not code-signed or notarized. macOS users may need to explicitly allow the downloaded application in system security settings.
+- Linux AppImage compatibility varies by distribution; the release build uses Ubuntu 22.04 as its baseline, while the deb package targets Debian/Ubuntu-style systems.
 - The browser build requires a browser that supports directory picking with read/write access.
 - Editor shortcuts may still run while a dropdown is focused; input handling for these controls remains unresolved.
 - Some scene, entity, material, particle, or encoding variants may not yet be supported.

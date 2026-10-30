@@ -21,6 +21,9 @@ body:
       label: Runtime
       options:
         - Windows desktop application
+        - Linux desktop application
+        - macOS Intel desktop application
+        - macOS Apple Silicon desktop application
         - Web application in Chrome
         - Web application in Edge
         - Other supported Chromium browser

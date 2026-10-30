@@ -21,6 +21,7 @@ dist/
 dist-ssr/
 build/
 out/
+release-assets/
 *.tsbuildinfo
 
 # Rust / Tauri Build outputs
