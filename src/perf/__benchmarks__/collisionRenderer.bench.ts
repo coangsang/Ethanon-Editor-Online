@@ -82,6 +82,28 @@ for (const size of SIZES) {
       index.getEntitiesInRect(512, 256, 1920, 1080, new Set());
     }, BENCH_OPTIONS);
 
+    bench('minimum zoom viewport query', () => {
+      const zoom = 0.005;
+      const padding = 128 / zoom;
+      index.getEntitiesInRect(
+        -padding,
+        -padding,
+        1920 / zoom + padding * 2,
+        1080 / zoom + padding * 2,
+        new Set(),
+      );
+    }, BENCH_OPTIONS);
+
+    bench('oversized collision bounds insertion', () => {
+      const oversizedIndex = new BucketManager();
+      oversizedIndex.insertOrUpdate('oversized', {
+        x: -500_000,
+        y: -500_000,
+        width: 1_000_000,
+        height: 1_000_000,
+      });
+    }, BENCH_OPTIONS);
+
     bench('parallax bounds projection', () => {
       const projection = {
         ...baseProjection,

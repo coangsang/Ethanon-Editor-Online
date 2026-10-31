@@ -247,6 +247,34 @@ describe('useCollisionRenderer', () => {
     expect(data.graphics.poly).toHaveBeenCalledTimes(6);
   });
 
+  it('culls correctly at the minimum supported zoom without scanning every viewport bucket', () => {
+    const data = fixture();
+    const farEntity = {
+      ...data.scene.entities[0],
+      id: 2,
+      editorEntityUID: 'far',
+      position: { x: 100_000, y: 100_000, z: 0 },
+    };
+    const scene = { ...data.scene, entities: [...data.scene.entities, farEntity] };
+
+    renderHook(() => useCollisionRenderer({
+      refs: data.refs,
+      scene,
+      templates: data.templates,
+      selectedUIDs: [],
+      showCollisions: true,
+      camera: { x: 0, y: 0, zoom: 0.005 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    }));
+    flushAnimationFrames();
+
+    expect(data.graphics.poly).toHaveBeenCalledTimes(6);
+    expect(data.graphics.stroke).toHaveBeenCalledTimes(1);
+  });
+
   it('does not resubmit unchanged geometry when panning inside the same culling set', () => {
     const data = fixture();
     const initialProps = {

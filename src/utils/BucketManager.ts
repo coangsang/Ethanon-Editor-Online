@@ -5,29 +5,72 @@ export interface SimpleBounds {
   height: number;
 }
 
+export interface BucketManagerOptions {
+  maxBucketsPerEntity?: number;
+  maxBucketsPerQuery?: number;
+}
+
+const DEFAULT_MAX_BUCKETS_PER_ENTITY = 256;
+const DEFAULT_MAX_BUCKETS_PER_QUERY = 4096;
+
+type BucketRange = {
+  minBx: number;
+  minBy: number;
+  maxBx: number;
+  maxBy: number;
+};
+
 export class BucketManager {
   private buckets: Map<string, Set<string>> = new Map();
   private entityToBuckets: Map<string, string[]> = new Map();
+  private entityBounds: Map<string, SimpleBounds> = new Map();
+  private oversizedEntities: Set<string> = new Set();
+  private readonly maxBucketsPerEntity: number;
+  private readonly maxBucketsPerQuery: number;
   public bucketSize: number = 256;
+
+  constructor(options: BucketManagerOptions = {}) {
+    this.maxBucketsPerEntity = this.normalizeLimit(
+      options.maxBucketsPerEntity,
+      DEFAULT_MAX_BUCKETS_PER_ENTITY,
+    );
+    this.maxBucketsPerQuery = this.normalizeLimit(
+      options.maxBucketsPerQuery,
+      DEFAULT_MAX_BUCKETS_PER_QUERY,
+    );
+  }
 
   private getBucketHash(bx: number, by: number): string {
     return `${bx},${by}`;
   }
 
   public insertOrUpdate(uid: string, bounds: SimpleBounds) {
-    const minBx = Math.floor(bounds.x / this.bucketSize);
-    const minBy = Math.floor(bounds.y / this.bucketSize);
-    const maxBx = Math.floor((bounds.x + bounds.width) / this.bucketSize);
-    const maxBy = Math.floor((bounds.y + bounds.height) / this.bucketSize);
+    const range = this.getBucketRange(bounds);
+    if (!range) {
+      this.removeEntity(uid);
+      return;
+    }
+
+    this.entityBounds.set(uid, { ...bounds });
+    const oldHashes = this.entityToBuckets.get(uid);
+    if (this.exceedsCellLimit(range, this.maxBucketsPerEntity)) {
+      if (oldHashes) {
+        this.removeFromBucketHashes(uid, oldHashes);
+        this.entityToBuckets.delete(uid);
+      }
+      this.oversizedEntities.add(uid);
+      return;
+    }
+
+    this.oversizedEntities.delete(uid);
 
     const newHashes: string[] = [];
-    for (let bx = minBx; bx <= maxBx; bx++) {
-      for (let by = minBy; by <= maxBy; by++) {
+    for (let bx = range.minBx; bx <= range.maxBx; bx++) {
+      for (let by = range.minBy; by <= range.maxBy; by++) {
         newHashes.push(this.getBucketHash(bx, by));
       }
     }
 
-    const oldHashes = this.entityToBuckets.get(uid);
     if (oldHashes && this.areHashArraysEqual(oldHashes, newHashes)) {
       return;
     }
@@ -54,26 +97,34 @@ export class BucketManager {
       this.removeFromBucketHashes(uid, oldHashes);
       this.entityToBuckets.delete(uid);
     }
+    this.entityBounds.delete(uid);
+    this.oversizedEntities.delete(uid);
   }
 
   public clear() {
     this.buckets.clear();
     this.entityToBuckets.clear();
+    this.entityBounds.clear();
+    this.oversizedEntities.clear();
   }
 
   public getEntitiesInRect(x: number, y: number, w: number, h: number, outSet?: Set<string>): Set<string> {
     const result = outSet ?? new Set<string>();
-    if (outSet) {
-      outSet.clear();
+    result.clear();
+
+    const queryBounds = { x, y, width: w, height: h };
+    const range = this.getBucketRange(queryBounds);
+    if (!range) return result;
+
+    if (this.exceedsCellLimit(range, this.maxBucketsPerQuery)) {
+      for (const [uid, bounds] of this.entityBounds) {
+        if (this.boundsIntersect(bounds, queryBounds)) result.add(uid);
+      }
+      return result;
     }
 
-    const startX = Math.floor(x / this.bucketSize);
-    const startY = Math.floor(y / this.bucketSize);
-    const endX = Math.floor((x + w) / this.bucketSize);
-    const endY = Math.floor((y + h) / this.bucketSize);
-
-    for (let bx = startX; bx <= endX; bx++) {
-      for (let by = startY; by <= endY; by++) {
+    for (let bx = range.minBx; bx <= range.maxBx; bx++) {
+      for (let by = range.minBy; by <= range.maxBy; by++) {
         const hash = this.getBucketHash(bx, by);
         const bucket = this.buckets.get(hash);
         if (bucket) {
@@ -82,6 +133,10 @@ export class BucketManager {
           }
         }
       }
+    }
+    for (const uid of this.oversizedEntities) {
+      const bounds = this.entityBounds.get(uid);
+      if (bounds && this.boundsIntersect(bounds, queryBounds)) result.add(uid);
     }
     return result;
   }
@@ -125,6 +180,40 @@ export class BucketManager {
       if (a[i] !== b[i]) return false;
     }
     return true;
+  }
+
+  private normalizeLimit(value: number | undefined, fallback: number) {
+    return value !== undefined && Number.isSafeInteger(value) && value > 0 ? value : fallback;
+  }
+
+  private getBucketRange(bounds: SimpleBounds): BucketRange | null {
+    if (![bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite)
+      || bounds.width < 0
+      || bounds.height < 0) {
+      return null;
+    }
+    const right = bounds.x + bounds.width;
+    const bottom = bounds.y + bounds.height;
+    if (!Number.isFinite(right) || !Number.isFinite(bottom)) return null;
+    return {
+      minBx: Math.floor(bounds.x / this.bucketSize),
+      minBy: Math.floor(bounds.y / this.bucketSize),
+      maxBx: Math.floor(right / this.bucketSize),
+      maxBy: Math.floor(bottom / this.bucketSize),
+    };
+  }
+
+  private exceedsCellLimit(range: BucketRange, limit: number) {
+    const columns = range.maxBx - range.minBx + 1;
+    const rows = range.maxBy - range.minBy + 1;
+    return columns > limit || rows > limit || columns > Math.floor(limit / rows);
+  }
+
+  private boundsIntersect(left: SimpleBounds, right: SimpleBounds) {
+    return left.x <= right.x + right.width
+      && left.x + left.width >= right.x
+      && left.y <= right.y + right.height
+      && left.y + left.height >= right.y;
   }
 }
 
