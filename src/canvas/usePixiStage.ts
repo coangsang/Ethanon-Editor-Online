@@ -27,6 +27,7 @@ function resetStageRefs(refs: ViewportRefs) {
   refs.worldRef.current = null;
   refs.gridRef.current = null;
   refs.entitiesContainerRef.current = null;
+  refs.collisionGraphicsRef.current = null;
   refs.selectionRef.current = null;
   refs.marqueeGraphicsRef.current = null;
   refs.moveGizmoContainerRef.current = null;
@@ -191,6 +192,10 @@ export function usePixiStage({ refs, camera, showGrid }: UsePixiStageParams) {
         const entities = new PIXI.Container();
         world.addChild(entities);
         refs.entitiesContainerRef.current = entities;
+
+        const collisions = new PIXI.Graphics();
+        world.addChild(collisions);
+        refs.collisionGraphicsRef.current = collisions;
 
         const selection = new PIXI.Graphics();
         app.stage.addChild(selection);

@@ -142,6 +142,7 @@ interface SceneStore {
   gridSize: number;
   snapToGrid: boolean;
   showParticles: boolean;
+  showCollisions: boolean;
   updateParticlesWhileMoving: boolean;
   showFps: boolean;
   showParticleFps: boolean;
@@ -205,6 +206,7 @@ interface SceneStore {
   setGridSize: (size: number) => void;
   toggleSnap: () => void;
   toggleParticles: () => void;
+  toggleCollisions: () => void;
   toggleUpdateParticlesWhileMoving: () => void;
   toggleFps: () => void;
   toggleParticleFps: () => void;
@@ -279,6 +281,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   gridSize: 16,
   snapToGrid: false,
   showParticles: true,
+  showCollisions: false,
   updateParticlesWhileMoving: true,
   showFps: false,
   showParticleFps: false,
@@ -1241,6 +1244,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   setGridSize: (size) => set({ gridSize: size }),
   toggleSnap: () => set(state => ({ snapToGrid: !state.snapToGrid })),
   toggleParticles: () => set(state => ({ showParticles: !state.showParticles })),
+  toggleCollisions: () => set(state => ({ showCollisions: !state.showCollisions })),
   toggleUpdateParticlesWhileMoving: () => set(state => ({ updateParticlesWhileMoving: !state.updateParticlesWhileMoving })),
   toggleFps: () => set(state => ({ showFps: !state.showFps })),
   toggleParticleFps: () => set(state => ({ showParticleFps: !state.showParticleFps })),

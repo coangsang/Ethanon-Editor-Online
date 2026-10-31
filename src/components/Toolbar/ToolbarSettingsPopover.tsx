@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Ruler,
   ScanSearch,
+  ScanLine,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -73,6 +74,8 @@ export function ToolbarSettingsPopover() {
   const toggleSnap = useSceneStore((s) => s.toggleSnap);
   const showParticles = useSceneStore((s) => s.showParticles);
   const toggleParticles = useSceneStore((s) => s.toggleParticles);
+  const showCollisions = useSceneStore((s) => s.showCollisions);
+  const toggleCollisions = useSceneStore((s) => s.toggleCollisions);
   const updateParticlesWhileMoving = useSceneStore((s) => s.updateParticlesWhileMoving);
   const toggleUpdateParticlesWhileMoving = useSceneStore((s) => s.toggleUpdateParticlesWhileMoving);
   const showFps = useSceneStore((s) => s.showFps);
@@ -115,6 +118,7 @@ export function ToolbarSettingsPopover() {
     showCursorCoordinates,
     snapToGrid,
     showParticles,
+    showCollisions,
     updateParticlesWhileMoving,
     showFps,
     showParticleFps,
@@ -191,6 +195,13 @@ export function ToolbarSettingsPopover() {
               description="Render live particle emitters"
               checked={showParticles}
               onChange={toggleParticles}
+            />
+            <ToggleItem
+              icon={<ScanLine size={14} className="text-cyan-400/80 group-hover:text-cyan-300" />}
+              label="Show Collisions"
+              description="Render entity collision outlines"
+              checked={showCollisions}
+              onChange={toggleCollisions}
             />
             <ToggleItem
               icon={<ScanSearch size={14} className="text-indigo-400/80 group-hover:text-indigo-300" />}

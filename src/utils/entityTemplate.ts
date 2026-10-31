@@ -52,6 +52,7 @@ export function mergeTemplate(
     emissiveColor: inlineTemplate.emissiveColor ?? fallback.emissiveColor,
     particleSystems: inlineTemplate.particleSystems ?? fallback.particleSystems,
     customData: inlineTemplate.customData ?? fallback.customData,
+    physics: inlineTemplate.physics ?? fallback.physics,
     rawEntityData: fallback.rawEntityData,
   };
 }
@@ -70,8 +71,10 @@ export function resolveEntityTemplate(
     return hasFileName
       ? {
           ...resolved,
+          scale: externalTemplate?.scale ?? { x: 1, y: 1 },
           blendMode: externalTemplate?.blendMode ?? 0,
           emissiveColor: externalTemplate?.emissiveColor,
+          physics: externalTemplate?.physics,
         }
       : resolved;
   }
@@ -152,6 +155,7 @@ export function unpackEntityInstance(
     ...((entity.diffuseColor || template?.diffuseColor) ? { diffuseColor: entity.diffuseColor ?? template?.diffuseColor } : {}),
     ...(template?.emissiveColor ? { emissiveColor: template.emissiveColor } : {}),
     ...((entity.inlineTemplate?.particleSystems || template?.particleSystems) ? { particleSystems: entity.inlineTemplate?.particleSystems ?? template?.particleSystems } : {}),
+    ...(template?.physics ? { physics: template.physics } : {}),
   };
 
   const templateRawData = template?.rawEntityData

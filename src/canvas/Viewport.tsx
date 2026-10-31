@@ -10,6 +10,7 @@ import { ViewportRuntimeOverlay } from './ViewportRuntimeOverlay';
 import { ViewportZoomControls } from './ViewportZoomControls';
 import { ViewportCursorCoordinates } from './ViewportCursorCoordinates';
 import { useViewportTextures } from './useViewportTextures';
+import { useCollisionRenderer } from './useCollisionRenderer';
 
 export function Viewport() {
   const refs = useViewportRefs();
@@ -28,6 +29,7 @@ export function Viewport() {
   const showGrid = useSceneStore(s => s.showGrid);
   const snapToGrid = useSceneStore(s => s.snapToGrid);
   const showParticles = useSceneStore(s => s.showParticles);
+  const showCollisions = useSceneStore(s => s.showCollisions);
   const parallaxOriginNormalized = useSceneStore(s => s.parallaxOriginNormalized);
   const parallaxPreviewActive = useSceneStore(s => s.parallaxPreviewActive);
 
@@ -68,6 +70,16 @@ export function Viewport() {
     showParticles,
     viewportSize,
     onEntityPointerDown,
+  });
+
+  useCollisionRenderer({
+    refs,
+    scene,
+    templates,
+    selectedUIDs,
+    showCollisions,
+    cameraZoom: camera.zoom,
+    appReadyRevision,
   });
 
   usePlacePreviewRenderer({

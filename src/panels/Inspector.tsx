@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { Icon } from '../components/Icon';
 import './Inspector.css';
 import type { CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityTemplate, SpriteAtlas } from '../types';
@@ -14,6 +14,7 @@ import { SpritePickerModal } from '../components/SpritePickerModal';
 import { ExportPrefabModal } from '../components/ExportPrefabModal';
 import { EntityRefPickerModal } from '../components/EntityRefPickerModal';
 import { ColorControl } from '../components/ColorControl';
+import { collisionShapeName } from '../utils/collision';
 import { transformEventBus } from '../store/TransformEventBus';
 
 function AxisNumberInput({
@@ -822,6 +823,99 @@ function MaterialSection({ entity, hasFileName, template, currentDiffuseColor }:
           <option value={4}>4 - Multiply</option>
         </select>
       </div>
+    </div>
+  );
+}
+
+function CollisionInfoRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-2 text-[10px]">
+      <span className="text-gray-500 shrink-0">{label}</span>
+      <span className="text-gray-300 font-mono text-right break-all">{children}</span>
+    </div>
+  );
+}
+
+function CollisionPhysicsSection({ template, source }: {
+  template: EntityTemplate;
+  source: 'Template' | 'Inline';
+}) {
+  const physics = template.physics;
+  if (!physics) return null;
+  const { collision } = physics;
+  const scale = template.scale ?? { x: 1, y: 1 };
+  const effectiveSize = {
+    x: Math.abs(collision.size.x * scale.x),
+    y: Math.abs(collision.size.y * scale.y),
+  };
+  const value = (number: number) => Number.isFinite(number) ? Number(number.toFixed(4)) : 0;
+
+  return (
+    <div className="inspector-section px-3 py-2 flex flex-col gap-1.5 border-b border-gray-700">
+      <div className="inspector-section-title text-xs text-gray-500 mb-0.5 flex items-center justify-between">
+        <span>Collision &amp; Physics</span>
+        <span className="text-[10px] rounded bg-cyan-950/70 px-1.5 py-0.5 text-cyan-300">{source}</span>
+      </div>
+      <div className="inspector-subsection rounded border border-gray-800 bg-gray-950/40 p-2 flex flex-col gap-1">
+        <CollisionInfoRow label="Shape">{physics.shape} - {collisionShapeName(physics.shape)}</CollisionInfoRow>
+        <CollisionInfoRow label="Body">
+          {[physics.static ? 'Static' : 'Dynamic', physics.sensor && 'Sensor', physics.bullet && 'Bullet', physics.fixedRotation && 'Fixed rotation'].filter(Boolean).join(', ')}
+        </CollisionInfoRow>
+        <CollisionInfoRow label="Material">F {value(physics.friction)} · D {value(physics.density)} · R {value(physics.restitution)}</CollisionInfoRow>
+        <CollisionInfoRow label="Gravity scale">{value(physics.gravityScale)}</CollisionInfoRow>
+        <CollisionInfoRow label="Position XY">{value(collision.position.x)}, {value(collision.position.y)}</CollisionInfoRow>
+        <CollisionInfoRow label="Size XY">{value(collision.size.x)}, {value(collision.size.y)}</CollisionInfoRow>
+        <CollisionInfoRow label="Entity Scale">{value(scale.x)}, {value(scale.y)}</CollisionInfoRow>
+        <CollisionInfoRow label="Effective Size">{value(effectiveSize.x)}, {value(effectiveSize.y)}</CollisionInfoRow>
+      </div>
+
+      {physics.warnings.length > 0 && (
+        <div className="rounded border border-amber-800/70 bg-amber-950/30 p-2 text-[10px] text-amber-300">
+          {physics.warnings.map((warning, index) => <div key={index}>• {warning}</div>)}
+        </div>
+      )}
+
+      {physics.shape === 3 && collision.polygon.length > 0 && (
+        <div className="inspector-subsection rounded border border-gray-800 bg-gray-950/40 p-2">
+          <div className="mb-1 text-[10px] font-semibold text-gray-400">Polygon vertices ({collision.polygon.length})</div>
+          {collision.polygon.map(vertex => (
+            <CollisionInfoRow key={vertex.name} label={vertex.name}>{value(vertex.x)}, {value(vertex.y)}</CollisionInfoRow>
+          ))}
+        </div>
+      )}
+
+      {physics.shape === 4 && collision.compound.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <div className="text-[10px] font-semibold text-gray-400">Compound shapes ({collision.compound.length})</div>
+          {collision.compound.map(item => (
+            <div key={item.name} className="inspector-subsection rounded border border-gray-800 bg-gray-950/40 p-2">
+              <CollisionInfoRow label={item.name}>{item.shape}</CollisionInfoRow>
+              <CollisionInfoRow label="Position">{value(item.posX)}, {value(item.posY)}</CollisionInfoRow>
+              {item.shape === 'box' ? (
+                <><CollisionInfoRow label="Size">{value(item.sizeX ?? 0)}, {value(item.sizeY ?? 0)}</CollisionInfoRow><CollisionInfoRow label="Angle">{value(item.angle)} rad</CollisionInfoRow></>
+              ) : <CollisionInfoRow label="Radius">{value(item.radius ?? 0)}</CollisionInfoRow>}
+              <CollisionInfoRow label="Material">
+                F {value(item.friction ?? physics.friction)} · D {value(item.density ?? physics.density)} · R {value(item.restitution ?? physics.restitution)}
+              </CollisionInfoRow>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {collision.joints.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <div className="text-[10px] font-semibold text-gray-400">Revolute joints ({collision.joints.length})</div>
+          {collision.joints.map(joint => (
+            <div key={joint.name} className="inspector-subsection rounded border border-gray-800 bg-gray-950/40 p-2">
+              <CollisionInfoRow label={joint.name}>{joint.otherEntityName || '(no target)'}</CollisionInfoRow>
+              <CollisionInfoRow label="Anchor A">{value(joint.attachPointAX)}, {value(joint.attachPointAY)}</CollisionInfoRow>
+              <CollisionInfoRow label="Anchor B">{value(joint.attachPointBX)}, {value(joint.attachPointBY)}</CollisionInfoRow>
+              <CollisionInfoRow label="Limit">{joint.enableLimit ? `${value(joint.lowerAngle)}…${value(joint.upperAngle)} rad` : 'Disabled'}</CollisionInfoRow>
+              <CollisionInfoRow label="Motor">{joint.enableMotor ? `${value(joint.motorSpeed)} rad/s · ${value(joint.maxMotorTorque)} torque` : 'Disabled'}</CollisionInfoRow>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1798,6 +1892,14 @@ export function Inspector() {
         template={template}
         currentDiffuseColor={currentDiffuseColor}
       />
+
+      {template?.physics && (
+        <CollisionPhysicsSection
+          key={`${entity.editorEntityUID}:collision-physics`}
+          template={template}
+          source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
+        />
+      )}
 
       {template?.particleSystems && template.particleSystems.length > 0 && (
         <div className="inspector-section px-3 py-2 flex flex-col gap-1.5 border-b border-gray-700">

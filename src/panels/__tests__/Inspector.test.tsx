@@ -19,6 +19,30 @@ afterEach(() => {
 });
 
 describe('Inspector pending edit interactions', () => {
+  it('shows collision physics as read-only XY data with effective entity scale', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="1" spriteFrame="0" editorEntityUID="collision-entity">
+          <EntityName>collision-entity</EntityName><Position x="0" y="0" z="70" angle="0" />
+          <Entity shape="1" static="1" friction="0.8">
+            <Scale x="2" y="3"/><Collision><Position x="4" y="5" z="9"/><Size x="20" y="30" z="64"/></Collision>
+          </Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+    useSceneStore.getState().selectEntity('collision-entity');
+    render(<Inspector />);
+
+    const section = screen.getByText('Collision & Physics').closest('.inspector-section');
+    expect(section?.textContent).toContain('Inline');
+    expect(section?.textContent).toContain('1 - Box');
+    expect(section?.textContent).toContain('Position XY4, 5');
+    expect(section?.textContent).toContain('Size XY20, 30');
+    expect(section?.textContent).toContain('Effective Size40, 90');
+    expect(section?.textContent).not.toContain('Position Z');
+    expect(section?.textContent).not.toContain('Size Z');
+  });
+
   it('shows each entity values when selection changes', () => {
     useSceneStore.getState().loadScene(`
       <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
