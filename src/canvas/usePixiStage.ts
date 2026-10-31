@@ -151,6 +151,8 @@ export function usePixiStage({ refs, camera, showGrid }: UsePixiStageParams) {
       contextRecoveryTimer = null;
       if (!destroyed) {
         setRuntimeState({ status: 'ready', message: null, canRetry: false });
+        // Force every renderer to rebuild/re-upload its GPU-backed resources.
+        setAppReadyRevision(revision => revision + 1);
       }
     };
 

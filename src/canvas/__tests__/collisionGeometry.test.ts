@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { EntityInstance, EntityPhysicsConfig } from '../../types';
-import { buildCollisionPrimitives } from '../collisionGeometry';
+import {
+  buildCollisionPrimitives,
+  buildCollisionWorldGeometry,
+  getProjectedCollisionBounds,
+} from '../collisionGeometry';
 
 function entity(overrides: Partial<EntityInstance> = {}): EntityInstance {
   return {
@@ -105,5 +109,47 @@ describe('collision geometry', () => {
     const config = physics(1);
     config.collision.valid = false;
     expect(buildCollisionPrimitives(entity(), config, { x: 1, y: 1 })).toEqual([]);
+  });
+
+  it('computes projected bounds that contain every generated primitive', () => {
+    const config = physics(4);
+    config.collision.compound = [
+      { name: 'box', shape: 'box', posX: 1, posY: 0, sizeX: 1, sizeY: 2, angle: 0.4 },
+      { name: 'circle', shape: 'circle', posX: -1, posY: 1, radius: 0.75, angle: 0 },
+    ];
+    const target = entity({ angle: 35, position: { x: 100, y: 200, z: 10 } });
+    const projection = {
+      camera: { x: 20, y: -10, zoom: 1.5 },
+      parallaxContext: { globalParallaxIntensity: 2, screenWidth: 800, originPxX: 400, originPxY: 300 },
+      zAxisDirection: { x: 0.25, y: -1 },
+      templateParallaxIntensity: 0.8,
+    };
+    const geometry = buildCollisionWorldGeometry(target, config, { x: -2, y: 3 });
+    const bounds = getProjectedCollisionBounds(geometry, projection)!;
+    const primitives = buildCollisionPrimitives(target, config, { x: -2, y: 3 }, projection);
+    for (const primitive of primitives) {
+      if (primitive.kind === 'path') {
+        for (const point of primitive.points) {
+          expect(point.x).toBeGreaterThanOrEqual(bounds.x - 1e-8);
+          expect(point.x).toBeLessThanOrEqual(bounds.x + bounds.width + 1e-8);
+          expect(point.y).toBeGreaterThanOrEqual(bounds.y - 1e-8);
+          expect(point.y).toBeLessThanOrEqual(bounds.y + bounds.height + 1e-8);
+        }
+      } else {
+        expect(primitive.center.x - primitive.radius).toBeGreaterThanOrEqual(bounds.x - 1e-8);
+        expect(primitive.center.x + primitive.radius).toBeLessThanOrEqual(bounds.x + bounds.width + 1e-8);
+      }
+    }
+  });
+
+  it('rejects non-finite transforms and projections without throwing', () => {
+    expect(buildCollisionWorldGeometry(entity({ angle: Number.NaN }), physics(1), { x: 1, y: 1 })).toBeNull();
+    expect(buildCollisionPrimitives(entity(), physics(1), { x: Number.POSITIVE_INFINITY, y: 1 })).toEqual([]);
+    expect(buildCollisionPrimitives(entity(), physics(1), { x: 1, y: 1 }, {
+      camera: { x: 0, y: 0, zoom: 0 },
+      parallaxContext: { globalParallaxIntensity: 0, screenWidth: 100, originPxX: 0, originPxY: 0 },
+      zAxisDirection: { x: 0, y: 0 },
+      templateParallaxIntensity: 1,
+    })).toEqual([]);
   });
 });

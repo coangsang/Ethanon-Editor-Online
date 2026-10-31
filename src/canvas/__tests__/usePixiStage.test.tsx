@@ -145,12 +145,14 @@ describe('usePixiStage runtime recovery', () => {
       canRetry: false,
     });
 
+    const revisionBeforeRestore = result.current.runtime.appReadyRevision;
     act(() => canvas.dispatchEvent(new Event('webglcontextrestored')));
     expect(result.current.runtime.runtimeState).toEqual({
       status: 'ready',
       message: null,
       canRetry: false,
     });
+    expect(result.current.runtime.appReadyRevision).toBe(revisionBeforeRestore + 1);
   });
 
   it('updates only active particle runtimes and does not accumulate offscreen time', async () => {

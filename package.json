@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "test": "vitest run --configLoader native",
     "bench:placement": "vitest bench --configLoader native src/perf/__benchmarks__/scenePlacement.bench.ts",
+    "bench:collision": "vitest bench --configLoader native src/perf/__benchmarks__/collisionRenderer.bench.ts",
     "notices:check": "node scripts/check-third-party-notices.mjs",
     "notices:update": "node scripts/check-third-party-notices.mjs --update",
     "tauri": "tauri"

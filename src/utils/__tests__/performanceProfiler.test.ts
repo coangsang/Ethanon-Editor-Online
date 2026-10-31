@@ -67,4 +67,18 @@ describe('performanceProfiler', () => {
     expect(getPerformanceSummary('history.push')).toBeNull();
     expect(getPerformanceSummary('texture.commit')).toBeNull();
   });
+
+  it('reports the latest collision workload alongside timing summaries', () => {
+    setPerformanceProfilerEnabled(true);
+    recordPerformanceMetric('renderer.collision', 2.5, 1000, 123, {
+      visibleEntities: 42,
+      primitiveCount: 252,
+    });
+
+    expect(getPerformanceSummary('renderer.collision')).toMatchObject({
+      latestMs: 2.5,
+      entityCount: 1000,
+      workload: { visibleEntities: 42, primitiveCount: 252 },
+    });
+  });
 });

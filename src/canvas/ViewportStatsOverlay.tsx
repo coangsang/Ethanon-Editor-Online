@@ -133,7 +133,7 @@ export function ViewportStatsOverlay({ refs }: ViewportStatsOverlayProps) {
       {showPlacementProfiler && import.meta.env.DEV && (
         <div className="bg-gray-950/90 border border-cyan-800/70 px-2.5 py-2 rounded-md shadow-xl min-w-72">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-cyan-300 font-semibold">PLACEMENT PROFILER</span>
+            <span className="text-cyan-300 font-semibold">PERFORMANCE PROFILER</span>
             <span className="text-gray-400">{entityCount} entities</span>
           </div>
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1 tabular-nums">
@@ -159,9 +159,23 @@ function PerformanceMetricRow({
   summary: PerformanceSummary | null;
 }) {
   const format = (value: number) => `${value.toFixed(value >= 10 ? 1 : 2)} ms`;
+  const workload = summary?.workload;
+  const title = summary
+    ? [
+        `${summary.sampleCount} samples`,
+        `${summary.entityCount} total`,
+        workload?.visibleEntities !== undefined ? `${workload.visibleEntities} visible` : null,
+        workload?.primitiveCount !== undefined ? `${workload.primitiveCount} primitives` : null,
+      ].filter(Boolean).join(' · ')
+    : 'No samples';
   return (
     <>
-      <span className="text-gray-300" title={summary ? `${summary.sampleCount} samples` : 'No samples'}>{metric}</span>
+      <span className="text-gray-300" title={title}>
+        {metric}
+        {workload?.visibleEntities !== undefined && (
+          <span className="ml-1 text-gray-500">{workload.visibleEntities}/{summary?.entityCount} · {workload.primitiveCount ?? 0}p</span>
+        )}
+      </span>
       <span className="text-right text-cyan-200">{summary ? format(summary.latestMs) : '—'}</span>
       <span className="text-right text-gray-200">{summary ? format(summary.medianMs) : '—'}</span>
       <span className="text-right text-amber-200">{summary ? format(summary.p95Ms) : '—'}</span>
