@@ -133,7 +133,8 @@ describe('Unpack Entity Feature', () => {
               range: '256',
             },
             Collision: {
-              Size: { x: '32', y: '64' },
+              Position: { x: '1', y: '2', z: '3' },
+              Size: { x: '32', y: '64', z: '16' },
             },
           },
         },
@@ -172,7 +173,8 @@ describe('Unpack Entity Feature', () => {
         range: '256',
       });
       expect(unpacked.inlineEntityData?.Collision).toEqual({
-        Size: { x: '32', y: '64' },
+        Position: { x: '1', y: '2', z: '3' },
+        Size: { x: '32', y: '64', z: '16' },
       });
 
       // Verify serialization output includes Light, Particles, Collision and attributes
@@ -193,6 +195,8 @@ describe('Unpack Entity Feature', () => {
       expect(xml).toContain('<ParticleSystem');
       expect(xml).toContain('<Light');
       expect(xml).toContain('<Collision>');
+      expect(xml).toContain('<Position x="1" y="2" z="3"');
+      expect(xml).toContain('<Size x="32" y="64" z="16"');
     });
   });
 

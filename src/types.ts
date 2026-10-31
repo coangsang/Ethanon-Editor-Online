@@ -130,8 +130,9 @@ export interface EntityPhysicsConfig {
   restitution: number;
   gravityScale: number;
   collision: {
-    position: { x: number; y: number };
-    size: { x: number; y: number };
+    valid: boolean;
+    position: { x: number; y: number; z: number };
+    size: { x: number; y: number; z: number };
     polygon: CollisionPolygonVertex[];
     compound: CollisionCompoundShape[];
     joints: CollisionJoint[];

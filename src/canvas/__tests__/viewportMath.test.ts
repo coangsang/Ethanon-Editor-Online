@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EntityInstance, ParticleSystemConfig } from '../../types';
-import { computeDragDelta, isParticleEmitterInViewport } from '../viewportMath';
+import { computeDragDelta, isParticleEmitterInViewport, projectParallaxPoint } from '../viewportMath';
 
 describe('viewport drag math', () => {
   it('uses one integer-aligned delta for a multi-entity drag without grid snapping', () => {
@@ -25,6 +25,18 @@ describe('viewport drag math', () => {
     );
 
     expect(delta).toEqual({ x: 6, y: 0 });
+  });
+});
+
+describe('parallax projection', () => {
+  it('projects a world point using camera, viewport origin, Z, and template intensity', () => {
+    expect(projectParallaxPoint(
+      { x: 100, y: 50 },
+      10,
+      { x: 20, y: 10, zoom: 2 },
+      { globalParallaxIntensity: 2, screenWidth: 200, originPxX: 100, originPxY: 50 },
+      0.5,
+    )).toEqual({ x: 103, y: 51.5 });
   });
 });
 

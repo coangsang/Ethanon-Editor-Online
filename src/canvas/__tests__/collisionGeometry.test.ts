@@ -30,8 +30,9 @@ function physics(shape: EntityPhysicsConfig['shape']): EntityPhysicsConfig {
     restitution: 0,
     gravityScale: 1,
     collision: {
-      position: { x: 5, y: 10 },
-      size: { x: 20, y: 40 },
+      valid: true,
+      position: { x: 5, y: 10, z: 0 },
+      size: { x: 20, y: 40, z: 10 },
       polygon: [],
       compound: [],
       joints: [],
@@ -63,10 +64,25 @@ describe('collision geometry', () => {
     });
   });
 
-  it('applies instance rotation and ignores Z', () => {
+  it('applies instance rotation and projects entity and collision Z', () => {
     const first = buildCollisionPrimitives(entity({ angle: 90 }), physics(1), { x: 1, y: 1 });
-    const second = buildCollisionPrimitives(entity({ angle: 90, position: { x: 100, y: 200, z: -12345 } }), physics(1), { x: 1, y: 1 });
-    expect(second).toEqual(first);
+    const config = physics(1);
+    config.collision.position.z = 4;
+    config.collision.size.z = 6;
+    const second = buildCollisionPrimitives(
+      entity({ angle: 90, position: { x: 100, y: 200, z: 10 } }),
+      config,
+      { x: 1, y: 1 },
+      {
+        camera: { x: 0, y: 0, zoom: 1 },
+        parallaxContext: { globalParallaxIntensity: 1, screenWidth: 100, originPxX: 0, originPxY: 0 },
+        zAxisDirection: { x: 0, y: -1 },
+        templateParallaxIntensity: 1,
+      },
+    );
+    expect(second).toHaveLength(6);
+    expect((second[0] as { points: Array<{ x: number; y: number }> }).points[0]).toEqual({ x: 99, y: 224.5 });
+    expect((second[1] as { points: Array<{ x: number; y: number }> }).points[0]).toEqual({ x: 99, y: 218.5 });
     expect(first[0]).toMatchObject({ kind: 'path' });
   });
 
@@ -80,8 +96,14 @@ describe('collision geometry', () => {
       { name: 'circle', shape: 'circle', posX: 0, posY: -1, radius: 0.5, angle: 0 },
     ];
     const compound = buildCollisionPrimitives(entity(), config, { x: 2, y: 3 });
-    expect(compound).toHaveLength(2);
+    expect(compound).toHaveLength(12);
     expect(compound[0].kind).toBe('path');
-    expect(compound[1]).toMatchObject({ kind: 'circle', radius: 10 });
+    expect(compound[6]).toMatchObject({ kind: 'circle', radius: 10 });
+  });
+
+  it('does not render a collision marked invalid', () => {
+    const config = physics(1);
+    config.collision.valid = false;
+    expect(buildCollisionPrimitives(entity(), config, { x: 1, y: 1 })).toEqual([]);
   });
 });

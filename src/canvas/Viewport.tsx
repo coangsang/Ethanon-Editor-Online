@@ -78,7 +78,10 @@ export function Viewport() {
     templates,
     selectedUIDs,
     showCollisions,
-    cameraZoom: camera.zoom,
+    camera,
+    viewportSize,
+    parallaxOriginNormalized,
+    parallaxPreviewActive,
     appReadyRevision,
   });
 

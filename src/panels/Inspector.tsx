@@ -847,6 +847,7 @@ function CollisionPhysicsSection({ template, source }: {
   const effectiveSize = {
     x: Math.abs(collision.size.x * scale.x),
     y: Math.abs(collision.size.y * scale.y),
+    z: collision.size.z,
   };
   const value = (number: number) => Number.isFinite(number) ? Number(number.toFixed(4)) : 0;
 
@@ -863,10 +864,10 @@ function CollisionPhysicsSection({ template, source }: {
         </CollisionInfoRow>
         <CollisionInfoRow label="Material">F {value(physics.friction)} · D {value(physics.density)} · R {value(physics.restitution)}</CollisionInfoRow>
         <CollisionInfoRow label="Gravity scale">{value(physics.gravityScale)}</CollisionInfoRow>
-        <CollisionInfoRow label="Position XY">{value(collision.position.x)}, {value(collision.position.y)}</CollisionInfoRow>
-        <CollisionInfoRow label="Size XY">{value(collision.size.x)}, {value(collision.size.y)}</CollisionInfoRow>
+        <CollisionInfoRow label="Position XYZ">{value(collision.position.x)}, {value(collision.position.y)}, {value(collision.position.z)}</CollisionInfoRow>
+        <CollisionInfoRow label="Size XYZ">{value(collision.size.x)}, {value(collision.size.y)}, {value(collision.size.z)}</CollisionInfoRow>
         <CollisionInfoRow label="Entity Scale">{value(scale.x)}, {value(scale.y)}</CollisionInfoRow>
-        <CollisionInfoRow label="Effective Size">{value(effectiveSize.x)}, {value(effectiveSize.y)}</CollisionInfoRow>
+        <CollisionInfoRow label="Effective Size XYZ">{value(effectiveSize.x)}, {value(effectiveSize.y)}, {value(effectiveSize.z)}</CollisionInfoRow>
       </div>
 
       {physics.warnings.length > 0 && (

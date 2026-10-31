@@ -274,6 +274,26 @@ export function computeParallaxContext(
   };
 }
 
+export function projectParallaxPoint(
+  point: { x: number; y: number },
+  effectiveZ: number,
+  camera: { x: number; y: number; zoom: number },
+  parallaxContext: ParallaxContext,
+  templateParallaxIntensity = 1,
+) {
+  const { globalParallaxIntensity, screenWidth, originPxX, originPxY } = parallaxContext;
+  const effectiveIntensity = globalParallaxIntensity * templateParallaxIntensity;
+  if (effectiveIntensity === 0 || effectiveZ === 0) return point;
+  let screenX = camera.x + point.x * camera.zoom;
+  let screenY = camera.y + point.y * camera.zoom;
+  screenX += ((screenX - originPxX) / screenWidth) * effectiveZ * effectiveIntensity;
+  screenY += ((screenY - originPxY) / screenWidth) * effectiveZ * effectiveIntensity;
+  return {
+    x: (screenX - camera.x) / camera.zoom,
+    y: (screenY - camera.y) / camera.zoom,
+  };
+}
+
 export function applyEntityTransformToMesh(
   mesh: PIXI.Mesh,
   entity: EntityInstance,
@@ -283,7 +303,7 @@ export function applyEntityTransformToMesh(
   useVerticalGeometry: boolean,
   parallaxContext: ParallaxContext,
 ) {
-  const { globalParallaxIntensity, screenWidth, originPxX, originPxY } = parallaxContext;
+  const { globalParallaxIntensity } = parallaxContext;
   const textureWidth = renderFrame.layoutWidth;
   const textureHeight = renderFrame.layoutHeight;
   const templateScale = template?.scale ?? { x: 1, y: 1 };
@@ -315,15 +335,16 @@ export function applyEntityTransformToMesh(
       const worldY = entity.position.y + localX * sin + localY * cos;
       const verticalOffset = useVerticalGeometry ? Math.max(0, bottomLocalY - localY) : 0;
       const effectiveZ = baseZ + verticalOffset;
-      let screenX = camera.x + worldX * camera.zoom;
-      let screenY = camera.y + worldY * camera.zoom;
-      screenX += ((screenX - originPxX) / screenWidth) * effectiveZ * effectiveIntensity;
-      screenY += ((screenY - originPxY) / screenWidth) * effectiveZ * effectiveIntensity;
-      const vertexX = (screenX - camera.x) / camera.zoom;
-      const vertexY = (screenY - camera.y) / camera.zoom;
+      const projected = projectParallaxPoint(
+        { x: worldX, y: worldY },
+        effectiveZ,
+        camera,
+        parallaxContext,
+        template?.parallaxIntensity ?? 1,
+      );
 
-      vertices[index * 2] = vertexX;
-      vertices[index * 2 + 1] = vertexY;
+      vertices[index * 2] = projected.x;
+      vertices[index * 2 + 1] = projected.y;
     }
 
     mesh.geometry.getBuffer('aPosition').update();
