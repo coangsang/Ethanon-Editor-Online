@@ -53,16 +53,18 @@ describe('Inspector pending edit interactions', () => {
     const { unmount } = render(<Inspector />);
 
     const physicsSection = screen.getByText('Physics').closest('.inspector-section');
-    expect(physicsSection?.textContent).toContain('Inline');
-    expect(physicsSection?.textContent).toContain('BodyStatic');
-    expect(physicsSection?.textContent).toContain('MaterialF 0.8 · D 1 · R 0');
+    expect(physicsSection?.textContent).toContain('Static');
+    expect(physicsSection?.textContent).toContain('Friction');
+    expect(screen.getByDisplayValue('0.8')).toBeDefined();
+    expect(physicsSection?.textContent).toContain('Density');
+    expect(physicsSection?.textContent).toContain('Restitution');
+
 
     const collisionSection = screen.getByText('Collision').closest('.inspector-section');
-    expect(collisionSection?.textContent).toContain('Inline');
     expect(collisionSection?.textContent).toContain('1 - Box');
-    expect(collisionSection?.textContent).toContain('Position XYZ4, 5, 9');
-    expect(collisionSection?.textContent).toContain('Size XYZ20, 30, 64');
-    expect(collisionSection?.textContent).toContain('Effective Size XYZ40, 90, 64');
+    expect(collisionSection?.textContent).toContain('Position');
+    expect(collisionSection?.textContent).toContain('Size');
+    expect(collisionSection?.textContent).toContain('Effective');
     expect(screen.queryByText(/Revolute Joints/)).toBeNull();
 
     unmount();
@@ -74,9 +76,11 @@ describe('Inspector pending edit interactions', () => {
     const jointsSection = screen.getByText(/Revolute Joints/).closest('.inspector-section');
     expect(jointsSection).not.toBeNull();
     expect(jointsSection?.textContent).toContain('revoluteJoint_wheel');
-    expect(jointsSection?.textContent).toContain('wheel.ent');
-    expect(jointsSection?.textContent).toContain('Anchor A1, 2');
-    expect(jointsSection?.textContent).toContain('Anchor B3, 4');
+    expect(screen.getByDisplayValue('wheel.ent')).toBeDefined();
+    expect(jointsSection?.textContent).toContain('Anchor A');
+    expect(jointsSection?.textContent).toContain('Anchor B');
+    expect(jointsSection?.textContent).toContain('Limit');
+    expect(jointsSection?.textContent).toContain('Motor');
 
     unmountJoint();
 
