@@ -836,7 +836,32 @@ function CollisionInfoRow({ label, children }: { label: string; children: ReactN
   );
 }
 
-function CollisionPhysicsSection({ template, source }: {
+function EntityPhysicsSection({ template, source }: {
+  template: EntityTemplate;
+  source: 'Template' | 'Inline';
+}) {
+  const physics = template.physics;
+  if (!physics) return null;
+  const value = (number: number) => Number.isFinite(number) ? Number(number.toFixed(4)) : 0;
+
+  return (
+    <div className="inspector-section px-3 py-2 flex flex-col gap-1.5 border-b border-gray-700">
+      <div className="inspector-section-title text-xs text-gray-500 mb-0.5 flex items-center justify-between">
+        <span>Physics</span>
+        <span className="text-[10px] rounded bg-cyan-950/70 px-1.5 py-0.5 text-cyan-300">{source}</span>
+      </div>
+      <div className="inspector-subsection rounded border border-gray-800 bg-gray-950/40 p-2 flex flex-col gap-1">
+        <CollisionInfoRow label="Body">
+          {[physics.static ? 'Static' : 'Dynamic', physics.sensor && 'Sensor', physics.bullet && 'Bullet', physics.fixedRotation && 'Fixed rotation'].filter(Boolean).join(', ')}
+        </CollisionInfoRow>
+        <CollisionInfoRow label="Material">F {value(physics.friction)} · D {value(physics.density)} · R {value(physics.restitution)}</CollisionInfoRow>
+        <CollisionInfoRow label="Gravity scale">{value(physics.gravityScale)}</CollisionInfoRow>
+      </div>
+    </div>
+  );
+}
+
+function CollisionGeometrySection({ template, source }: {
   template: EntityTemplate;
   source: 'Template' | 'Inline';
 }) {
@@ -854,20 +879,19 @@ function CollisionPhysicsSection({ template, source }: {
   return (
     <div className="inspector-section px-3 py-2 flex flex-col gap-1.5 border-b border-gray-700">
       <div className="inspector-section-title text-xs text-gray-500 mb-0.5 flex items-center justify-between">
-        <span>Collision &amp; Physics</span>
+        <span>Collision</span>
         <span className="text-[10px] rounded bg-cyan-950/70 px-1.5 py-0.5 text-cyan-300">{source}</span>
       </div>
       <div className="inspector-subsection rounded border border-gray-800 bg-gray-950/40 p-2 flex flex-col gap-1">
         <CollisionInfoRow label="Shape">{physics.shape} - {collisionShapeName(physics.shape)}</CollisionInfoRow>
-        <CollisionInfoRow label="Body">
-          {[physics.static ? 'Static' : 'Dynamic', physics.sensor && 'Sensor', physics.bullet && 'Bullet', physics.fixedRotation && 'Fixed rotation'].filter(Boolean).join(', ')}
-        </CollisionInfoRow>
-        <CollisionInfoRow label="Material">F {value(physics.friction)} · D {value(physics.density)} · R {value(physics.restitution)}</CollisionInfoRow>
-        <CollisionInfoRow label="Gravity scale">{value(physics.gravityScale)}</CollisionInfoRow>
-        <CollisionInfoRow label="Position XYZ">{value(collision.position.x)}, {value(collision.position.y)}, {value(collision.position.z)}</CollisionInfoRow>
-        <CollisionInfoRow label="Size XYZ">{value(collision.size.x)}, {value(collision.size.y)}, {value(collision.size.z)}</CollisionInfoRow>
-        <CollisionInfoRow label="Entity Scale">{value(scale.x)}, {value(scale.y)}</CollisionInfoRow>
-        <CollisionInfoRow label="Effective Size XYZ">{value(effectiveSize.x)}, {value(effectiveSize.y)}, {value(effectiveSize.z)}</CollisionInfoRow>
+        {physics.shape !== 0 && (
+          <>
+            <CollisionInfoRow label="Position XYZ">{value(collision.position.x)}, {value(collision.position.y)}, {value(collision.position.z)}</CollisionInfoRow>
+            <CollisionInfoRow label="Size XYZ">{value(collision.size.x)}, {value(collision.size.y)}, {value(collision.size.z)}</CollisionInfoRow>
+            <CollisionInfoRow label="Entity Scale">{value(scale.x)}, {value(scale.y)}</CollisionInfoRow>
+            <CollisionInfoRow label="Effective Size XYZ">{value(effectiveSize.x)}, {value(effectiveSize.y)}, {value(effectiveSize.z)}</CollisionInfoRow>
+          </>
+        )}
       </div>
 
       {physics.warnings.length > 0 && (
@@ -902,21 +926,35 @@ function CollisionPhysicsSection({ template, source }: {
           ))}
         </div>
       )}
+    </div>
+  );
+}
 
-      {collision.joints.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <div className="text-[10px] font-semibold text-gray-400">Revolute joints ({collision.joints.length})</div>
-          {collision.joints.map(joint => (
-            <div key={joint.name} className="inspector-subsection rounded border border-gray-800 bg-gray-950/40 p-2">
-              <CollisionInfoRow label={joint.name}>{joint.otherEntityName || '(no target)'}</CollisionInfoRow>
-              <CollisionInfoRow label="Anchor A">{value(joint.attachPointAX)}, {value(joint.attachPointAY)}</CollisionInfoRow>
-              <CollisionInfoRow label="Anchor B">{value(joint.attachPointBX)}, {value(joint.attachPointBY)}</CollisionInfoRow>
-              <CollisionInfoRow label="Limit">{joint.enableLimit ? `${value(joint.lowerAngle)}…${value(joint.upperAngle)} rad` : 'Disabled'}</CollisionInfoRow>
-              <CollisionInfoRow label="Motor">{joint.enableMotor ? `${value(joint.motorSpeed)} rad/s · ${value(joint.maxMotorTorque)} torque` : 'Disabled'}</CollisionInfoRow>
-            </div>
-          ))}
-        </div>
-      )}
+function RevoluteJointsSection({ template, source }: {
+  template: EntityTemplate;
+  source: 'Template' | 'Inline';
+}) {
+  const joints = template.physics?.collision.joints;
+  if (!joints || joints.length === 0) return null;
+  const value = (number: number) => Number.isFinite(number) ? Number(number.toFixed(4)) : 0;
+
+  return (
+    <div className="inspector-section px-3 py-2 flex flex-col gap-1.5 border-b border-gray-700">
+      <div className="inspector-section-title text-xs text-gray-500 mb-0.5 flex items-center justify-between">
+        <span>Revolute Joints ({joints.length})</span>
+        <span className="text-[10px] rounded bg-cyan-950/70 px-1.5 py-0.5 text-cyan-300">{source}</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        {joints.map(joint => (
+          <div key={joint.name} className="inspector-subsection rounded border border-gray-800 bg-gray-950/40 p-2">
+            <CollisionInfoRow label={joint.name}>{joint.otherEntityName || '(no target)'}</CollisionInfoRow>
+            <CollisionInfoRow label="Anchor A">{value(joint.attachPointAX)}, {value(joint.attachPointAY)}</CollisionInfoRow>
+            <CollisionInfoRow label="Anchor B">{value(joint.attachPointBX)}, {value(joint.attachPointBY)}</CollisionInfoRow>
+            <CollisionInfoRow label="Limit">{joint.enableLimit ? `${value(joint.lowerAngle)}…${value(joint.upperAngle)} rad` : 'Disabled'}</CollisionInfoRow>
+            <CollisionInfoRow label="Motor">{joint.enableMotor ? `${value(joint.motorSpeed)} rad/s · ${value(joint.maxMotorTorque)} torque` : 'Disabled'}</CollisionInfoRow>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1895,11 +1933,25 @@ export function Inspector() {
       />
 
       {template?.physics && (
-        <CollisionPhysicsSection
-          key={`${entity.editorEntityUID}:collision-physics`}
-          template={template}
-          source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
-        />
+        <>
+          <EntityPhysicsSection
+            key={`${entity.editorEntityUID}:physics`}
+            template={template}
+            source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
+          />
+          <CollisionGeometrySection
+            key={`${entity.editorEntityUID}:collision`}
+            template={template}
+            source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
+          />
+          {template.physics.collision.joints.length > 0 && (
+            <RevoluteJointsSection
+              key={`${entity.editorEntityUID}:joints`}
+              template={template}
+              source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
+            />
+          )}
+        </>
       )}
 
       {template?.particleSystems && template.particleSystems.length > 0 && (

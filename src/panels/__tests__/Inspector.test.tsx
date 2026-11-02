@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe('Inspector pending edit interactions', () => {
-  it('shows collision physics as read-only XYZ data with effective entity scale', () => {
+  it('shows separated physics, collision, and revolute joints sections', () => {
     useSceneStore.getState().loadScene(`
       <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
         <Entity id="1" spriteFrame="0" editorEntityUID="collision-entity">
@@ -28,17 +28,65 @@ describe('Inspector pending edit interactions', () => {
             <Scale x="2" y="3"/><Collision><Position x="4" y="5" z="9"/><Size x="20" y="30" z="64"/></Collision>
           </Entity>
         </Entity>
+        <Entity id="2" spriteFrame="0" editorEntityUID="joint-entity">
+          <EntityName>joint-entity</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="4">
+            <Collision>
+              <Position x="0" y="0" z="0"/><Size x="10" y="10" z="10"/>
+              <Joints>
+                revoluteJoint_wheel { otherEntityName = wheel.ent; attachPointAX = 1; attachPointAY = 2; attachPointBX = 3; attachPointBY = 4; enableLimit = true; lowerAngle = 0; upperAngle = 1.57; enableMotor = true; motorSpeed = 5; maxMotorTorque = 100; }
+              </Joints>
+            </Collision>
+          </Entity>
+        </Entity>
+        <Entity id="3" spriteFrame="0" editorEntityUID="none-shape-entity">
+          <EntityName>none-shape-entity</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="0" static="1">
+            <Collision><Position x="0" y="0" z="0"/><Size x="0" y="0" z="0"/></Collision>
+          </Entity>
+        </Entity>
       </EntitiesInScene></Ethanon>
     `);
+
+    // Test box entity
     useSceneStore.getState().selectEntity('collision-entity');
+    const { unmount } = render(<Inspector />);
+
+    const physicsSection = screen.getByText('Physics').closest('.inspector-section');
+    expect(physicsSection?.textContent).toContain('Inline');
+    expect(physicsSection?.textContent).toContain('BodyStatic');
+    expect(physicsSection?.textContent).toContain('MaterialF 0.8 · D 1 · R 0');
+
+    const collisionSection = screen.getByText('Collision').closest('.inspector-section');
+    expect(collisionSection?.textContent).toContain('Inline');
+    expect(collisionSection?.textContent).toContain('1 - Box');
+    expect(collisionSection?.textContent).toContain('Position XYZ4, 5, 9');
+    expect(collisionSection?.textContent).toContain('Size XYZ20, 30, 64');
+    expect(collisionSection?.textContent).toContain('Effective Size XYZ40, 90, 64');
+    expect(screen.queryByText(/Revolute Joints/)).toBeNull();
+
+    unmount();
+
+    // Test joint entity
+    useSceneStore.getState().selectEntity('joint-entity');
+    const { unmount: unmountJoint } = render(<Inspector />);
+
+    const jointsSection = screen.getByText(/Revolute Joints/).closest('.inspector-section');
+    expect(jointsSection).not.toBeNull();
+    expect(jointsSection?.textContent).toContain('revoluteJoint_wheel');
+    expect(jointsSection?.textContent).toContain('wheel.ent');
+    expect(jointsSection?.textContent).toContain('Anchor A1, 2');
+    expect(jointsSection?.textContent).toContain('Anchor B3, 4');
+
+    unmountJoint();
+
+    // Test none-shape entity
+    useSceneStore.getState().selectEntity('none-shape-entity');
     render(<Inspector />);
 
-    const section = screen.getByText('Collision & Physics').closest('.inspector-section');
-    expect(section?.textContent).toContain('Inline');
-    expect(section?.textContent).toContain('1 - Box');
-    expect(section?.textContent).toContain('Position XYZ4, 5, 9');
-    expect(section?.textContent).toContain('Size XYZ20, 30, 64');
-    expect(section?.textContent).toContain('Effective Size XYZ40, 90, 64');
+    const noneCollisionSection = screen.getByText('Collision').closest('.inspector-section');
+    expect(noneCollisionSection?.textContent).toContain('0 - None');
+    expect(screen.queryByText(/Revolute Joints/)).toBeNull();
   });
 
   it('shows each entity values when selection changes', () => {
