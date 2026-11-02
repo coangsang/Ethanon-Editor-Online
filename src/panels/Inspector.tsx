@@ -1727,15 +1727,19 @@ export function Inspector() {
         <>
           <EntityPhysicsSection
             key={`${entity.editorEntityUID}:physics`}
+            source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
             template={template}
           />
           <CollisionGeometrySection
             key={`${entity.editorEntityUID}:collision`}
+            source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
+            instanceScale={currentScale}
             template={template}
           />
           {template.physics.collision.joints.length > 0 && (
             <RevoluteJointsSection
               key={`${entity.editorEntityUID}:joints`}
+              source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
               template={template}
               />
           )}

@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatNumber } from './inspectorFormatters';
 
 export function AxisNumberInput({
   axis,
@@ -12,6 +13,7 @@ export function AxisNumberInput({
   ariaLabel,
   title,
   disabled = false,
+  readOnly = false,
 }: {
   axis: string;
   badgeClass: string;
@@ -24,9 +26,12 @@ export function AxisNumberInput({
   ariaLabel?: string;
   title?: string;
   disabled?: boolean;
+  readOnly?: boolean;
 }) {
+  const isInactive = disabled || readOnly;
+
   const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
-    if (disabled || !onChange) return;
+    if (isInactive || !onChange) return;
     const stepVal = typeof step === 'number' ? step : 1;
     const delta = e.deltaY < 0 ? stepVal : -stepVal;
     let nextVal = value + delta;
@@ -39,24 +44,37 @@ export function AxisNumberInput({
     onChange(nextVal);
   };
 
+  const displayVal = Number.isFinite(value)
+    ? (precision !== undefined ? formatNumber(value, precision) : value)
+    : 0;
+
+  const effectiveStep = isInactive && step === 1 ? 'any' : step;
+
+  const stateClass = disabled
+    ? 'opacity-70 cursor-not-allowed'
+    : readOnly
+    ? 'opacity-85 cursor-default'
+    : '';
+
   return (
-    <div className={`axis-input-group ${disabled ? 'opacity-70 cursor-not-allowed' : ''}`} title={title}>
+    <div className={`axis-input-group ${stateClass}`} title={title}>
       <span className={`axis-badge ${badgeClass}`}>{axis}</span>
       <input
         type="number"
         disabled={disabled}
+        readOnly={readOnly}
         aria-label={ariaLabel || axis}
-        value={Number.isFinite(value) ? value : 0}
-        step={step}
+        value={displayVal}
+        step={effectiveStep}
         min={min}
         max={max}
         onWheel={handleWheel}
         onChange={e => {
-          if (disabled || !onChange) return;
+          if (isInactive || !onChange) return;
           const parsed = parseFloat(e.target.value);
           onChange(Number.isFinite(parsed) ? parsed : 0);
         }}
-        className="axis-number-input"
+        className={`axis-number-input ${readOnly ? 'select-text cursor-default' : ''}`}
       />
     </div>
   );
@@ -67,19 +85,26 @@ export function CheckInput({
   value,
   onChange,
   disabled = false,
+  readOnly = false,
 }: {
   label: string;
   value: boolean;
   onChange?: (v: boolean) => void;
   disabled?: boolean;
+  readOnly?: boolean;
 }) {
+  const isInactive = disabled || readOnly;
   return (
-    <label className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}>
+    <label className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-75' : readOnly ? 'cursor-default opacity-85' : 'cursor-pointer'}`}>
       <input
         type="checkbox"
         checked={value}
         disabled={disabled}
-        onChange={e => onChange?.(e.target.checked)}
+        readOnly={readOnly}
+        onChange={e => {
+          if (isInactive) return;
+          onChange?.(e.target.checked);
+        }}
         className="w-3.5 h-3.5 accent-gray-500"
       />
       <span className="text-xs text-gray-300">{label}</span>

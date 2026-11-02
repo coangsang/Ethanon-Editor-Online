@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EntityTemplate } from '../../types';
 import { useSceneStore } from '../../store/sceneStore';
@@ -53,16 +53,28 @@ describe('Inspector pending edit interactions', () => {
     const { unmount } = render(<Inspector />);
 
     const physicsSection = screen.getByText('Physics').closest('.inspector-section');
+    expect(physicsSection?.textContent).toContain('Inline');
     expect(physicsSection?.textContent).toContain('Static');
     expect(physicsSection?.textContent).toContain('Friction');
-    expect(screen.getByDisplayValue('0.8')).toBeDefined();
+    const withinPhysics = within(physicsSection as HTMLElement);
+    expect(withinPhysics.getByDisplayValue('0.8')).toBeDefined();
     expect(physicsSection?.textContent).toContain('Density');
     expect(physicsSection?.textContent).toContain('Restitution');
 
 
     const collisionSection = screen.getByText('Collision').closest('.inspector-section');
+    const withinCollision = within(collisionSection as HTMLElement);
+    expect(collisionSection?.textContent).toContain('Inline');
     expect(collisionSection?.textContent).toContain('1 - Box');
     expect(collisionSection?.textContent).toContain('Position');
+    expect(withinCollision.getByDisplayValue('4')).toBeDefined();
+    expect(withinCollision.getByDisplayValue('5')).toBeDefined();
+    expect(withinCollision.getByDisplayValue('9')).toBeDefined();
+    expect(withinCollision.getByDisplayValue('20')).toBeDefined();
+    expect(withinCollision.getByDisplayValue('30')).toBeDefined();
+    expect(withinCollision.getAllByDisplayValue('64')).toHaveLength(2);
+    expect(withinCollision.getByDisplayValue('40')).toBeDefined();
+    expect(withinCollision.getByDisplayValue('90')).toBeDefined();
     expect(collisionSection?.textContent).toContain('Size');
     expect(collisionSection?.textContent).toContain('Effective');
     expect(screen.queryByText(/Revolute Joints/)).toBeNull();
@@ -74,13 +86,22 @@ describe('Inspector pending edit interactions', () => {
     const { unmount: unmountJoint } = render(<Inspector />);
 
     const jointsSection = screen.getByText(/Revolute Joints/).closest('.inspector-section');
+    const withinJoints = within(jointsSection as HTMLElement);
     expect(jointsSection).not.toBeNull();
+    expect(jointsSection?.textContent).toContain('Inline');
     expect(jointsSection?.textContent).toContain('revoluteJoint_wheel');
-    expect(screen.getByDisplayValue('wheel.ent')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('wheel.ent')).toBeDefined();
     expect(jointsSection?.textContent).toContain('Anchor A');
     expect(jointsSection?.textContent).toContain('Anchor B');
     expect(jointsSection?.textContent).toContain('Limit');
     expect(jointsSection?.textContent).toContain('Motor');
+    expect(withinJoints.getByDisplayValue('1')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('2')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('3')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('4')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('1.57')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('5')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('100')).toBeDefined();
 
     unmountJoint();
 
