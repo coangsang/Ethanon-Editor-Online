@@ -99,6 +99,20 @@ export function CollisionGeometrySection({
   const isReadOnly = readOnly || source === 'Template';
 
   const handlePosChange = (axis: 'x' | 'y' | 'z', val: number) => {
+    if (isReadOnly) return;
+    const rounded = Math.round(val);
+    const newPos = {
+      ...latestPosRef.current,
+      [axis]: rounded,
+    };
+    latestPosRef.current = newPos;
+    setLocalPos(newPos);
+    if (entityUid) {
+      transformEventBus.emit([{ uid: entityUid, collisionPos: newPos }]);
+    }
+  };
+
+  const commitPosChange = (axis: 'x' | 'y' | 'z', val: number) => {
     if (isReadOnly || !onChangePosition) return;
     const rounded = Math.round(val);
     const newPos = {
@@ -114,6 +128,29 @@ export function CollisionGeometrySection({
   };
 
   const handleSizeChange = (axis: 'x' | 'y' | 'z', val: number) => {
+    if (isReadOnly) return;
+    const clamped = Math.max(0.5, Number((Math.round(val * 2) / 2).toFixed(1)));
+    let newSize: { x: number; y: number; z: number };
+    if (shape === 2 && uniformCircleLock && (axis === 'x' || axis === 'y')) {
+      newSize = {
+        ...latestSizeRef.current,
+        x: clamped,
+        y: clamped,
+      };
+    } else {
+      newSize = {
+        ...latestSizeRef.current,
+        [axis]: clamped,
+      };
+    }
+    latestSizeRef.current = newSize;
+    setLocalSize(newSize);
+    if (entityUid) {
+      transformEventBus.emit([{ uid: entityUid, collisionSize: newSize }]);
+    }
+  };
+
+  const commitSizeChange = (axis: 'x' | 'y' | 'z', val: number) => {
     if (isReadOnly || !onChangeSize) return;
     const clamped = Math.max(0.5, Number((Math.round(val * 2) / 2).toFixed(1)));
     let newSize: { x: number; y: number; z: number };
@@ -212,6 +249,7 @@ export function CollisionGeometrySection({
                 precision={0}
                 readOnly={isReadOnly}
                 onChange={v => handlePosChange('x', v)}
+                onCommit={v => commitPosChange('x', v)}
               />
               <AxisNumberInput
                 axis="Y"
@@ -222,6 +260,7 @@ export function CollisionGeometrySection({
                 precision={0}
                 readOnly={isReadOnly}
                 onChange={v => handlePosChange('y', v)}
+                onCommit={v => commitPosChange('y', v)}
               />
               <AxisNumberInput
                 axis="Z"
@@ -232,6 +271,7 @@ export function CollisionGeometrySection({
                 precision={0}
                 readOnly={isReadOnly}
                 onChange={v => handlePosChange('z', v)}
+                onCommit={v => commitPosChange('z', v)}
               />
             </div>
           </div>
@@ -267,6 +307,7 @@ export function CollisionGeometrySection({
                 min={0.5}
                 readOnly={isReadOnly}
                 onChange={v => handleSizeChange('x', v)}
+                onCommit={v => commitSizeChange('x', v)}
               />
               <AxisNumberInput
                 axis="Y"
@@ -278,6 +319,7 @@ export function CollisionGeometrySection({
                 min={0.5}
                 readOnly={isReadOnly}
                 onChange={v => handleSizeChange('y', v)}
+                onCommit={v => commitSizeChange('y', v)}
               />
               <AxisNumberInput
                 axis="Z"
@@ -289,6 +331,7 @@ export function CollisionGeometrySection({
                 min={0.5}
                 readOnly={isReadOnly}
                 onChange={v => handleSizeChange('z', v)}
+                onCommit={v => commitSizeChange('z', v)}
               />
             </div>
           </div>

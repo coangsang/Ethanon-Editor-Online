@@ -1626,7 +1626,7 @@ export function Inspector() {
     useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       if (newShape === 0) {
-        return applyPhysicsToEntity(currentEntity, null);
+        return applyPhysicsToEntity(currentEntity, createDefaultPhysics(0));
       }
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics;
@@ -1679,7 +1679,7 @@ export function Inspector() {
   const removeCollision = () => {
     useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
-      return applyPhysicsToEntity(currentEntity, null);
+      return applyPhysicsToEntity(currentEntity, createDefaultPhysics(0));
     });
   };
 

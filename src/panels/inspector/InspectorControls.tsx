@@ -6,6 +6,7 @@ export function AxisNumberInput({
   badgeClass,
   value,
   onChange,
+  onCommit,
   step = 1,
   min,
   max,
@@ -20,6 +21,7 @@ export function AxisNumberInput({
   badgeClass: string;
   value: number;
   onChange?: (val: number) => void;
+  onCommit?: (val: number) => void;
   step?: number | 'any';
   min?: number;
   max?: number;
@@ -34,6 +36,7 @@ export function AxisNumberInput({
   const isInteractive = !isInactive && !!onChange;
 
   const dragStartRef = useRef<{ startX: number; startVal: number } | null>(null);
+  const latestDragValRef = useRef<number>(value);
   const [isDragging, setIsDragging] = useState(false);
 
   const deltaStep = dragDelta ?? (typeof step === 'number' ? step : 1);
@@ -43,6 +46,7 @@ export function AxisNumberInput({
     e.preventDefault();
     e.stopPropagation();
     dragStartRef.current = { startX: e.clientX, startVal: value };
+    latestDragValRef.current = value;
     setIsDragging(true);
     try {
       e.currentTarget.setPointerCapture?.(e.pointerId);
@@ -62,6 +66,7 @@ export function AxisNumberInput({
       ? deltaStep.toString().split('.')[1].length
       : 0);
     nextVal = Number(nextVal.toFixed(dec));
+    latestDragValRef.current = nextVal;
     onChange(nextVal);
   };
 
@@ -74,6 +79,7 @@ export function AxisNumberInput({
       } catch {
         // Ignored if already released
       }
+      onCommit?.(latestDragValRef.current);
     }
   };
 
@@ -89,6 +95,7 @@ export function AxisNumberInput({
       : 0);
     nextVal = Number(nextVal.toFixed(dec));
     onChange(nextVal);
+    onCommit?.(nextVal);
   };
 
   const displayVal = Number.isFinite(value)
@@ -131,7 +138,9 @@ export function AxisNumberInput({
         onChange={e => {
           if (isInactive || !onChange) return;
           const parsed = parseFloat(e.target.value);
-          onChange(Number.isFinite(parsed) ? parsed : 0);
+          const nextVal = Number.isFinite(parsed) ? parsed : 0;
+          onChange(nextVal);
+          onCommit?.(nextVal);
         }}
         className={`axis-number-input ${readOnly ? 'select-text cursor-default' : ''}`}
       />

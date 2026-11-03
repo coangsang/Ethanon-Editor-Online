@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { parseEntityTemplate, parseScene } from '../../io/parseScene';
-import { resolveEntityTemplate } from '../entityTemplate';
+import { applyPhysicsToEntity, createDefaultPhysics, resolveEntityTemplate } from '../entityTemplate';
 import { parseEntityPhysics } from '../collision';
+import type { EntityInstance } from '../../types';
 
 describe('collision parsing and resolution', () => {
   it('parses complete XYZ box physics', () => {
@@ -227,5 +228,95 @@ describe('collision parsing and resolution', () => {
       expect.stringContaining('anchors'),
       expect.stringContaining('lowerAngle'),
     ]));
+  });
+
+  it('preserves raw ENML strings (Polygon, Compound, Joints) in inlineEntityData.Collision when updating physics', () => {
+    const rawPolygon = 'v0 { x=0; y=0; } v1 { x=1; y=1; }';
+    const rawJoints = 'revoluteJoint0 { attachPointAX=0; }';
+    const entity: EntityInstance = {
+      id: 1,
+      entityName: 'polyEntity',
+      editorEntityName: 'polyEntity',
+      editorEntityUID: 'poly-1',
+      position: { x: 0, y: 0, z: 0 },
+      angle: 0,
+      spriteFrame: 0,
+      hide: false,
+      flipX: false,
+      flipY: false,
+      customData: [],
+      inlineTemplate: {
+        name: 'polyEntity',
+        physics: createDefaultPhysics(3),
+      },
+      inlineEntityData: {
+        shape: '3',
+        Collision: {
+          Position: { x: '0', y: '0', z: '0' },
+          Size: { x: '10', y: '10', z: '10' },
+          Polygon: rawPolygon,
+          Joints: rawJoints,
+        },
+      },
+    };
+
+    const nextPhysics = {
+      ...createDefaultPhysics(3),
+      friction: 0.5,
+      collision: {
+        valid: true,
+        position: { x: 5, y: 5, z: 0 },
+        size: { x: 20, y: 20, z: 20 },
+        polygon: [{ name: 'v0', x: 0, y: 0 }, { name: 'v1', x: 1, y: 1 }],
+        compound: [],
+        joints: [],
+      },
+      warnings: [],
+    };
+
+    const updated = applyPhysicsToEntity(entity, nextPhysics);
+    const col = updated.inlineEntityData?.Collision as Record<string, unknown>;
+    expect(col.Polygon).toBe(rawPolygon);
+    expect(col.Joints).toBe(rawJoints);
+    expect(typeof col.Polygon).toBe('string');
+  });
+
+  it('allows disabling collision on an entity unpacked from a template without fallback revival', () => {
+    const template = parseEntityTemplate('rock', `
+      <Ethanon><Entity shape="1">
+        <Collision><Position x="0" y="0" z="0"/><Size x="32" y="32" z="32"/></Collision>
+      </Entity></Ethanon>`);
+
+    const entity: EntityInstance = {
+      id: 2,
+      entityName: 'rock',
+      editorEntityName: 'rock_instance',
+      editorEntityUID: 'rock-1',
+      position: { x: 0, y: 0, z: 0 },
+      angle: 0,
+      spriteFrame: 0,
+      hide: false,
+      flipX: false,
+      flipY: false,
+      customData: [],
+      inlineTemplate: {
+        name: 'rock',
+        physics: template.physics,
+      },
+      inlineEntityData: {
+        shape: '1',
+      },
+    };
+
+    const templates = { rock: template };
+
+    // Disabling collision
+    const disabled = applyPhysicsToEntity(entity, createDefaultPhysics(0));
+    expect(disabled.inlineEntityData?.shape).toBe('0');
+    expect(disabled.inlineEntityData?.Collision).toBeUndefined();
+
+    // Resolving template must preserve shape 0 instead of reviving shape 1 from template
+    const resolved = resolveEntityTemplate(disabled, templates);
+    expect(resolved.physics?.shape).toBe(0);
   });
 });

@@ -74,6 +74,14 @@ describe('Inspector Physics & Collision Sub-sections', () => {
       fireEvent.change(frictionInput, { target: { value: '0.9' } });
       expect(onChange).toHaveBeenCalledWith({ friction: 0.9 });
       expect(frictionInput.value).toBe('0.9');
+
+      // User can clear input to empty draft without immediate reset to 0
+      fireEvent.change(frictionInput, { target: { value: '' } });
+      expect(frictionInput.value).toBe('');
+
+      // On blur with empty/invalid string, reverts to valid template physics value
+      fireEvent.blur(frictionInput);
+      expect(frictionInput.value).toBe('0.75');
     });
   });
 
@@ -253,8 +261,9 @@ describe('Inspector Physics & Collision Sub-sections', () => {
   });
 
   describe('AxisNumberInput', () => {
-    it('supports mouse drag scrubbing with dragDelta', () => {
+    it('supports mouse drag scrubbing with dragDelta and commits on pointer up', () => {
       const onChange = vi.fn();
+      const onCommit = vi.fn();
       render(
         <AxisNumberInput
           axis="X"
@@ -263,6 +272,7 @@ describe('Inspector Physics & Collision Sub-sections', () => {
           dragDelta={0.5}
           precision={1}
           onChange={onChange}
+          onCommit={onCommit}
         />
       );
 
@@ -270,8 +280,10 @@ describe('Inspector Physics & Collision Sub-sections', () => {
       fireEvent.pointerDown(badge, { button: 0, clientX: 100, pointerId: 1 });
       fireEvent.pointerMove(badge, { clientX: 116, pointerId: 1 });
       expect(onChange).toHaveBeenCalledWith(12);
+      expect(onCommit).not.toHaveBeenCalled();
 
       fireEvent.pointerUp(badge, { pointerId: 1 });
+      expect(onCommit).toHaveBeenCalledWith(12);
     });
 
     it('does not scrub when readOnly or disabled', () => {

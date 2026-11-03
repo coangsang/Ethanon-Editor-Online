@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import type { EntityPhysicsConfig, EntityTemplate } from '../../types';
 import { CheckInput } from './InspectorControls';
 
@@ -14,29 +14,29 @@ export function EntityPhysicsSection({
   onChange?: (patch: Partial<EntityPhysicsConfig>) => void;
 }) {
   const physics = template.physics;
-  if (!physics || physics.shape === 0) return null;
-
   const isReadOnly = readOnly || source === 'Template';
 
-  const [localVals, setLocalVals] = useState({
-    friction: physics.friction,
-    density: physics.density,
-    restitution: physics.restitution,
-    gravityScale: physics.gravityScale,
+  const [drafts, setDrafts] = useState({
+    friction: String(physics?.friction ?? 1),
+    density: String(physics?.density ?? 1),
+    restitution: String(physics?.restitution ?? 0),
+    gravityScale: String(physics?.gravityScale ?? 1),
   });
 
   const [sourceVals, setSourceVals] = useState({
-    friction: physics.friction,
-    density: physics.density,
-    restitution: physics.restitution,
-    gravityScale: physics.gravityScale,
+    friction: physics?.friction,
+    density: physics?.density,
+    restitution: physics?.restitution,
+    gravityScale: physics?.gravityScale,
   });
 
   if (
-    sourceVals.friction !== physics.friction ||
-    sourceVals.density !== physics.density ||
-    sourceVals.restitution !== physics.restitution ||
-    sourceVals.gravityScale !== physics.gravityScale
+    physics && (
+      sourceVals.friction !== physics.friction ||
+      sourceVals.density !== physics.density ||
+      sourceVals.restitution !== physics.restitution ||
+      sourceVals.gravityScale !== physics.gravityScale
+    )
   ) {
     setSourceVals({
       friction: physics.friction,
@@ -44,31 +44,38 @@ export function EntityPhysicsSection({
       restitution: physics.restitution,
       gravityScale: physics.gravityScale,
     });
-    setLocalVals({
-      friction: physics.friction,
-      density: physics.density,
-      restitution: physics.restitution,
-      gravityScale: physics.gravityScale,
+    setDrafts({
+      friction: String(physics.friction),
+      density: String(physics.density),
+      restitution: String(physics.restitution),
+      gravityScale: String(physics.gravityScale),
     });
   }
-
-  const latestValsRef = useRef(localVals);
-  useEffect(() => {
-    latestValsRef.current = localVals;
-  }, [localVals]);
 
   const handleNumberChange = (
     field: 'friction' | 'density' | 'restitution' | 'gravityScale',
     valueStr: string,
   ) => {
     if (isReadOnly || !onChange) return;
+    setDrafts(prev => ({ ...prev, [field]: valueStr }));
     const parsed = parseFloat(valueStr);
-    const val = Number.isFinite(parsed) ? parsed : 0;
-    const next = { ...latestValsRef.current, [field]: val };
-    latestValsRef.current = next;
-    setLocalVals(next);
-    onChange({ [field]: val });
+    if (Number.isFinite(parsed)) {
+      onChange({ [field]: parsed });
+    }
   };
+
+  const handleBlur = (
+    field: 'friction' | 'density' | 'restitution' | 'gravityScale',
+  ) => {
+    if (!physics) return;
+    const current = drafts[field];
+    const parsed = parseFloat(current);
+    if (!Number.isFinite(parsed)) {
+      setDrafts(prev => ({ ...prev, [field]: String(physics[field]) }));
+    }
+  };
+
+  if (!physics || physics.shape === 0) return null;
 
   return (
     <div className="inspector-section px-3 py-2 flex flex-col gap-2 border-b border-gray-700">
@@ -117,10 +124,10 @@ export function EntityPhysicsSection({
             <input
               type="number"
               readOnly={isReadOnly}
-              disabled={isReadOnly}
-              value={localVals.friction}
+              value={drafts.friction}
               step="any"
               onChange={e => handleNumberChange('friction', e.target.value)}
+              onBlur={() => handleBlur('friction')}
               className={`w-16 editor-input-mono text-xs py-1 ${isReadOnly ? 'select-text cursor-default opacity-85' : 'bg-gray-800'}`}
             />
           </div>
@@ -129,10 +136,10 @@ export function EntityPhysicsSection({
             <input
               type="number"
               readOnly={isReadOnly}
-              disabled={isReadOnly}
-              value={localVals.density}
+              value={drafts.density}
               step="any"
               onChange={e => handleNumberChange('density', e.target.value)}
+              onBlur={() => handleBlur('density')}
               className={`w-16 editor-input-mono text-xs py-1 ${isReadOnly ? 'select-text cursor-default opacity-85' : 'bg-gray-800'}`}
             />
           </div>
@@ -144,10 +151,10 @@ export function EntityPhysicsSection({
             <input
               type="number"
               readOnly={isReadOnly}
-              disabled={isReadOnly}
-              value={localVals.restitution}
+              value={drafts.restitution}
               step="any"
               onChange={e => handleNumberChange('restitution', e.target.value)}
+              onBlur={() => handleBlur('restitution')}
               className={`w-16 editor-input-mono text-xs py-1 ${isReadOnly ? 'select-text cursor-default opacity-85' : 'bg-gray-800'}`}
             />
           </div>
@@ -156,10 +163,10 @@ export function EntityPhysicsSection({
             <input
               type="number"
               readOnly={isReadOnly}
-              disabled={isReadOnly}
-              value={localVals.gravityScale}
+              value={drafts.gravityScale}
               step="any"
               onChange={e => handleNumberChange('gravityScale', e.target.value)}
+              onBlur={() => handleBlur('gravityScale')}
               className={`w-16 editor-input-mono text-xs py-1 ${isReadOnly ? 'select-text cursor-default opacity-85' : 'bg-gray-800'}`}
             />
           </div>

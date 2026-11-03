@@ -52,7 +52,7 @@ export function mergeTemplate(
     emissiveColor: inlineTemplate.emissiveColor ?? fallback.emissiveColor,
     particleSystems: inlineTemplate.particleSystems ?? fallback.particleSystems,
     customData: inlineTemplate.customData ?? fallback.customData,
-    physics: inlineTemplate.physics ?? fallback.physics,
+    physics: inlineTemplate.physics !== undefined ? inlineTemplate.physics : fallback.physics,
     rawEntityData: fallback.rawEntityData,
   };
 }
@@ -219,12 +219,12 @@ export function unpackEntityInstance(
 
 
 export function createDefaultPhysics(
-  shape: 1 | 2 = 1,
+  shape: 0 | 1 | 2 = 1,
   defaultSize?: { x: number; y: number; z?: number },
 ): EntityPhysicsConfig {
-  const sizeX = defaultSize?.x && defaultSize.x > 0 ? defaultSize.x : 64;
-  const sizeY = defaultSize?.y && defaultSize.y > 0 ? defaultSize.y : 64;
-  const sizeZ = defaultSize?.z && defaultSize.z > 0 ? defaultSize.z : 64;
+  const sizeX = defaultSize?.x && defaultSize.x > 0 ? defaultSize.x : (shape === 0 ? 0 : 64);
+  const sizeY = defaultSize?.y && defaultSize.y > 0 ? defaultSize.y : (shape === 0 ? 0 : 64);
+  const sizeZ = defaultSize?.z && defaultSize.z > 0 ? defaultSize.z : (shape === 0 ? 0 : 64);
   return {
     shape,
     static: false,
@@ -236,7 +236,7 @@ export function createDefaultPhysics(
     restitution: 0,
     gravityScale: 1,
     collision: {
-      valid: true,
+      valid: shape !== 0,
       position: { x: 0, y: 0, z: 0 },
       size: { x: sizeX, y: sizeY, z: sizeZ },
       polygon: [],
@@ -259,7 +259,7 @@ export function applyPhysicsToEntity(
   };
 
   if (!physics || physics.shape === 0) {
-    inlineTemplate.physics = physics ? { ...physics, shape: 0 } : undefined;
+    inlineTemplate.physics = physics ? { ...physics, shape: 0 } : createDefaultPhysics(0);
     inlineEntityData.shape = '0';
     delete inlineEntityData.Collision;
     return {
@@ -276,6 +276,8 @@ export function applyPhysicsToEntity(
       valid: true,
     },
   };
+
+  const existingCollision = (entity.inlineEntityData?.Collision as Record<string, unknown>) ?? {};
 
   inlineEntityData.shape = String(physics.shape);
   inlineEntityData.static = physics.static ? '1' : '0';
@@ -298,9 +300,9 @@ export function applyPhysicsToEntity(
       y: String(physics.collision.size.y),
       z: String(physics.collision.size.z),
     },
-    ...(physics.collision.polygon && physics.collision.polygon.length > 0 ? { Polygon: physics.collision.polygon } : {}),
-    ...(physics.collision.compound && physics.collision.compound.length > 0 ? { Compound: physics.collision.compound } : {}),
-    ...(physics.collision.joints && physics.collision.joints.length > 0 ? { Joints: physics.collision.joints } : {}),
+    ...(typeof existingCollision.Polygon === 'string' ? { Polygon: existingCollision.Polygon } : {}),
+    ...(typeof existingCollision.Compound === 'string' ? { Compound: existingCollision.Compound } : {}),
+    ...(typeof existingCollision.Joints === 'string' ? { Joints: existingCollision.Joints } : {}),
   };
 
   return {
