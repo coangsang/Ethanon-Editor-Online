@@ -47,7 +47,7 @@ export function Viewport() {
     templateImageUrls,
     placingTemplate,
   });
-  const { onEntityPointerDown, onStartGizmoDrag, onViewportClick, zoomIn, zoomOut } = useViewportInteractions({
+  const { onEntityPointerDown, onStartGizmoDrag, onViewportClick, zoomIn, zoomOut, resetZoom } = useViewportInteractions({
     refs,
     appReadyRevision,
     setCamera,
@@ -130,7 +130,7 @@ export function Viewport() {
         style={{ cursor: cursorStyle }}
         onClick={onViewportClick}
       />
-      <ViewportZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
+      <ViewportZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} onResetZoom={resetZoom} />
       <ViewportCursorCoordinates refs={refs} appReadyRevision={appReadyRevision} />
       <ViewportStatsOverlay refs={refs} />
       <ViewportRuntimeOverlay runtimeState={runtimeState} onRetry={retryViewport} />

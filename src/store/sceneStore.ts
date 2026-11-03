@@ -43,6 +43,7 @@ import { generatePrefabThumbnail } from '../utils/generatePrefabThumbnail';
 import { decodeProjectText } from '../io/decodeProjectText';
 import { pushHistorySnapshot, type HistoryEntry } from './sceneHistory';
 import { resetPerformanceProfiler, setPerformanceProfilerEnabled } from '../utils/performanceProfiler';
+import { DEFAULT_VIEWPORT_ZOOM } from '../canvas/viewportMath';
 
 function snapVal(v: number, active: boolean, step = 16): number {
   return active ? Math.round(v / step) * step : Math.round(v);
@@ -266,7 +267,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   projectError: null,
   projectScanIssues: [],
   recentProjects: getRecentProjectsFromStorage(),
-  camera: { x: 0, y: 0, zoom: 1 },
+  camera: { x: 0, y: 0, zoom: DEFAULT_VIEWPORT_ZOOM },
   focusEntityRequest: null,
   scrollHierarchyRequest: null,
   pingTemplateRequest: null,
@@ -429,7 +430,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
         projectError: null,
         projectScanIssues: project.scanIssues,
         recentProjects: recent,
-        camera: { x: 0, y: 0, zoom: 1 },
+        camera: { x: 0, y: 0, zoom: DEFAULT_VIEWPORT_ZOOM },
         focusEntityRequest: null,
         pingTemplateRequest: null,
         pingSpriteRequest: null,

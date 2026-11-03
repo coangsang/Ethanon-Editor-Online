@@ -432,6 +432,16 @@ export function getAtlasForTemplate(template: EntityTemplate, atlases: Record<st
 }
 
 
+export const DEFAULT_VIEWPORT_ZOOM = 0.68;
+
+export function formatZoomPercentage(zoom: number, baseZoom: number = DEFAULT_VIEWPORT_ZOOM): string {
+  return `${Math.round((zoom / baseZoom) * 100)}%`;
+}
+
+export function percentToZoom(percent: number, baseZoom: number = DEFAULT_VIEWPORT_ZOOM): number {
+  return (percent / 100) * baseZoom;
+}
+
 export const DEFAULT_SCENE_BOUNDS: Bounds = { x: 0, y: 0, width: 1920, height: 1080 };
 export const DEFAULT_SCENE_PADDING = 64;
 export const MIN_ZOOM_ABSOLUTE = 0.005;
@@ -490,8 +500,8 @@ export function computeSceneMinZoom(
   const availH = Math.max(20, viewportSize.height - padding * 2);
 
   const fitZoom = Math.min(availW / sceneBounds.width, availH / sceneBounds.height);
-  // Clamping zoom-out to scene bounds should never prevent zooming out to 1:1 view (1.0)
-  const sceneMinZoom = Math.min(fitZoom, 1.0);
+  // Clamping zoom-out to scene bounds should never prevent zooming out to 1:1 view (DEFAULT_VIEWPORT_ZOOM)
+  const sceneMinZoom = Math.min(fitZoom, DEFAULT_VIEWPORT_ZOOM);
   return Math.max(MIN_ZOOM_ABSOLUTE, Math.min(MAX_ZOOM, sceneMinZoom));
 }
 
@@ -501,17 +511,17 @@ export function computeSceneFitCamera(
   padding: number = DEFAULT_SCENE_PADDING
 ): { x: number; y: number; zoom: number } {
   if (viewportSize.width <= 0 || viewportSize.height <= 0) {
-    return { x: 0, y: 0, zoom: 1 };
+    return { x: 0, y: 0, zoom: DEFAULT_VIEWPORT_ZOOM };
   }
 
   const availW = Math.max(20, viewportSize.width - padding * 2);
   const availH = Math.max(20, viewportSize.height - padding * 2);
   const rawFitZoom = sceneBounds.width > 0 && sceneBounds.height > 0
     ? Math.min(availW / sceneBounds.width, availH / sceneBounds.height)
-    : 1;
+    : DEFAULT_VIEWPORT_ZOOM;
 
-  // For small scenes, frame naturally without magnifying past 100% (1.0).
-  const fitZoom = Math.max(MIN_ZOOM_ABSOLUTE, Math.min(1.0, rawFitZoom));
+  // For small scenes, frame naturally without magnifying past 100% (DEFAULT_VIEWPORT_ZOOM).
+  const fitZoom = Math.max(MIN_ZOOM_ABSOLUTE, Math.min(DEFAULT_VIEWPORT_ZOOM, rawFitZoom));
   const centerX = sceneBounds.x + sceneBounds.width / 2;
   const centerY = sceneBounds.y + sceneBounds.height / 2;
 

@@ -5,6 +5,7 @@ import {
   computeSceneFitCamera,
   DEFAULT_SCENE_BOUNDS,
   MIN_ZOOM_ABSOLUTE,
+  DEFAULT_VIEWPORT_ZOOM,
 } from '../viewportMath';
 import type { EntityInstance } from '../../types';
 import type { Bounds } from '../viewportTypes';
@@ -83,16 +84,16 @@ describe('computeSceneMinZoom & computeSceneFitCamera', () => {
     expect(minZoom).toBeGreaterThanOrEqual(MIN_ZOOM_ABSOLUTE);
   });
 
-  it('does not clamp minZoom above 1.0 for small scenes so users can zoom out', () => {
+  it('does not clamp minZoom above DEFAULT_VIEWPORT_ZOOM for small scenes so users can zoom out', () => {
     const smallBounds: Bounds = { x: 0, y: 0, width: 64, height: 64 };
     const minZoom = computeSceneMinZoom(smallBounds, viewportSize, 64);
-    expect(minZoom).toBeLessThanOrEqual(1.0);
+    expect(minZoom).toBeLessThanOrEqual(DEFAULT_VIEWPORT_ZOOM);
   });
 
-  it('caps fit camera zoom to 1.0 for small scenes instead of extreme magnification', () => {
+  it('caps fit camera zoom to DEFAULT_VIEWPORT_ZOOM for small scenes instead of extreme magnification', () => {
     const smallBounds: Bounds = { x: 0, y: 0, width: 64, height: 64 };
     const camera = computeSceneFitCamera(smallBounds, viewportSize, 64);
-    expect(camera.zoom).toBe(1.0);
+    expect(camera.zoom).toBe(DEFAULT_VIEWPORT_ZOOM);
   });
 
   it('computes centered camera transform for fit view on large scenes', () => {

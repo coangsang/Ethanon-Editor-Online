@@ -3,6 +3,7 @@ import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { useViewportInteractions } from '../useViewportInteractions';
 import { useSceneStore } from '../../store/sceneStore';
+import { DEFAULT_VIEWPORT_ZOOM } from '../viewportMath';
 import type { ViewportRefs } from '../viewportTypes';
 
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => false }));
@@ -229,5 +230,98 @@ describe('Viewport Fit Scene keyboard shortcut', () => {
     expect(selectEvent.defaultPrevented).toBe(false);
 
     document.body.removeChild(select);
+  });
+  it('triggers resetZoom to DEFAULT_VIEWPORT_ZOOM when pressing key "9"', () => {
+    let capturedCam: any = null;
+    const refs = createMockRefs();
+    const canvas = document.createElement('canvas');
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 800,
+      right: 1000,
+      bottom: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    refs.containerRef.current.appendChild(canvas);
+
+    useSceneStore.setState({
+      camera: { x: 100, y: 100, zoom: 1.5 },
+    });
+
+    const result = renderHook(() =>
+      useViewportInteractions({
+        refs,
+        setCamera: (patch) => {
+          capturedCam = patch;
+        },
+        addEntity: vi.fn(),
+        updateWorldTransform: vi.fn(),
+        setParallaxOriginNormalized: vi.fn(),
+      })
+    );
+    unmountHook = result.unmount;
+
+    const event = new KeyboardEvent('keydown', {
+      key: '9',
+      code: 'Digit9',
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(event);
+
+    expect(capturedCam).not.toBeNull();
+    expect(capturedCam.zoom).toBe(DEFAULT_VIEWPORT_ZOOM);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('triggers resetZoom when pressing Numpad9', () => {
+    let capturedCam: any = null;
+    const refs = createMockRefs();
+    const canvas = document.createElement('canvas');
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 1000,
+      height: 800,
+      right: 1000,
+      bottom: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+    refs.containerRef.current.appendChild(canvas);
+
+    useSceneStore.setState({
+      camera: { x: 100, y: 100, zoom: 1.5 },
+    });
+
+    const result = renderHook(() =>
+      useViewportInteractions({
+        refs,
+        setCamera: (patch) => {
+          capturedCam = patch;
+        },
+        addEntity: vi.fn(),
+        updateWorldTransform: vi.fn(),
+        setParallaxOriginNormalized: vi.fn(),
+      })
+    );
+    unmountHook = result.unmount;
+
+    const event = new KeyboardEvent('keydown', {
+      key: '9',
+      code: 'Numpad9',
+      bubbles: true,
+      cancelable: true,
+    });
+    window.dispatchEvent(event);
+
+    expect(capturedCam).not.toBeNull();
+    expect(capturedCam.zoom).toBe(DEFAULT_VIEWPORT_ZOOM);
+    expect(event.defaultPrevented).toBe(true);
   });
 });
