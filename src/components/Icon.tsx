@@ -2,8 +2,10 @@ import {
   Boxes,
   ChevronDown,
   ChevronUp,
+  Copy,
   FolderOpen,
   Hand,
+  Lock,
   MousePointer2,
   Maximize,
   Move,
@@ -11,22 +13,26 @@ import {
   Save,
   Settings,
   Trash2,
+  Unlock,
   type LucideIcon,
-} from 'lucide-react';
+} from "lucide-react";
 
 export type IconName =
-  | 'chevron-down'
-  | 'chevron-up'
-  | 'cursor'
-  | 'fit-view'
-  | 'hand'
-  | 'move'
-  | 'prefab'
-  | 'project-open'
-  | 'rotate'
-  | 'save'
-  | 'settings'
-  | 'trash';
+  | "chevron-down"
+  | "chevron-up"
+  | "copy"
+  | "cursor"
+  | "fit-view"
+  | "hand"
+  | "lock"
+  | "move"
+  | "prefab"
+  | "project-open"
+  | "rotate"
+  | "save"
+  | "settings"
+  | "trash"
+  | "unlock";
 
 interface IconProps {
   name: IconName;
@@ -36,21 +42,24 @@ interface IconProps {
 }
 
 const ICONS: Record<IconName, LucideIcon> = {
-  'chevron-down': ChevronDown,
-  'chevron-up': ChevronUp,
+  "chevron-down": ChevronDown,
+  "chevron-up": ChevronUp,
+  copy: Copy,
   cursor: MousePointer2,
-  'fit-view': Maximize,
+  "fit-view": Maximize,
   hand: Hand,
+  lock: Lock,
   move: Move,
   prefab: Boxes,
-  'project-open': FolderOpen,
+  "project-open": FolderOpen,
   rotate: RotateCw,
   save: Save,
   settings: Settings,
   trash: Trash2,
+  unlock: Unlock,
 };
 
-export function Icon({ name, size = 16, className = '', title }: IconProps) {
+export function Icon({ name, size = 16, className = "", title }: IconProps) {
   const IconComponent = ICONS[name];
 
   return (
@@ -58,7 +67,7 @@ export function Icon({ name, size = 16, className = '', title }: IconProps) {
       aria-hidden={title ? undefined : true}
       aria-label={title}
       className={`shrink-0 ${className}`}
-      role={title ? 'img' : undefined}
+      role={title ? "img" : undefined}
       size={size}
       strokeWidth={1.75}
     >

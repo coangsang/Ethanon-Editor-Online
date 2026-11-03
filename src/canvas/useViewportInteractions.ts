@@ -11,6 +11,7 @@ import {
   clamp01,
   computeDragDelta,
   computeSceneMinZoom,
+  DEFAULT_VIEWPORT_ZOOM,
   screenToWorld,
   transformBounds,
 } from "./viewportMath";
@@ -751,6 +752,31 @@ export function useViewportInteractions({
     zoomBy(1 / 1.2);
   }, [zoomBy]);
 
+  const resetZoom = useCallback(
+    (center?: { x: number; y: number }) => {
+      const canvas = (refs.appRef.current?.canvas ||
+        refs.containerRef.current?.querySelector("canvas")) as
+        | HTMLCanvasElement
+        | undefined;
+      if (!canvas) return;
+
+      const store = useSceneStore.getState();
+      const rect = canvas.getBoundingClientRect();
+      const mx = center ? center.x : rect.width / 2;
+      const my = center ? center.y : rect.height / 2;
+      const newZoom = DEFAULT_VIEWPORT_ZOOM;
+      if (newZoom !== store.camera.zoom) {
+        setCamera({
+          zoom: newZoom,
+          x: mx - (mx - store.camera.x) * (newZoom / store.camera.zoom),
+          y: my - (my - store.camera.y) * (newZoom / store.camera.zoom),
+        });
+      }
+    },
+    [refs, setCamera],
+  );
+
+
   // Keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -775,9 +801,23 @@ export function useViewportInteractions({
         !e.altKey &&
         (e.key === "0" || e.code === "Numpad0");
 
-      if (isFitKey) {
+            if (isFitKey) {
         e.preventDefault();
         store.fitViewToScene();
+        return;
+      }
+
+      // Reset Zoom to 100% (9)
+      const isResetZoomKey =
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.shiftKey &&
+        !e.altKey &&
+        (e.key === "9" || e.code === "Digit9" || e.code === "Numpad9");
+
+      if (isResetZoomKey) {
+        e.preventDefault();
+        resetZoom();
         return;
       }
 
@@ -855,7 +895,7 @@ export function useViewportInteractions({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [refs, zoomIn, zoomOut]);
+  }, [refs, zoomIn, zoomOut, resetZoom]);
 
   const onViewportClick = useCallback(() => {
     const { tool } = useSceneStore.getState();
@@ -881,5 +921,6 @@ export function useViewportInteractions({
     onViewportClick,
     zoomIn,
     zoomOut,
+    resetZoom,
   };
 }

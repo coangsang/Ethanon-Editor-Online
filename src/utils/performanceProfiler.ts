@@ -2,12 +2,19 @@ export type PerformanceMetricName =
   | 'history.push'
   | 'texture.scan'
   | 'texture.commit'
-  | 'renderer.placement';
+  | 'renderer.placement'
+  | 'renderer.collision';
+
+export interface PerformanceWorkload {
+  visibleEntities?: number;
+  primitiveCount?: number;
+}
 
 export interface PerformanceSample {
   durationMs: number;
   entityCount: number;
   timestamp: number;
+  workload?: PerformanceWorkload;
 }
 
 export interface PerformanceSummary {
@@ -16,6 +23,7 @@ export interface PerformanceSummary {
   p95Ms: number;
   sampleCount: number;
   entityCount: number;
+  workload?: PerformanceWorkload;
 }
 
 const SAMPLE_LIMIT = 120;
@@ -24,6 +32,7 @@ const METRIC_NAMES: PerformanceMetricName[] = [
   'texture.scan',
   'texture.commit',
   'renderer.placement',
+  'renderer.collision',
 ];
 
 const samples = new Map<PerformanceMetricName, PerformanceSample[]>(
@@ -60,11 +69,12 @@ export function recordPerformanceMetric(
   durationMs: number,
   entityCount: number,
   timestamp = Date.now(),
+  workload?: PerformanceWorkload,
 ): void {
   if (!isPerformanceProfilerEnabled()) return;
 
   const metricSamples = samples.get(metric)!;
-  metricSamples.push({ durationMs, entityCount, timestamp });
+  metricSamples.push({ durationMs, entityCount, timestamp, workload });
   if (metricSamples.length > SAMPLE_LIMIT) {
     metricSamples.splice(0, metricSamples.length - SAMPLE_LIMIT);
   }
@@ -115,6 +125,7 @@ export function getPerformanceSummary(metric: PerformanceMetricName): Performanc
     p95Ms: percentile(sortedDurations, 0.95),
     sampleCount: metricSamples.length,
     entityCount: latest.entityCount,
+    workload: latest.workload,
   };
 }
 
@@ -124,6 +135,7 @@ export function getPerformanceSummaries(): Record<PerformanceMetricName, Perform
     'texture.scan': getPerformanceSummary('texture.scan'),
     'texture.commit': getPerformanceSummary('texture.commit'),
     'renderer.placement': getPerformanceSummary('renderer.placement'),
+    'renderer.collision': getPerformanceSummary('renderer.collision'),
   };
 }
 

@@ -1,4 +1,12 @@
-import type { EntityInstance, EntityTemplate, InlineEntityTemplate } from '../types';
+import type { CollisionShape, EntityInstance, EntityPhysicsConfig, EntityTemplate, InlineEntityTemplate } from '../types';
+import {
+  createDefaultCompoundSubShape,
+  createDefaultPolygonVertices,
+  parsePolygonVertices,
+  polygonsEqual,
+  serializeCompoundEnml,
+  serializePolygonEnml,
+} from './collision';
 
 function defaultTemplate(name: string): EntityTemplate {
   return {
@@ -52,6 +60,7 @@ export function mergeTemplate(
     emissiveColor: inlineTemplate.emissiveColor ?? fallback.emissiveColor,
     particleSystems: inlineTemplate.particleSystems ?? fallback.particleSystems,
     customData: inlineTemplate.customData ?? fallback.customData,
+    physics: inlineTemplate.physics !== undefined ? inlineTemplate.physics : fallback.physics,
     rawEntityData: fallback.rawEntityData,
   };
 }
@@ -70,8 +79,10 @@ export function resolveEntityTemplate(
     return hasFileName
       ? {
           ...resolved,
+          scale: externalTemplate?.scale ?? { x: 1, y: 1 },
           blendMode: externalTemplate?.blendMode ?? 0,
           emissiveColor: externalTemplate?.emissiveColor,
+          physics: externalTemplate?.physics,
         }
       : resolved;
   }
@@ -152,6 +163,7 @@ export function unpackEntityInstance(
     ...((entity.diffuseColor || template?.diffuseColor) ? { diffuseColor: entity.diffuseColor ?? template?.diffuseColor } : {}),
     ...(template?.emissiveColor ? { emissiveColor: template.emissiveColor } : {}),
     ...((entity.inlineTemplate?.particleSystems || template?.particleSystems) ? { particleSystems: entity.inlineTemplate?.particleSystems ?? template?.particleSystems } : {}),
+    ...(template?.physics ? { physics: template.physics } : {}),
   };
 
   const templateRawData = template?.rawEntityData
@@ -213,3 +225,117 @@ export function unpackEntityInstance(
 }
 
 
+
+export function createDefaultPhysics(
+  shape: CollisionShape = 1,
+  defaultSize?: { x: number; y: number; z?: number },
+): EntityPhysicsConfig {
+  const sizeX = defaultSize?.x && defaultSize.x > 0 ? defaultSize.x : (shape === 0 ? 0 : 64);
+  const sizeY = defaultSize?.y && defaultSize.y > 0 ? defaultSize.y : (shape === 0 ? 0 : 64);
+  const sizeZ = defaultSize?.z && defaultSize.z > 0 ? defaultSize.z : (shape === 0 ? 0 : 64);
+  const polygon = shape === 3 ? createDefaultPolygonVertices() : [];
+  const compound = shape === 4 ? [createDefaultCompoundSubShape([])] : [];
+  return {
+    shape,
+    static: false,
+    sensor: false,
+    bullet: false,
+    fixedRotation: false,
+    friction: 1,
+    density: 1,
+    restitution: 0,
+    gravityScale: 1,
+    collision: {
+      valid: shape !== 0,
+      position: { x: 0, y: 0, z: 0 },
+      size: { x: sizeX, y: sizeY, z: sizeZ },
+      polygon,
+      compound,
+      joints: [],
+    },
+    warnings: [],
+  };
+}
+
+export function applyPhysicsToEntity(
+  entity: EntityInstance,
+  physics: EntityPhysicsConfig | null,
+): EntityInstance {
+  const inlineTemplate = {
+    ...(entity.inlineTemplate ?? { name: entity.entityName }),
+  };
+  const inlineEntityData = {
+    ...(entity.inlineEntityData ?? {}),
+  };
+
+  if (!physics || physics.shape === 0) {
+    inlineTemplate.physics = physics ? { ...physics, shape: 0 } : createDefaultPhysics(0);
+    inlineEntityData.shape = '0';
+    delete inlineEntityData.Collision;
+    return {
+      ...entity,
+      inlineTemplate,
+      inlineEntityData,
+    };
+  }
+
+  inlineTemplate.physics = {
+    ...physics,
+    collision: {
+      ...physics.collision,
+      valid: true,
+    },
+  };
+
+  const existingCollision = (entity.inlineEntityData?.Collision as Record<string, unknown>) ?? {};
+  const rawExistingPolygon = typeof existingCollision.Polygon === 'string' ? existingCollision.Polygon : undefined;
+  let polygonValue: string | undefined;
+  if (physics.shape === 3) {
+    if (rawExistingPolygon !== undefined && polygonsEqual(parsePolygonVertices(rawExistingPolygon), physics.collision.polygon)) {
+      polygonValue = rawExistingPolygon;
+    } else if (physics.collision.polygon.length > 0) {
+      polygonValue = serializePolygonEnml(physics.collision.polygon);
+    } else {
+      polygonValue = rawExistingPolygon ?? '';
+    }
+  } else {
+    polygonValue = rawExistingPolygon;
+  }
+  const compoundValue = physics.shape === 4
+    ? (physics.collision.compound.length > 0
+        ? serializeCompoundEnml(physics.collision.compound)
+        : (typeof existingCollision.Compound === 'string' ? existingCollision.Compound : ''))
+    : (typeof existingCollision.Compound === 'string' ? existingCollision.Compound : undefined);
+
+  inlineEntityData.shape = String(physics.shape);
+  inlineEntityData.static = physics.static ? '1' : '0';
+  inlineEntityData.sensor = physics.sensor ? '1' : '0';
+  inlineEntityData.bullet = physics.bullet ? '1' : '0';
+  inlineEntityData.fixedRotation = physics.fixedRotation ? '1' : '0';
+  inlineEntityData.friction = String(physics.friction);
+  inlineEntityData.density = String(physics.density);
+  inlineEntityData.restitution = String(physics.restitution);
+  inlineEntityData.gravityScale = String(physics.gravityScale);
+
+  inlineEntityData.Collision = {
+    Position: {
+      x: String(physics.collision.position.x),
+      y: String(physics.collision.position.y),
+      z: String(physics.collision.position.z),
+    },
+    Size: {
+      x: String(physics.collision.size.x),
+      y: String(physics.collision.size.y),
+      z: String(physics.collision.size.z),
+    },
+    ...(polygonValue !== undefined ? { Polygon: polygonValue } : {}),
+    ...(compoundValue !== undefined ? { Compound: compoundValue } : {}),
+    ...(typeof existingCollision.Joints === 'string' ? { Joints: existingCollision.Joints } : {}),
+  };
+
+  return {
+    ...entity,
+    inlineTemplate,
+    inlineEntityData,
+  };
+}

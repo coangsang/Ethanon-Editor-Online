@@ -10,6 +10,7 @@ import { ViewportRuntimeOverlay } from './ViewportRuntimeOverlay';
 import { ViewportZoomControls } from './ViewportZoomControls';
 import { ViewportCursorCoordinates } from './ViewportCursorCoordinates';
 import { useViewportTextures } from './useViewportTextures';
+import { useCollisionRenderer } from './useCollisionRenderer';
 
 export function Viewport() {
   const refs = useViewportRefs();
@@ -28,6 +29,7 @@ export function Viewport() {
   const showGrid = useSceneStore(s => s.showGrid);
   const snapToGrid = useSceneStore(s => s.snapToGrid);
   const showParticles = useSceneStore(s => s.showParticles);
+  const showCollisions = useSceneStore(s => s.showCollisions);
   const parallaxOriginNormalized = useSceneStore(s => s.parallaxOriginNormalized);
   const parallaxPreviewActive = useSceneStore(s => s.parallaxPreviewActive);
 
@@ -45,7 +47,7 @@ export function Viewport() {
     templateImageUrls,
     placingTemplate,
   });
-  const { onEntityPointerDown, onStartGizmoDrag, onViewportClick, zoomIn, zoomOut } = useViewportInteractions({
+  const { onEntityPointerDown, onStartGizmoDrag, onViewportClick, zoomIn, zoomOut, resetZoom } = useViewportInteractions({
     refs,
     appReadyRevision,
     setCamera,
@@ -68,6 +70,19 @@ export function Viewport() {
     showParticles,
     viewportSize,
     onEntityPointerDown,
+  });
+
+  useCollisionRenderer({
+    refs,
+    scene,
+    templates,
+    selectedUIDs,
+    showCollisions,
+    camera,
+    viewportSize,
+    parallaxOriginNormalized,
+    parallaxPreviewActive,
+    appReadyRevision,
   });
 
   usePlacePreviewRenderer({
@@ -115,7 +130,7 @@ export function Viewport() {
         style={{ cursor: cursorStyle }}
         onClick={onViewportClick}
       />
-      <ViewportZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} />
+      <ViewportZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} onResetZoom={resetZoom} />
       <ViewportCursorCoordinates refs={refs} appReadyRevision={appReadyRevision} />
       <ViewportStatsOverlay refs={refs} />
       <ViewportRuntimeOverlay runtimeState={runtimeState} onRetry={retryViewport} />

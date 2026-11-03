@@ -1,18 +1,29 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Maximize, Minus, Plus } from 'lucide-react';
+import { ChevronDown, ChevronUp, Maximize, Minus, Plus, RotateCcw } from 'lucide-react';
 import { useSceneStore } from '../store/sceneStore';
+import { DEFAULT_VIEWPORT_ZOOM, formatZoomPercentage } from './viewportMath';
 
 interface ViewportZoomControlsProps {
   onZoomIn?: () => void;
   onZoomOut?: () => void;
+  onResetZoom?: () => void;
 }
 
-export function ViewportZoomControls({ onZoomIn, onZoomOut }: ViewportZoomControlsProps) {
+export function ViewportZoomControls({ onZoomIn, onZoomOut, onResetZoom }: ViewportZoomControlsProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const zoom = useSceneStore(s => s.camera.zoom);
   const fitViewToScene = useSceneStore(s => s.fitViewToScene);
+  const setCamera = useSceneStore(s => s.setCamera);
 
-  const zoomPercent = `${Math.round(zoom * 100)}%`;
+  const zoomPercent = formatZoomPercentage(zoom);
+
+  const handleResetZoom = () => {
+    if (onResetZoom) {
+      onResetZoom();
+    } else {
+      setCamera({ zoom: DEFAULT_VIEWPORT_ZOOM });
+    }
+  };
 
   return (
     <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center select-none pointer-events-auto transition-opacity duration-200 opacity-40 hover:opacity-100">
@@ -48,13 +59,25 @@ export function ViewportZoomControls({ onZoomIn, onZoomOut }: ViewportZoomContro
         >
           <Maximize size={14} />
         </button>
+        <button
+          type="button"
+          onClick={handleResetZoom}
+          title="Reset Zoom to 100% (9)"
+          aria-label="Reset Zoom to 100%"
+          className="p-1 rounded hover:bg-gray-800 text-gray-300 hover:text-white transition-colors"
+        >
+          <RotateCcw size={14} />
+        </button>
         <div className="w-px h-3.5 bg-gray-700 mx-0.5" />
-        <span
-          className="px-1 text-[11px] font-mono font-medium text-gray-300 min-w-10 text-center select-none cursor-default"
-          title={`Current Zoom: ${zoomPercent}`}
+        <button
+          type="button"
+          onClick={handleResetZoom}
+          className="px-1 py-0.5 text-[11px] font-mono font-medium text-gray-300 hover:text-white hover:bg-gray-800 rounded min-w-10 text-center select-none transition-colors"
+          title={`Current Zoom: ${zoomPercent} (Click to reset to 100%)`}
+          aria-label={`Reset Zoom to 100% (Current: ${zoomPercent})`}
         >
           {zoomPercent}
-        </span>
+        </button>
         <div className="w-px h-3.5 bg-gray-700 mx-0.5" />
         <button
           type="button"
@@ -81,4 +104,3 @@ export function ViewportZoomControls({ onZoomIn, onZoomOut }: ViewportZoomContro
     </div>
   );
 }
-

@@ -27,6 +27,8 @@ function resetStageRefs(refs: ViewportRefs) {
   refs.worldRef.current = null;
   refs.gridRef.current = null;
   refs.entitiesContainerRef.current = null;
+  refs.collisionGraphicsRef.current = null;
+  refs.selectedCollisionGraphicsRef.current = null;
   refs.selectionRef.current = null;
   refs.marqueeGraphicsRef.current = null;
   refs.moveGizmoContainerRef.current = null;
@@ -150,6 +152,8 @@ export function usePixiStage({ refs, camera, showGrid }: UsePixiStageParams) {
       contextRecoveryTimer = null;
       if (!destroyed) {
         setRuntimeState({ status: 'ready', message: null, canRetry: false });
+        // Force every renderer to rebuild/re-upload its GPU-backed resources.
+        setAppReadyRevision(revision => revision + 1);
       }
     };
 
@@ -192,9 +196,17 @@ export function usePixiStage({ refs, camera, showGrid }: UsePixiStageParams) {
         world.addChild(entities);
         refs.entitiesContainerRef.current = entities;
 
+        const collisions = new PIXI.Graphics();
+        world.addChild(collisions);
+        refs.collisionGraphicsRef.current = collisions;
+
         const selection = new PIXI.Graphics();
         app.stage.addChild(selection);
         refs.selectionRef.current = selection;
+
+        const selectedCollision = new PIXI.Graphics();
+        app.stage.addChild(selectedCollision);
+        refs.selectedCollisionGraphicsRef.current = selectedCollision;
 
         const marquee = new PIXI.Graphics();
         app.stage.addChild(marquee);
@@ -394,6 +406,11 @@ export function usePixiStage({ refs, camera, showGrid }: UsePixiStageParams) {
     if (!world) return;
     world.position.set(camera.x, camera.y);
     world.scale.set(camera.zoom);
+    const selectedCollision = refs.selectedCollisionGraphicsRef.current;
+    if (selectedCollision) {
+      selectedCollision.position.set(camera.x, camera.y);
+      selectedCollision.scale.set(camera.zoom);
+    }
   }, [refs, camera, appReadyRevision]);
 
   return { viewportSize, appReadyRevision, runtimeState, retryViewport };

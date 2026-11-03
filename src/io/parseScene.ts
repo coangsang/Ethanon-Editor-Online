@@ -1,6 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 import type { SceneData, EntityInstance, EntityTemplate, EntityType, CustomDataRefType, CustomDataVariable, InlineEntityTemplate, ParticleSystemConfig } from '../types';
 import { normalizeHierarchy } from '../utils/sceneHierarchy';
+import { hasPhysicsData, parseEntityPhysics } from '../utils/collision';
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' });
 
@@ -195,6 +196,7 @@ function hasInlineTemplateData(entityData: RawSceneEntityData | undefined) {
     entityData.blendMode !== undefined ||
     entityData.DiffuseColor !== undefined ||
     entityData.EmissiveColor !== undefined ||
+    hasPhysicsData(entityData as Record<string, unknown>) ||
     hasValidParticles
   );
 }
@@ -244,6 +246,9 @@ function parseInlineTemplate(name: string, entityData: RawSceneEntityData): Inli
     if (rawSystems.length > 0 || !hasFileName) {
       template.particleSystems = rawSystems.map(parseParticleSystem);
     }
+  }
+  if (hasPhysicsData(entityData as Record<string, unknown>)) {
+    template.physics = parseEntityPhysics(entityData as Record<string, unknown>);
   }
 
   return template;
@@ -435,6 +440,7 @@ export function parseEntityTemplate(name: string, xmlString: string): EntityTemp
     ...(emissiveColor ? { emissiveColor } : {}),
     ...(particleSystems.length > 0 ? { particleSystems } : {}),
     ...(customData.length > 0 ? { customData } : {}),
+    physics: parseEntityPhysics(root as Record<string, unknown>),
     ...(typeof root === 'object' && root !== null ? { rawEntityData: root as Record<string, unknown> } : {}),
   };
 }

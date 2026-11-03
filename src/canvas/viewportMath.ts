@@ -274,6 +274,26 @@ export function computeParallaxContext(
   };
 }
 
+export function projectParallaxPoint(
+  point: { x: number; y: number },
+  effectiveZ: number,
+  camera: { x: number; y: number; zoom: number },
+  parallaxContext: ParallaxContext,
+  templateParallaxIntensity = 1,
+) {
+  const { globalParallaxIntensity, screenWidth, originPxX, originPxY } = parallaxContext;
+  const effectiveIntensity = globalParallaxIntensity * templateParallaxIntensity;
+  if (effectiveIntensity === 0 || effectiveZ === 0) return point;
+  let screenX = camera.x + point.x * camera.zoom;
+  let screenY = camera.y + point.y * camera.zoom;
+  screenX += ((screenX - originPxX) / screenWidth) * effectiveZ * effectiveIntensity;
+  screenY += ((screenY - originPxY) / screenWidth) * effectiveZ * effectiveIntensity;
+  return {
+    x: (screenX - camera.x) / camera.zoom,
+    y: (screenY - camera.y) / camera.zoom,
+  };
+}
+
 export function applyEntityTransformToMesh(
   mesh: PIXI.Mesh,
   entity: EntityInstance,
@@ -283,7 +303,7 @@ export function applyEntityTransformToMesh(
   useVerticalGeometry: boolean,
   parallaxContext: ParallaxContext,
 ) {
-  const { globalParallaxIntensity, screenWidth, originPxX, originPxY } = parallaxContext;
+  const { globalParallaxIntensity } = parallaxContext;
   const textureWidth = renderFrame.layoutWidth;
   const textureHeight = renderFrame.layoutHeight;
   const templateScale = template?.scale ?? { x: 1, y: 1 };
@@ -315,15 +335,16 @@ export function applyEntityTransformToMesh(
       const worldY = entity.position.y + localX * sin + localY * cos;
       const verticalOffset = useVerticalGeometry ? Math.max(0, bottomLocalY - localY) : 0;
       const effectiveZ = baseZ + verticalOffset;
-      let screenX = camera.x + worldX * camera.zoom;
-      let screenY = camera.y + worldY * camera.zoom;
-      screenX += ((screenX - originPxX) / screenWidth) * effectiveZ * effectiveIntensity;
-      screenY += ((screenY - originPxY) / screenWidth) * effectiveZ * effectiveIntensity;
-      const vertexX = (screenX - camera.x) / camera.zoom;
-      const vertexY = (screenY - camera.y) / camera.zoom;
+      const projected = projectParallaxPoint(
+        { x: worldX, y: worldY },
+        effectiveZ,
+        camera,
+        parallaxContext,
+        template?.parallaxIntensity ?? 1,
+      );
 
-      vertices[index * 2] = vertexX;
-      vertices[index * 2 + 1] = vertexY;
+      vertices[index * 2] = projected.x;
+      vertices[index * 2 + 1] = projected.y;
     }
 
     mesh.geometry.getBuffer('aPosition').update();
@@ -411,6 +432,16 @@ export function getAtlasForTemplate(template: EntityTemplate, atlases: Record<st
 }
 
 
+export const DEFAULT_VIEWPORT_ZOOM = 0.68;
+
+export function formatZoomPercentage(zoom: number, baseZoom: number = DEFAULT_VIEWPORT_ZOOM): string {
+  return `${Math.round((zoom / baseZoom) * 100)}%`;
+}
+
+export function percentToZoom(percent: number, baseZoom: number = DEFAULT_VIEWPORT_ZOOM): number {
+  return (percent / 100) * baseZoom;
+}
+
 export const DEFAULT_SCENE_BOUNDS: Bounds = { x: 0, y: 0, width: 1920, height: 1080 };
 export const DEFAULT_SCENE_PADDING = 64;
 export const MIN_ZOOM_ABSOLUTE = 0.005;
@@ -469,8 +500,8 @@ export function computeSceneMinZoom(
   const availH = Math.max(20, viewportSize.height - padding * 2);
 
   const fitZoom = Math.min(availW / sceneBounds.width, availH / sceneBounds.height);
-  // Clamping zoom-out to scene bounds should never prevent zooming out to 1:1 view (1.0)
-  const sceneMinZoom = Math.min(fitZoom, 1.0);
+  // Clamping zoom-out to scene bounds should never prevent zooming out to 1:1 view (DEFAULT_VIEWPORT_ZOOM)
+  const sceneMinZoom = Math.min(fitZoom, DEFAULT_VIEWPORT_ZOOM);
   return Math.max(MIN_ZOOM_ABSOLUTE, Math.min(MAX_ZOOM, sceneMinZoom));
 }
 
@@ -480,17 +511,17 @@ export function computeSceneFitCamera(
   padding: number = DEFAULT_SCENE_PADDING
 ): { x: number; y: number; zoom: number } {
   if (viewportSize.width <= 0 || viewportSize.height <= 0) {
-    return { x: 0, y: 0, zoom: 1 };
+    return { x: 0, y: 0, zoom: DEFAULT_VIEWPORT_ZOOM };
   }
 
   const availW = Math.max(20, viewportSize.width - padding * 2);
   const availH = Math.max(20, viewportSize.height - padding * 2);
   const rawFitZoom = sceneBounds.width > 0 && sceneBounds.height > 0
     ? Math.min(availW / sceneBounds.width, availH / sceneBounds.height)
-    : 1;
+    : DEFAULT_VIEWPORT_ZOOM;
 
-  // For small scenes, frame naturally without magnifying past 100% (1.0).
-  const fitZoom = Math.max(MIN_ZOOM_ABSOLUTE, Math.min(1.0, rawFitZoom));
+  // For small scenes, frame naturally without magnifying past 100% (DEFAULT_VIEWPORT_ZOOM).
+  const fitZoom = Math.max(MIN_ZOOM_ABSOLUTE, Math.min(DEFAULT_VIEWPORT_ZOOM, rawFitZoom));
   const centerX = sceneBounds.x + sceneBounds.width / 2;
   const centerY = sceneBounds.y + sceneBounds.height / 2;
 

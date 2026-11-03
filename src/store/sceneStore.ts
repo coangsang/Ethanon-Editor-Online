@@ -43,6 +43,7 @@ import { generatePrefabThumbnail } from '../utils/generatePrefabThumbnail';
 import { decodeProjectText } from '../io/decodeProjectText';
 import { pushHistorySnapshot, type HistoryEntry } from './sceneHistory';
 import { resetPerformanceProfiler, setPerformanceProfilerEnabled } from '../utils/performanceProfiler';
+import { DEFAULT_VIEWPORT_ZOOM } from '../canvas/viewportMath';
 
 function snapVal(v: number, active: boolean, step = 16): number {
   return active ? Math.round(v / step) * step : Math.round(v);
@@ -58,7 +59,7 @@ const DEFAULT_SCENE: SceneData = {
   entities: [],
 };
 
-export type InspectorEditKey = 'identity' | 'transform' | 'scale' | 'spriteFlags' | 'spriteData' | 'material' | 'customData';
+export type InspectorEditKey = 'identity' | 'transform' | 'scale' | 'spriteFlags' | 'spriteData' | 'material' | 'customData' | 'physics' | 'collision';
 export type InspectorEditMutation = (entity: EntityInstance) => EntityInstance;
 
 type FileWithRelativePath = File & { webkitRelativePath?: string };
@@ -142,6 +143,7 @@ interface SceneStore {
   gridSize: number;
   snapToGrid: boolean;
   showParticles: boolean;
+  showCollisions: boolean;
   updateParticlesWhileMoving: boolean;
   showFps: boolean;
   showParticleFps: boolean;
@@ -205,6 +207,7 @@ interface SceneStore {
   setGridSize: (size: number) => void;
   toggleSnap: () => void;
   toggleParticles: () => void;
+  toggleCollisions: () => void;
   toggleUpdateParticlesWhileMoving: () => void;
   toggleFps: () => void;
   toggleParticleFps: () => void;
@@ -264,7 +267,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   projectError: null,
   projectScanIssues: [],
   recentProjects: getRecentProjectsFromStorage(),
-  camera: { x: 0, y: 0, zoom: 1 },
+  camera: { x: 0, y: 0, zoom: DEFAULT_VIEWPORT_ZOOM },
   focusEntityRequest: null,
   scrollHierarchyRequest: null,
   pingTemplateRequest: null,
@@ -279,6 +282,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   gridSize: 16,
   snapToGrid: false,
   showParticles: true,
+  showCollisions: false,
   updateParticlesWhileMoving: true,
   showFps: false,
   showParticleFps: false,
@@ -426,7 +430,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
         projectError: null,
         projectScanIssues: project.scanIssues,
         recentProjects: recent,
-        camera: { x: 0, y: 0, zoom: 1 },
+        camera: { x: 0, y: 0, zoom: DEFAULT_VIEWPORT_ZOOM },
         focusEntityRequest: null,
         pingTemplateRequest: null,
         pingSpriteRequest: null,
@@ -1241,6 +1245,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   setGridSize: (size) => set({ gridSize: size }),
   toggleSnap: () => set(state => ({ snapToGrid: !state.snapToGrid })),
   toggleParticles: () => set(state => ({ showParticles: !state.showParticles })),
+  toggleCollisions: () => set(state => ({ showCollisions: !state.showCollisions })),
   toggleUpdateParticlesWhileMoving: () => set(state => ({ updateParticlesWhileMoving: !state.updateParticlesWhileMoving })),
   toggleFps: () => set(state => ({ showFps: !state.showFps })),
   toggleParticleFps: () => set(state => ({ showParticleFps: !state.showParticleFps })),

@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '../components/Icon';
 import './Inspector.css';
-import type { CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityTemplate, SpriteAtlas } from '../types';
+import type { CollisionCompoundShape, CollisionPolygonVertex, CollisionShape, CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityPhysicsConfig, EntityTemplate, SpriteAtlas } from '../types';
 import { useSceneStore } from '../store/sceneStore';
-import { entityHasFileNameTag, getTemplateKey, resolveEntityTemplate, resolveExternalTemplate, unpackEntityInstance } from '../utils/entityTemplate';
+import { applyPhysicsToEntity, createDefaultPhysics, entityHasFileNameTag, getTemplateKey, resolveEntityTemplate, resolveExternalTemplate, unpackEntityInstance } from '../utils/entityTemplate';
+import { createDefaultCompoundSubShape, createDefaultPolygonVertices } from '../utils/collision';
 import {
   buildCustomDataRefIndex,
   isBaseDataFieldCompatibleWithType,
@@ -14,69 +15,11 @@ import { SpritePickerModal } from '../components/SpritePickerModal';
 import { ExportPrefabModal } from '../components/ExportPrefabModal';
 import { EntityRefPickerModal } from '../components/EntityRefPickerModal';
 import { ColorControl } from '../components/ColorControl';
+import { EntityPhysicsSection } from './inspector/EntityPhysicsSection';
+import { CollisionGeometrySection } from './inspector/CollisionGeometrySection';
+import { RevoluteJointsSection } from './inspector/RevoluteJointsSection';
+import { AxisNumberInput, CheckInput } from './inspector/InspectorControls';
 import { transformEventBus } from '../store/TransformEventBus';
-
-function AxisNumberInput({
-  axis,
-  badgeClass,
-  value,
-  onChange,
-  step = 1,
-  min,
-  max,
-  precision,
-  ariaLabel,
-  title,
-  disabled = false,
-}: {
-  axis: string;
-  badgeClass: string;
-  value: number;
-  onChange: (val: number) => void;
-  step?: number | 'any';
-  min?: number;
-  max?: number;
-  precision?: number;
-  ariaLabel?: string;
-  title?: string;
-  disabled?: boolean;
-}) {
-  const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
-    if (disabled) return;
-    const stepVal = typeof step === 'number' ? step : 1;
-    const delta = e.deltaY < 0 ? stepVal : -stepVal;
-    let nextVal = value + delta;
-    if (min !== undefined) nextVal = Math.max(min, nextVal);
-    if (max !== undefined) nextVal = Math.min(max, nextVal);
-    const dec = precision ?? (typeof stepVal === 'number' && stepVal.toString().includes('.')
-      ? stepVal.toString().split('.')[1].length
-      : 0);
-    nextVal = Number(nextVal.toFixed(dec));
-    onChange(nextVal);
-  };
-
-  return (
-    <div className={`axis-input-group ${disabled ? 'opacity-50' : ''}`} title={title}>
-      <span className={`axis-badge ${badgeClass}`}>{axis}</span>
-      <input
-        type="number"
-        disabled={disabled}
-        aria-label={ariaLabel || axis}
-        value={Number.isFinite(value) ? value : 0}
-        step={step}
-        min={min}
-        max={max}
-        onWheel={handleWheel}
-        onChange={e => {
-          if (disabled) return;
-          const parsed = parseFloat(e.target.value);
-          onChange(Number.isFinite(parsed) ? parsed : 0);
-        }}
-        className="axis-number-input"
-      />
-    </div>
-  );
-}
 
 function isVectorValue(value: CustomDataValue): value is CustomDataVectorValue {
   return typeof value === 'object' && value !== null;
@@ -197,24 +140,6 @@ function CustomDataInput({ variable, onChange, disabled = false }: {
       }}
       className={`w-full editor-input ${disabledClass}`}
     />
-  );
-}
-
-function CheckInput({ label, value, onChange }: {
-  label: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2 cursor-pointer">
-      <input
-        type="checkbox"
-        checked={value}
-        onChange={e => onChange(e.target.checked)}
-        className="w-3 h-3"
-      />
-      <span className="text-xs text-gray-300">{label}</span>
-    </label>
   );
 }
 
@@ -1674,6 +1599,142 @@ export function Inspector() {
   const currentSpriteCut = entity.inlineTemplate?.spriteCut ?? template?.spriteCut ?? { x: 1, y: 1 };
   const currentDiffuseColor = entity.diffuseColor ?? entity.color ?? template?.diffuseColor ?? { r: 1, g: 1, b: 1, a: 1 };
 
+  const effectiveTemplate: EntityTemplate = template ?? {
+    name: entity.entityName,
+    spriteFile: '',
+    spriteCut: { x: 1, y: 1 },
+    type: 'horizontal',
+    pivotAdjust: { x: 0, y: 0 },
+    scale: { x: 1, y: 1 },
+    parallaxIntensity: 1,
+    blendMode: 0,
+  };
+
+  const updateEntityPhysics = (patch: Partial<EntityPhysicsConfig>) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'physics', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
+      const nextPhysics: EntityPhysicsConfig = {
+        ...basePhysics,
+        ...patch,
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
+    });
+  };
+
+  const updateCollisionShape = (newShape: CollisionShape) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      if (newShape === 0) {
+        return applyPhysicsToEntity(currentEntity, createDefaultPhysics(0));
+      }
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics;
+      if (basePhysics && basePhysics.shape !== 0) {
+        let compound = basePhysics.collision.compound;
+        if (newShape === 4 && compound.length === 0) {
+          compound = [createDefaultCompoundSubShape([])];
+        }
+        let polygon = basePhysics.collision.polygon;
+        if (newShape === 3 && polygon.length === 0) {
+          polygon = createDefaultPolygonVertices();
+        }
+        const nextPhysics: EntityPhysicsConfig = {
+          ...basePhysics,
+          shape: newShape,
+          collision: {
+            ...basePhysics.collision,
+            polygon,
+            compound,
+            valid: newShape === 4 ? compound.length > 0 : newShape === 3 ? polygon.length >= 3 : true,
+          },
+        };
+        return applyPhysicsToEntity(currentEntity, nextPhysics);
+      }
+      const freshPhysics = createDefaultPhysics(newShape);
+      return applyPhysicsToEntity(currentEntity, freshPhysics);
+    });
+  };
+
+  const updateCollisionPolygon = (polygon: CollisionPolygonVertex[]) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics ?? createDefaultPhysics(3);
+      const nextPhysics: EntityPhysicsConfig = {
+        ...basePhysics,
+        shape: 3,
+        collision: {
+          ...basePhysics.collision,
+          polygon,
+          valid: polygon.length >= 3,
+        },
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
+    });
+  };
+
+  const updateCollisionCompound = (compound: CollisionCompoundShape[]) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics ?? createDefaultPhysics(4);
+      const nextPhysics: EntityPhysicsConfig = {
+        ...basePhysics,
+        shape: 4,
+        collision: {
+          ...basePhysics.collision,
+          compound,
+          valid: compound.length > 0,
+        },
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
+    });
+  };
+
+  const updateCollisionPosition = (pos: { x: number; y: number; z: number }) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
+      const nextPhysics: EntityPhysicsConfig = {
+        ...basePhysics,
+        collision: {
+          ...basePhysics.collision,
+          position: pos,
+          valid: true,
+        },
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
+    });
+  };
+
+  const updateCollisionSize = (size: { x: number; y: number; z: number }) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
+      const nextPhysics: EntityPhysicsConfig = {
+        ...basePhysics,
+        collision: {
+          ...basePhysics.collision,
+          size,
+          valid: true,
+        },
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
+    });
+  };
+
+  const removeCollision = () => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      return applyPhysicsToEntity(currentEntity, createDefaultPhysics(0));
+    });
+  };
+
+
   const updateSpriteFile = (newSpriteFile: string) => {
     useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'spriteData', currentEntity => {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
@@ -1798,6 +1859,36 @@ export function Inspector() {
         template={template}
         currentDiffuseColor={currentDiffuseColor}
       />
+
+      {effectiveTemplate.physics && effectiveTemplate.physics.shape !== 0 && (
+        <EntityPhysicsSection
+          key={`${entity.editorEntityUID}:physics`}
+          source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
+          template={effectiveTemplate}
+          readOnly={hasFileName}
+          onChange={updateEntityPhysics}
+        />
+      )}
+      <CollisionGeometrySection
+        key={`${entity.editorEntityUID}:collision`}
+        source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
+        entityUid={entity.editorEntityUID}
+        template={effectiveTemplate}
+        readOnly={hasFileName}
+        onChangeShape={updateCollisionShape}
+        onChangePosition={updateCollisionPosition}
+        onChangeSize={updateCollisionSize}
+        onChangePolygon={updateCollisionPolygon}
+        onChangeCompound={updateCollisionCompound}
+        onRemoveCollision={removeCollision}
+      />
+      {effectiveTemplate.physics && effectiveTemplate.physics.collision.joints.length > 0 && (
+        <RevoluteJointsSection
+          key={`${entity.editorEntityUID}:joints`}
+          source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
+          template={effectiveTemplate}
+        />
+      )}
 
       {template?.particleSystems && template.particleSystems.length > 0 && (
         <div className="inspector-section px-3 py-2 flex flex-col gap-1.5 border-b border-gray-700">

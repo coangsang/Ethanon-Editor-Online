@@ -1,9 +1,13 @@
 /* eslint react-hooks/immutability: off, react-hooks/preserve-manual-memoization: off */
-import { useCallback, useEffect } from 'react';
-import * as PIXI from 'pixi.js';
-import type { SceneData } from '../types';
-import { calculateSceneBounds, computeSceneFitCamera, transformBounds } from './viewportMath';
-import type { AxisConstraint, ViewportRefs } from './viewportTypes';
+import { useCallback, useEffect } from "react";
+import * as PIXI from "pixi.js";
+import type { SceneData } from "../types";
+import {
+  calculateSceneBounds,
+  computeSceneFitCamera,
+  transformBounds,
+} from "./viewportMath";
+import type { AxisConstraint, ViewportRefs } from "./viewportTypes";
 
 type UseViewportSelectionParams = {
   refs: ViewportRefs;
@@ -12,13 +16,16 @@ type UseViewportSelectionParams = {
   fitSceneRequest?: { nonce: number } | null;
   scene: SceneData;
   selectedUIDs: string[];
-  tool: 'select' | 'grab' | 'move' | 'rotate';
+  tool: "select" | "grab" | "move" | "rotate";
   parallaxOriginNormalized: { x: number; y: number };
   parallaxPreviewActive: boolean;
   viewportSize: { width: number; height: number };
   appReadyRevision?: number;
   setCamera: (patch: Partial<{ x: number; y: number; zoom: number }>) => void;
-  onStartGizmoDrag: (e: PIXI.FederatedPointerEvent, constraint: AxisConstraint) => void;
+  onStartGizmoDrag: (
+    e: PIXI.FederatedPointerEvent,
+    constraint: AxisConstraint,
+  ) => void;
 };
 
 export function useViewportSelection({
@@ -47,8 +54,8 @@ export function useViewportSelection({
 
     // 1. Center Corner Square (Blue)
     const squareGfx = new PIXI.Graphics();
-    squareGfx.eventMode = 'static';
-    squareGfx.cursor = 'move';
+    squareGfx.eventMode = "static";
+    squareGfx.cursor = "move";
     squareGfx.rect(0, -SQ_SIZE, SQ_SIZE, SQ_SIZE);
     squareGfx.fill({ color: 0x3498db, alpha: 0.4 });
     squareGfx.stroke({ width: 1.5, color: 0x2980b9, alpha: 0.9 });
@@ -57,15 +64,18 @@ export function useViewportSelection({
 
     // 2. X Arrow (Red)
     const xGfx = new PIXI.Graphics();
-    xGfx.eventMode = 'static';
-    xGfx.cursor = 'ew-resize';
+    xGfx.eventMode = "static";
+    xGfx.cursor = "ew-resize";
     xGfx.moveTo(0, 0);
     xGfx.lineTo(ARROW_LEN, 0);
     xGfx.stroke({ width: 2.5, color: 0xe74c3c, alpha: 1 });
     xGfx.poly([
-      ARROW_LEN, 0,
-      ARROW_LEN - HEAD_LEN, -HEAD_W,
-      ARROW_LEN - HEAD_LEN, HEAD_W,
+      ARROW_LEN,
+      0,
+      ARROW_LEN - HEAD_LEN,
+      -HEAD_W,
+      ARROW_LEN - HEAD_LEN,
+      HEAD_W,
     ]);
     xGfx.fill({ color: 0xe74c3c, alpha: 1 });
     xGfx.hitArea = new PIXI.Rectangle(0, -10, ARROW_LEN + 4, 20);
@@ -73,31 +83,52 @@ export function useViewportSelection({
 
     // 3. Y Arrow (Green - Pointing UP)
     const yGfx = new PIXI.Graphics();
-    yGfx.eventMode = 'static';
-    yGfx.cursor = 'ns-resize';
+    yGfx.eventMode = "static";
+    yGfx.cursor = "ns-resize";
     yGfx.moveTo(0, 0);
     yGfx.lineTo(0, -ARROW_LEN);
     yGfx.stroke({ width: 2.5, color: 0x2ecc71, alpha: 1 });
     yGfx.poly([
-      0, -ARROW_LEN,
-      -HEAD_W, -ARROW_LEN + HEAD_LEN,
-      HEAD_W, -ARROW_LEN + HEAD_LEN,
+      0,
+      -ARROW_LEN,
+      -HEAD_W,
+      -ARROW_LEN + HEAD_LEN,
+      HEAD_W,
+      -ARROW_LEN + HEAD_LEN,
     ]);
     yGfx.fill({ color: 0x2ecc71, alpha: 1 });
     yGfx.hitArea = new PIXI.Rectangle(-10, -ARROW_LEN - 4, 20, ARROW_LEN + 4);
     gizmoContainer.addChild(yGfx);
 
-    xGfx.on('pointerdown', (e: PIXI.FederatedPointerEvent) => onStartGizmoDrag(e, 'x'));
-    yGfx.on('pointerdown', (e: PIXI.FederatedPointerEvent) => onStartGizmoDrag(e, 'y'));
-    squareGfx.on('pointerdown', (e: PIXI.FederatedPointerEvent) => onStartGizmoDrag(e, 'free'));
+    xGfx.on("pointerdown", (e: PIXI.FederatedPointerEvent) =>
+      onStartGizmoDrag(e, "x"),
+    );
+    yGfx.on("pointerdown", (e: PIXI.FederatedPointerEvent) =>
+      onStartGizmoDrag(e, "y"),
+    );
+    squareGfx.on("pointerdown", (e: PIXI.FederatedPointerEvent) =>
+      onStartGizmoDrag(e, "free"),
+    );
 
     // Hover highlights
-    xGfx.on('pointerover', () => { xGfx.tint = 0xff8888; });
-    xGfx.on('pointerout', () => { xGfx.tint = 0xffffff; });
-    yGfx.on('pointerover', () => { yGfx.tint = 0x88ff88; });
-    yGfx.on('pointerout', () => { yGfx.tint = 0xffffff; });
-    squareGfx.on('pointerover', () => { squareGfx.tint = 0x88ccff; });
-    squareGfx.on('pointerout', () => { squareGfx.tint = 0xffffff; });
+    xGfx.on("pointerover", () => {
+      xGfx.tint = 0xff8888;
+    });
+    xGfx.on("pointerout", () => {
+      xGfx.tint = 0xffffff;
+    });
+    yGfx.on("pointerover", () => {
+      yGfx.tint = 0x88ff88;
+    });
+    yGfx.on("pointerout", () => {
+      yGfx.tint = 0xffffff;
+    });
+    squareGfx.on("pointerover", () => {
+      squareGfx.tint = 0x88ccff;
+    });
+    squareGfx.on("pointerout", () => {
+      squareGfx.tint = 0xffffff;
+    });
   }, [refs, appReadyRevision, onStartGizmoDrag]);
 
   // Draw selection outlines for all selected entities
@@ -113,10 +144,17 @@ export function useViewportSelection({
       const positions = sprite.geometry?.positions;
       if (!positions || positions.length < 8) {
         const cachedBounds = refs.boundsMapRef.current.get(suid);
-        const bounds = cachedBounds ? transformBounds(cachedBounds, camera) : sprite.getBounds();
+        const bounds = cachedBounds
+          ? transformBounds(cachedBounds, camera)
+          : sprite.getBounds();
         const pad = 3;
-        sel.rect(bounds.x - pad, bounds.y - pad, bounds.width + pad * 2, bounds.height + pad * 2);
-        sel.stroke({ width: 2, color: 0x00ffff, alpha: 1 });
+        sel.rect(
+          bounds.x - pad,
+          bounds.y - pad,
+          bounds.width + pad * 2,
+          bounds.height + pad * 2,
+        );
+        sel.stroke({ width: 1, color: 0xd0d0d0, alpha: 1 });
         continue;
       }
 
@@ -148,13 +186,22 @@ export function useViewportSelection({
       }
 
       sel.poly(polyPoints);
-      sel.stroke({ width: 2, color: 0x00ffff, alpha: 1 });
+      sel.stroke({ width: 1, color: 0xd0d0d0, alpha: 1 });
     }
   }, [refs, selectedUIDs, camera]);
 
   useEffect(() => {
     updateSelectionOutlines();
-  }, [selectedUIDs, scene.entities, scene.properties, camera, parallaxOriginNormalized, parallaxPreviewActive, viewportSize, updateSelectionOutlines]);
+  }, [
+    selectedUIDs,
+    scene.entities,
+    scene.properties,
+    camera,
+    parallaxOriginNormalized,
+    parallaxPreviewActive,
+    viewportSize,
+    updateSelectionOutlines,
+  ]);
 
   useEffect(() => {
     refs.updateSelectionOutlinesRef.current = updateSelectionOutlines;
@@ -166,12 +213,14 @@ export function useViewportSelection({
     if (!gizmo) return;
     if (refs.isDraggingEntityRef.current) return;
 
-    if (tool !== 'move' || selectedUIDs.length === 0) {
+    if (tool !== "move" || selectedUIDs.length === 0) {
       gizmo.visible = false;
       return;
     }
 
-    const selectedEntities = scene.entities.filter(e => selectedUIDs.includes(e.editorEntityUID) && !e.hide);
+    const selectedEntities = scene.entities.filter(
+      (e) => selectedUIDs.includes(e.editorEntityUID) && !e.hide,
+    );
     if (selectedEntities.length === 0) {
       gizmo.visible = false;
       return;
@@ -195,16 +244,24 @@ export function useViewportSelection({
 
   // Pan camera to the requested entity without changing zoom.
   useEffect(() => {
-    if (!focusEntityRequest || refs.handledFocusNonceRef.current === focusEntityRequest.nonce) return;
+    if (
+      !focusEntityRequest ||
+      refs.handledFocusNonceRef.current === focusEntityRequest.nonce
+    )
+      return;
 
     const app = refs.appRef.current;
     if (!app) return;
 
-    const entity = scene.entities.find(item => item.editorEntityUID === focusEntityRequest.uid);
+    const entity = scene.entities.find(
+      (item) => item.editorEntityUID === focusEntityRequest.uid,
+    );
     refs.handledFocusNonceRef.current = focusEntityRequest.nonce;
     if (!entity) return;
 
-    const bounds = entity.hide ? null : refs.boundsMapRef.current.get(entity.editorEntityUID);
+    const bounds = entity.hide
+      ? null
+      : refs.boundsMapRef.current.get(entity.editorEntityUID);
     const targetX = bounds ? bounds.x + bounds.width / 2 : entity.position.x;
     const targetY = bounds ? bounds.y + bounds.height / 2 : entity.position.y;
 
@@ -212,23 +269,45 @@ export function useViewportSelection({
       x: app.renderer.width / 2 - targetX * camera.zoom,
       y: app.renderer.height / 2 - targetY * camera.zoom,
     });
-  }, [refs, camera.zoom, focusEntityRequest, scene.entities, appReadyRevision, setCamera]);
+  }, [
+    refs,
+    camera.zoom,
+    focusEntityRequest,
+    scene.entities,
+    appReadyRevision,
+    setCamera,
+  ]);
 
   // Fit camera to full scene size
   useEffect(() => {
-    if (!fitSceneRequest || refs.handledFitNonceRef.current === fitSceneRequest.nonce) return;
+    if (
+      !fitSceneRequest ||
+      refs.handledFitNonceRef.current === fitSceneRequest.nonce
+    )
+      return;
 
     const app = refs.appRef.current;
     if (!app) return;
 
     refs.handledFitNonceRef.current = fitSceneRequest.nonce;
-    const vpSize = viewportSize.width > 0 && viewportSize.height > 0
-      ? viewportSize
-      : { width: app.renderer.width, height: app.renderer.height };
-    const bounds = calculateSceneBounds(scene.entities, refs.boundsMapRef.current);
+    const vpSize =
+      viewportSize.width > 0 && viewportSize.height > 0
+        ? viewportSize
+        : { width: app.renderer.width, height: app.renderer.height };
+    const bounds = calculateSceneBounds(
+      scene.entities,
+      refs.boundsMapRef.current,
+    );
     const targetCam = computeSceneFitCamera(bounds, vpSize);
     setCamera(targetCam);
-  }, [refs, fitSceneRequest, scene.entities, viewportSize, appReadyRevision, setCamera]);
+  }, [
+    refs,
+    fitSceneRequest,
+    scene.entities,
+    viewportSize,
+    appReadyRevision,
+    setCamera,
+  ]);
 
   return { updateSelectionOutlines };
 }

@@ -79,6 +79,67 @@ export interface ParticleSystemConfig {
   luminance: { r: number; g: number; b: number };
 }
 
+export type CollisionShape = 0 | 1 | 2 | 3 | 4;
+
+export interface CollisionMaterial {
+  friction?: number;
+  density?: number;
+  restitution?: number;
+}
+
+export interface CollisionPolygonVertex {
+  name: string;
+  x: number;
+  y: number;
+}
+
+export interface CollisionCompoundShape extends CollisionMaterial {
+  name: string;
+  shape: 'box' | 'circle';
+  posX: number;
+  posY: number;
+  sizeX?: number;
+  sizeY?: number;
+  radius?: number;
+  angle: number;
+}
+
+export interface CollisionJoint {
+  name: string;
+  otherEntityName: string;
+  attachPointAX: number;
+  attachPointAY: number;
+  attachPointBX: number;
+  attachPointBY: number;
+  enableLimit: boolean;
+  lowerAngle: number;
+  upperAngle: number;
+  enableMotor: boolean;
+  motorSpeed: number;
+  maxMotorTorque: number;
+}
+
+export interface EntityPhysicsConfig {
+  shape: CollisionShape;
+  static: boolean;
+  sensor: boolean;
+  bullet: boolean;
+  fixedRotation: boolean;
+  friction: number;
+  density: number;
+  restitution: number;
+  gravityScale: number;
+  collision: {
+    valid: boolean;
+    position: { x: number; y: number; z: number };
+    size: { x: number; y: number; z: number };
+    polygon: CollisionPolygonVertex[];
+    compound: CollisionCompoundShape[];
+    joints: CollisionJoint[];
+  };
+  warnings: string[];
+}
+
 export interface EntityTemplate {
   name: string;
   spriteFile: string;
@@ -92,6 +153,7 @@ export interface EntityTemplate {
   emissiveColor?: { r: number; g: number; b: number; a: number };
   particleSystems?: ParticleSystemConfig[];
   customData?: CustomDataVariable[];
+  physics?: EntityPhysicsConfig;
   rawEntityData?: Record<string, unknown>;
 }
 

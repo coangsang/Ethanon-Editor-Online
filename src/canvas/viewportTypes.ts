@@ -55,6 +55,8 @@ export type ViewportRefs = {
   worldRef: { current: PIXI.Container | null };
   gridRef: { current: PIXI.Graphics | null };
   entitiesContainerRef: { current: PIXI.Container | null };
+  collisionGraphicsRef: { current: PIXI.Graphics | null };
+  selectedCollisionGraphicsRef: { current: PIXI.Graphics | null };
   selectionRef: { current: PIXI.Graphics | null };
   marqueeGraphicsRef: { current: PIXI.Graphics | null };
   moveGizmoContainerRef: { current: PIXI.Container | null };

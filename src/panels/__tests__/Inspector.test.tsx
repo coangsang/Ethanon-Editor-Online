@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EntityTemplate } from '../../types';
 import { useSceneStore } from '../../store/sceneStore';
@@ -19,6 +19,100 @@ afterEach(() => {
 });
 
 describe('Inspector pending edit interactions', () => {
+  it('shows separated physics, collision, and revolute joints sections', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="1" spriteFrame="0" editorEntityUID="collision-entity">
+          <EntityName>collision-entity</EntityName><Position x="0" y="0" z="70" angle="0" />
+          <Entity shape="1" static="1" friction="0.8">
+            <Scale x="2" y="3"/><Collision><Position x="4" y="5" z="9"/><Size x="20" y="30" z="64"/></Collision>
+          </Entity>
+        </Entity>
+        <Entity id="2" spriteFrame="0" editorEntityUID="joint-entity">
+          <EntityName>joint-entity</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="4">
+            <Collision>
+              <Position x="0" y="0" z="0"/><Size x="10" y="10" z="10"/>
+              <Joints>
+                revoluteJoint_wheel { otherEntityName = wheel.ent; attachPointAX = 1; attachPointAY = 2; attachPointBX = 3; attachPointBY = 4; enableLimit = true; lowerAngle = 0; upperAngle = 1.57; enableMotor = true; motorSpeed = 5; maxMotorTorque = 100; }
+              </Joints>
+            </Collision>
+          </Entity>
+        </Entity>
+        <Entity id="3" spriteFrame="0" editorEntityUID="none-shape-entity">
+          <EntityName>none-shape-entity</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="0" static="1">
+            <Collision><Position x="0" y="0" z="0"/><Size x="0" y="0" z="0"/></Collision>
+          </Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+
+    // Test box entity
+    useSceneStore.getState().selectEntity('collision-entity');
+    const { unmount } = render(<Inspector />);
+
+    const physicsSection = screen.getByText('Physics').closest('.inspector-section');
+    expect(physicsSection?.textContent).toContain('Inline');
+    expect(physicsSection?.textContent).toContain('Static');
+    expect(physicsSection?.textContent).toContain('Friction');
+    const withinPhysics = within(physicsSection as HTMLElement);
+    expect(withinPhysics.getByDisplayValue('0.8')).toBeDefined();
+    expect(physicsSection?.textContent).toContain('Density');
+    expect(physicsSection?.textContent).toContain('Restitution');
+
+
+    const collisionSection = screen.getByText('Collision').closest('.inspector-section');
+    const withinCollision = within(collisionSection as HTMLElement);
+    expect(collisionSection?.textContent).toContain('Inline');
+    expect(collisionSection?.textContent).toContain('1 - Box');
+    expect(collisionSection?.textContent).toContain('Position');
+    expect(withinCollision.getByDisplayValue('4')).toBeDefined();
+    expect(withinCollision.getByDisplayValue('5')).toBeDefined();
+    expect(withinCollision.getByDisplayValue('9')).toBeDefined();
+    expect(withinCollision.getByDisplayValue('20')).toBeDefined();
+    expect(withinCollision.getByDisplayValue('30')).toBeDefined();
+    expect(withinCollision.getByDisplayValue('64')).toBeDefined();
+
+    expect(collisionSection?.textContent).toContain('Size');
+    expect(collisionSection?.textContent).not.toContain('Effective');
+    expect(screen.queryByText(/Revolute Joints/)).toBeNull();
+
+    unmount();
+
+    // Test joint entity
+    useSceneStore.getState().selectEntity('joint-entity');
+    const { unmount: unmountJoint } = render(<Inspector />);
+
+    const jointsSection = screen.getByText(/Revolute Joints/).closest('.inspector-section');
+    const withinJoints = within(jointsSection as HTMLElement);
+    expect(jointsSection).not.toBeNull();
+    expect(jointsSection?.textContent).toContain('Inline');
+    expect(jointsSection?.textContent).toContain('revoluteJoint_wheel');
+    expect(withinJoints.getByDisplayValue('wheel.ent')).toBeDefined();
+    expect(jointsSection?.textContent).toContain('Anchor A');
+    expect(jointsSection?.textContent).toContain('Anchor B');
+    expect(jointsSection?.textContent).toContain('Limit');
+    expect(jointsSection?.textContent).toContain('Motor');
+    expect(withinJoints.getByDisplayValue('1')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('2')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('3')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('4')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('1.57')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('5')).toBeDefined();
+    expect(withinJoints.getByDisplayValue('100')).toBeDefined();
+
+    unmountJoint();
+
+    // Test none-shape entity
+    useSceneStore.getState().selectEntity('none-shape-entity');
+    render(<Inspector />);
+
+    const noneCollisionSection = screen.getByText('Collision').closest('.inspector-section');
+    expect(noneCollisionSection?.textContent).toContain('0 - None');
+    expect(screen.queryByText(/Revolute Joints/)).toBeNull();
+  });
+
   it('shows each entity values when selection changes', () => {
     useSceneStore.getState().loadScene(`
       <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>

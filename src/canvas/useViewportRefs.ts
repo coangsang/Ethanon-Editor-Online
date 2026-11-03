@@ -20,6 +20,8 @@ export function useViewportRefs(): ViewportRefs {
   const worldRef = useRef<PIXI.Container | null>(null);
   const gridRef = useRef<PIXI.Graphics | null>(null);
   const entitiesContainerRef = useRef<PIXI.Container | null>(null);
+  const collisionGraphicsRef = useRef<PIXI.Graphics | null>(null);
+  const selectedCollisionGraphicsRef = useRef<PIXI.Graphics | null>(null);
   const selectionRef = useRef<PIXI.Graphics | null>(null);
   const marqueeGraphicsRef = useRef<PIXI.Graphics | null>(null);
   const moveGizmoContainerRef = useRef<PIXI.Container | null>(null);
@@ -73,6 +75,8 @@ export function useViewportRefs(): ViewportRefs {
     worldRef,
     gridRef,
     entitiesContainerRef,
+    collisionGraphicsRef,
+    selectedCollisionGraphicsRef,
     selectionRef,
     marqueeGraphicsRef,
     moveGizmoContainerRef,
