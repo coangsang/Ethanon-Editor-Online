@@ -88,7 +88,7 @@ describe('collision parsing and resolution', () => {
       Collision: { Position: { x: 0, y: 0, z: 0 }, Size: { x: 0, y: 20, z: 10 }, Compound: 'bad { shape = capsule; }' },
     });
     expect(physics.warnings).toEqual(expect.arrayContaining([
-      expect.stringContaining('Size.x'),
+      'Collision.Size invalid',
       expect.stringContaining('unsupported'),
     ]));
     expect(physics.collision.valid).toBe(false);
@@ -106,9 +106,71 @@ describe('collision parsing and resolution', () => {
       size: { x: 10, y: 10, z: 0 },
     });
     expect(parsed.warnings).toEqual(expect.arrayContaining([
-      expect.stringContaining('Position.z'),
-      expect.stringContaining('Size.z'),
+      'Collision.Position invalid',
+      'Collision.Size invalid',
     ]));
+  });
+
+  it('reports only "Collision tag missing" when shape != 0 and Collision tag is missing', () => {
+    for (const shape of [1, 2, 3, 4]) {
+      const parsed = parseEntityPhysics({ shape });
+      expect(parsed.warnings).toEqual(['Collision tag missing']);
+      expect(parsed.collision.valid).toBe(false);
+      expect(parsed.collision.position).toEqual({ x: 0, y: 0, z: 0 });
+      expect(parsed.collision.size).toEqual({ x: 0, y: 0, z: 0 });
+      expect(parsed.collision.polygon).toEqual([]);
+      expect(parsed.collision.compound).toEqual([]);
+    }
+  });
+
+  it('reports "Collision.Position tag missing" without inspecting x, y, z when Position tag is missing', () => {
+    const parsed = parseEntityPhysics({
+      shape: 1,
+      Collision: { Size: { x: 10, y: 20, z: 30 } },
+    });
+    expect(parsed.warnings).toEqual(['Collision.Position tag missing']);
+    expect(parsed.collision.valid).toBe(false);
+    expect(parsed.collision.position).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it('reports "Collision.Position invalid" when position child coordinates are malformed', () => {
+    const parsed = parseEntityPhysics({
+      shape: 1,
+      Collision: {
+        Position: { x: 'invalid', y: 0, z: 0 },
+        Size: { x: 10, y: 20, z: 30 },
+      },
+    });
+    expect(parsed.warnings).toEqual(['Collision.Position invalid']);
+    expect(parsed.collision.valid).toBe(false);
+  });
+
+  it('reports "Collision.Size tag missing" without inspecting x, y, z when Size tag is missing', () => {
+    const parsed = parseEntityPhysics({
+      shape: 1,
+      Collision: { Position: { x: 0, y: 0, z: 0 } },
+    });
+    expect(parsed.warnings).toEqual(['Collision.Size tag missing']);
+    expect(parsed.collision.valid).toBe(false);
+    expect(parsed.collision.size).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it('reports "Collision.Size invalid" when size child dimension is malformed or non-positive', () => {
+    const parsedZero = parseEntityPhysics({
+      shape: 1,
+      Collision: {
+        Position: { x: 0, y: 0, z: 0 },
+        Size: { x: 10, y: -5, z: 30 },
+      },
+    });
+    expect(parsedZero.warnings).toEqual(['Collision.Size invalid']);
+    expect(parsedZero.collision.valid).toBe(false);
+  });
+
+  it('reports no warnings when shape is 0 without Collision tag', () => {
+    const parsed = parseEntityPhysics({ shape: 0 });
+    expect(parsed.warnings).toEqual([]);
+    expect(parsed.collision.valid).toBe(true);
   });
 
   it('accepts a clockwise convex polygon with eight sequential vertices', () => {
