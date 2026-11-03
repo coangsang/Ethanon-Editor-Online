@@ -11,6 +11,8 @@ export type TransformUpdate = {
   hide?: boolean;
   diffuseColor?: { r: number; g: number; b: number; a: number };
   blendMode?: number;
+  collisionPos?: { x: number; y: number; z: number };
+  collisionSize?: { x: number; y: number; z: number };
 };
 
 type Listener = (updates: TransformUpdate[]) => void;

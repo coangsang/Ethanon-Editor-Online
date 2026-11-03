@@ -72,11 +72,10 @@ describe('Inspector pending edit interactions', () => {
     expect(withinCollision.getByDisplayValue('9')).toBeDefined();
     expect(withinCollision.getByDisplayValue('20')).toBeDefined();
     expect(withinCollision.getByDisplayValue('30')).toBeDefined();
-    expect(withinCollision.getAllByDisplayValue('64')).toHaveLength(2);
-    expect(withinCollision.getByDisplayValue('40')).toBeDefined();
-    expect(withinCollision.getByDisplayValue('90')).toBeDefined();
+    expect(withinCollision.getByDisplayValue('64')).toBeDefined();
+
     expect(collisionSection?.textContent).toContain('Size');
-    expect(collisionSection?.textContent).toContain('Effective');
+    expect(collisionSection?.textContent).not.toContain('Effective');
     expect(screen.queryByText(/Revolute Joints/)).toBeNull();
 
     unmount();

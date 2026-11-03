@@ -1,4 +1,4 @@
-import type { EntityInstance, EntityTemplate, InlineEntityTemplate } from '../types';
+import type { EntityInstance, EntityPhysicsConfig, EntityTemplate, InlineEntityTemplate } from '../types';
 
 function defaultTemplate(name: string): EntityTemplate {
   return {
@@ -217,3 +217,95 @@ export function unpackEntityInstance(
 }
 
 
+
+export function createDefaultPhysics(
+  shape: 1 | 2 = 1,
+  defaultSize?: { x: number; y: number; z?: number },
+): EntityPhysicsConfig {
+  const sizeX = defaultSize?.x && defaultSize.x > 0 ? defaultSize.x : 64;
+  const sizeY = defaultSize?.y && defaultSize.y > 0 ? defaultSize.y : 64;
+  const sizeZ = defaultSize?.z && defaultSize.z > 0 ? defaultSize.z : 64;
+  return {
+    shape,
+    static: false,
+    sensor: false,
+    bullet: false,
+    fixedRotation: false,
+    friction: 1,
+    density: 1,
+    restitution: 0,
+    gravityScale: 1,
+    collision: {
+      valid: true,
+      position: { x: 0, y: 0, z: 0 },
+      size: { x: sizeX, y: sizeY, z: sizeZ },
+      polygon: [],
+      compound: [],
+      joints: [],
+    },
+    warnings: [],
+  };
+}
+
+export function applyPhysicsToEntity(
+  entity: EntityInstance,
+  physics: EntityPhysicsConfig | null,
+): EntityInstance {
+  const inlineTemplate = {
+    ...(entity.inlineTemplate ?? { name: entity.entityName }),
+  };
+  const inlineEntityData = {
+    ...(entity.inlineEntityData ?? {}),
+  };
+
+  if (!physics || physics.shape === 0) {
+    inlineTemplate.physics = physics ? { ...physics, shape: 0 } : undefined;
+    inlineEntityData.shape = '0';
+    delete inlineEntityData.Collision;
+    return {
+      ...entity,
+      inlineTemplate,
+      inlineEntityData,
+    };
+  }
+
+  inlineTemplate.physics = {
+    ...physics,
+    collision: {
+      ...physics.collision,
+      valid: true,
+    },
+  };
+
+  inlineEntityData.shape = String(physics.shape);
+  inlineEntityData.static = physics.static ? '1' : '0';
+  inlineEntityData.sensor = physics.sensor ? '1' : '0';
+  inlineEntityData.bullet = physics.bullet ? '1' : '0';
+  inlineEntityData.fixedRotation = physics.fixedRotation ? '1' : '0';
+  inlineEntityData.friction = String(physics.friction);
+  inlineEntityData.density = String(physics.density);
+  inlineEntityData.restitution = String(physics.restitution);
+  inlineEntityData.gravityScale = String(physics.gravityScale);
+
+  inlineEntityData.Collision = {
+    Position: {
+      x: String(physics.collision.position.x),
+      y: String(physics.collision.position.y),
+      z: String(physics.collision.position.z),
+    },
+    Size: {
+      x: String(physics.collision.size.x),
+      y: String(physics.collision.size.y),
+      z: String(physics.collision.size.z),
+    },
+    ...(physics.collision.polygon && physics.collision.polygon.length > 0 ? { Polygon: physics.collision.polygon } : {}),
+    ...(physics.collision.compound && physics.collision.compound.length > 0 ? { Compound: physics.collision.compound } : {}),
+    ...(physics.collision.joints && physics.collision.joints.length > 0 ? { Joints: physics.collision.joints } : {}),
+  };
+
+  return {
+    ...entity,
+    inlineTemplate,
+    inlineEntityData,
+  };
+}

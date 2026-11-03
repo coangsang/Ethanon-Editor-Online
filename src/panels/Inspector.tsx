@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '../components/Icon';
 import './Inspector.css';
-import type { CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityTemplate, SpriteAtlas } from '../types';
+import type { CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityPhysicsConfig, EntityTemplate, SpriteAtlas } from '../types';
 import { useSceneStore } from '../store/sceneStore';
-import { entityHasFileNameTag, getTemplateKey, resolveEntityTemplate, resolveExternalTemplate, unpackEntityInstance } from '../utils/entityTemplate';
+import { applyPhysicsToEntity, createDefaultPhysics, entityHasFileNameTag, getTemplateKey, resolveEntityTemplate, resolveExternalTemplate, unpackEntityInstance } from '../utils/entityTemplate';
 import {
   buildCustomDataRefIndex,
   isBaseDataFieldCompatibleWithType,
@@ -1598,6 +1598,92 @@ export function Inspector() {
   const currentSpriteCut = entity.inlineTemplate?.spriteCut ?? template?.spriteCut ?? { x: 1, y: 1 };
   const currentDiffuseColor = entity.diffuseColor ?? entity.color ?? template?.diffuseColor ?? { r: 1, g: 1, b: 1, a: 1 };
 
+  const effectiveTemplate: EntityTemplate = template ?? {
+    name: entity.entityName,
+    spriteFile: '',
+    spriteCut: { x: 1, y: 1 },
+    type: 'horizontal',
+    pivotAdjust: { x: 0, y: 0 },
+    scale: { x: 1, y: 1 },
+    parallaxIntensity: 1,
+    blendMode: 0,
+  };
+
+  const updateEntityPhysics = (patch: Partial<EntityPhysicsConfig>) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'physics', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
+      const nextPhysics: EntityPhysicsConfig = {
+        ...basePhysics,
+        ...patch,
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
+    });
+  };
+
+  const updateCollisionShape = (newShape: 0 | 1 | 2) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      if (newShape === 0) {
+        return applyPhysicsToEntity(currentEntity, null);
+      }
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics;
+      if (basePhysics && basePhysics.shape !== 0) {
+        const nextPhysics: EntityPhysicsConfig = {
+          ...basePhysics,
+          shape: newShape,
+        };
+        return applyPhysicsToEntity(currentEntity, nextPhysics);
+      }
+      const freshPhysics = createDefaultPhysics(newShape);
+      return applyPhysicsToEntity(currentEntity, freshPhysics);
+    });
+  };
+
+  const updateCollisionPosition = (pos: { x: number; y: number; z: number }) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
+      const nextPhysics: EntityPhysicsConfig = {
+        ...basePhysics,
+        collision: {
+          ...basePhysics.collision,
+          position: pos,
+          valid: true,
+        },
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
+    });
+  };
+
+  const updateCollisionSize = (size: { x: number; y: number; z: number }) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
+      const nextPhysics: EntityPhysicsConfig = {
+        ...basePhysics,
+        collision: {
+          ...basePhysics.collision,
+          size,
+          valid: true,
+        },
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
+    });
+  };
+
+  const removeCollision = () => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      return applyPhysicsToEntity(currentEntity, null);
+    });
+  };
+
+
   const updateSpriteFile = (newSpriteFile: string) => {
     useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'spriteData', currentEntity => {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
@@ -1723,27 +1809,32 @@ export function Inspector() {
         currentDiffuseColor={currentDiffuseColor}
       />
 
-      {template?.physics && (
-        <>
-          <EntityPhysicsSection
-            key={`${entity.editorEntityUID}:physics`}
-            source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
-            template={template}
-          />
-          <CollisionGeometrySection
-            key={`${entity.editorEntityUID}:collision`}
-            source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
-            instanceScale={currentScale}
-            template={template}
-          />
-          {template.physics.collision.joints.length > 0 && (
-            <RevoluteJointsSection
-              key={`${entity.editorEntityUID}:joints`}
-              source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
-              template={template}
-              />
-          )}
-        </>
+      {effectiveTemplate.physics && effectiveTemplate.physics.shape !== 0 && (
+        <EntityPhysicsSection
+          key={`${entity.editorEntityUID}:physics`}
+          source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
+          template={effectiveTemplate}
+          readOnly={hasFileName}
+          onChange={updateEntityPhysics}
+        />
+      )}
+      <CollisionGeometrySection
+        key={`${entity.editorEntityUID}:collision`}
+        source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
+        entityUid={entity.editorEntityUID}
+        template={effectiveTemplate}
+        readOnly={hasFileName}
+        onChangeShape={updateCollisionShape}
+        onChangePosition={updateCollisionPosition}
+        onChangeSize={updateCollisionSize}
+        onRemoveCollision={removeCollision}
+      />
+      {effectiveTemplate.physics && effectiveTemplate.physics.collision.joints.length > 0 && (
+        <RevoluteJointsSection
+          key={`${entity.editorEntityUID}:joints`}
+          source={hasFileName || !entity.inlineEntityData ? 'Template' : 'Inline'}
+          template={effectiveTemplate}
+        />
       )}
 
       {template?.particleSystems && template.particleSystems.length > 0 && (

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { render, screen, cleanup } from '@testing-library/react';
-import { describe, it, expect, afterEach } from 'vitest';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { EntityPhysicsSection } from '../inspector/EntityPhysicsSection';
 import { CollisionGeometrySection } from '../inspector/CollisionGeometrySection';
 import { RevoluteJointsSection } from '../inspector/RevoluteJointsSection';
+import { AxisNumberInput } from '../inspector/InspectorControls';
 import type { EntityTemplate } from '../../types';
 
 describe('Inspector Physics & Collision Sub-sections', () => {
@@ -14,7 +15,7 @@ describe('Inspector Physics & Collision Sub-sections', () => {
     name: 'test_entity',
     spriteFile: 'test.png',
     spriteCut: { x: 1, y: 1 },
-    type: 0,
+    type: 'horizontal',
     pivotAdjust: { x: 0, y: 0 },
     scale: { x: 2, y: 2 },
     parallaxIntensity: 1,
@@ -43,7 +44,8 @@ describe('Inspector Physics & Collision Sub-sections', () => {
   describe('EntityPhysicsSection', () => {
     it('renders restrained body simulation checkboxes and material input fields', () => {
       const template = createBaseTemplate();
-      render(<EntityPhysicsSection template={template} source="Template" />);
+      const onChange = vi.fn();
+      render(<EntityPhysicsSection template={template} source="Template" onChange={onChange} />);
 
       expect(screen.getByText('Physics')).toBeDefined();
       expect(screen.getByText('Template')).toBeDefined();
@@ -62,16 +64,26 @@ describe('Inspector Physics & Collision Sub-sections', () => {
       expect(screen.getByText('Gravity Scale')).toBeDefined();
       expect(screen.getByDisplayValue('-1')).toBeDefined();
     });
+
+    it('updates local state and triggers onChange on user input', () => {
+      const template = createBaseTemplate();
+      const onChange = vi.fn();
+      render(<EntityPhysicsSection template={template} source="Inline" onChange={onChange} />);
+
+      const frictionInput = screen.getByDisplayValue('0.75') as HTMLInputElement;
+      fireEvent.change(frictionInput, { target: { value: '0.9' } });
+      expect(onChange).toHaveBeenCalledWith({ friction: 0.9 });
+      expect(frictionInput.value).toBe('0.9');
+    });
   });
 
   describe('CollisionGeometrySection', () => {
-    it('renders position, size, and effective size with instance scale', () => {
+    it('renders position and size without effective size', () => {
       const template = createBaseTemplate();
       render(
         <CollisionGeometrySection
           template={template}
           source="Inline"
-          instanceScale={{ x: 3, y: 1.5 }}
         />
       );
 
@@ -87,11 +99,10 @@ describe('Inspector Physics & Collision Sub-sections', () => {
       // Size: { x: 30, y: 40, z: 50 }
       expect(screen.getByDisplayValue('30')).toBeDefined();
       expect(screen.getByDisplayValue('40')).toBeDefined();
-      expect(screen.getAllByDisplayValue('50')).toHaveLength(2);
+      expect(screen.getByDisplayValue('50')).toBeDefined();
 
-      // Effective: { x: 30 * 3 = 90, y: 40 * 1.5 = 60, z: 50 }
-      expect(screen.getByDisplayValue('90')).toBeDefined();
-      expect(screen.getByDisplayValue('60')).toBeDefined();
+      // Effective size is removed
+      expect(screen.queryByText('Effective')).toBeNull();
     });
 
     it('renders polygon vertices with normalized bounds indicator for shape 3', () => {
@@ -162,6 +173,47 @@ describe('Inspector Physics & Collision Sub-sections', () => {
 
       expect(screen.getByText(/• Polygon must be convex./)).toBeDefined();
     });
+
+    it('allows editing position and size with delta 0.5 and uniform circle lock', () => {
+      const template = createBaseTemplate();
+      if (!template.physics) throw new Error('Physics required');
+      template.physics.shape = 2; // Circle
+      template.physics.collision.size = { x: 40, y: 40, z: 20 };
+
+      const onChangePosition = vi.fn();
+      const onChangeSize = vi.fn();
+      const onRemoveCollision = vi.fn();
+
+      render(
+        <CollisionGeometrySection
+          template={template}
+          source="Inline"
+          onChangePosition={onChangePosition}
+          onChangeSize={onChangeSize}
+          onRemoveCollision={onRemoveCollision}
+        />
+      );
+
+      // Position edit (rounded integer)
+      const xInputs = screen.getAllByLabelText('X');
+      const posXInput = xInputs[0];
+      fireEvent.change(posXInput, { target: { value: '25.7' } });
+      expect(onChangePosition).toHaveBeenCalledWith(expect.objectContaining({ x: 26 }));
+
+      // Circle Uniform Size edit: editing X should update both X and Y with 0.5 snapping
+      const sizeXInput = xInputs[1];
+      fireEvent.change(sizeXInput, { target: { value: '80.2' } });
+      expect(onChangeSize).toHaveBeenCalledWith(expect.objectContaining({ x: 80, y: 80 }));
+
+      // Wheel delta 0.5 test on Size
+      fireEvent.wheel(sizeXInput, { deltaY: -100 });
+      expect(onChangeSize).toHaveBeenCalledWith(expect.objectContaining({ x: 80.5, y: 80.5 }));
+
+      // Remove button
+      const removeBtn = screen.getByLabelText('Remove Collision');
+      fireEvent.click(removeBtn);
+      expect(onRemoveCollision).toHaveBeenCalled();
+    });
   });
 
   describe('RevoluteJointsSection', () => {
@@ -197,6 +249,48 @@ describe('Inspector Physics & Collision Sub-sections', () => {
       expect(screen.getByDisplayValue('250')).toBeDefined();
       expect(screen.getAllByText('rad').length).toBeGreaterThan(0);
       expect(screen.getByText('rad/s')).toBeDefined();
+    });
+  });
+
+  describe('AxisNumberInput', () => {
+    it('supports mouse drag scrubbing with dragDelta', () => {
+      const onChange = vi.fn();
+      render(
+        <AxisNumberInput
+          axis="X"
+          badgeClass="axis-badge-x"
+          value={10}
+          dragDelta={0.5}
+          precision={1}
+          onChange={onChange}
+        />
+      );
+
+      const badge = screen.getByText('X');
+      fireEvent.pointerDown(badge, { button: 0, clientX: 100, pointerId: 1 });
+      fireEvent.pointerMove(badge, { clientX: 116, pointerId: 1 });
+      expect(onChange).toHaveBeenCalledWith(12);
+
+      fireEvent.pointerUp(badge, { pointerId: 1 });
+    });
+
+    it('does not scrub when readOnly or disabled', () => {
+      const onChange = vi.fn();
+      render(
+        <AxisNumberInput
+          axis="X"
+          badgeClass="axis-badge-x"
+          value={10}
+          dragDelta={0.5}
+          readOnly
+          onChange={onChange}
+        />
+      );
+
+      const badge = screen.getByText('X');
+      fireEvent.pointerDown(badge, { button: 0, clientX: 100, pointerId: 1 });
+      fireEvent.pointerMove(badge, { clientX: 116, pointerId: 1 });
+      expect(onChange).not.toHaveBeenCalled();
     });
   });
 });

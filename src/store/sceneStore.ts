@@ -59,7 +59,7 @@ const DEFAULT_SCENE: SceneData = {
   entities: [],
 };
 
-export type InspectorEditKey = 'identity' | 'transform' | 'scale' | 'spriteFlags' | 'spriteData' | 'material' | 'customData';
+export type InspectorEditKey = 'identity' | 'transform' | 'scale' | 'spriteFlags' | 'spriteData' | 'material' | 'customData' | 'physics' | 'collision';
 export type InspectorEditMutation = (entity: EntityInstance) => EntityInstance;
 
 type FileWithRelativePath = File & { webkitRelativePath?: string };

@@ -126,6 +126,29 @@ describe('useCollisionRenderer', () => {
     expect(points[0].y).toBeCloseTo(210);
   });
 
+  it('redraws collision preview when collisionPos or collisionSize updates from event bus', () => {
+    const data = fixture();
+    renderHook(() => useCollisionRenderer({
+      refs: data.refs,
+      scene: data.scene,
+      templates: data.templates,
+      selectedUIDs: [],
+      showCollisions: true,
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    }));
+    flushAnimationFrames();
+    data.graphics.poly.mockClear();
+
+    act(() => transformEventBus.emit([{ uid: 'uid', collisionPos: { x: 50, y: 50, z: 0 }, collisionSize: { x: 40, y: 60, z: 10 } }]));
+    flushAnimationFrames();
+
+    expect(data.graphics.poly).toHaveBeenCalledTimes(6);
+  });
+
   it('redraws parallax geometry when the camera changes', () => {
     const data = fixture();
     data.scene.entities[0].position.z = 10;

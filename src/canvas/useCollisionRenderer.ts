@@ -117,7 +117,7 @@ function applyPreview(
     },
     angle: preview.angle ?? entity.angle,
   };
-  const nextTemplate = preview.scaleX !== undefined || preview.scaleY !== undefined
+  let nextTemplate = preview.scaleX !== undefined || preview.scaleY !== undefined
     ? {
         ...template,
         scale: {
@@ -126,6 +126,24 @@ function applyPreview(
         },
       }
     : template;
+
+  if (preview.collisionPos !== undefined || preview.collisionSize !== undefined) {
+    if (nextTemplate.physics) {
+      nextTemplate = {
+        ...nextTemplate,
+        physics: {
+          ...nextTemplate.physics,
+          collision: {
+            ...nextTemplate.physics.collision,
+            ...(preview.collisionPos ? { position: preview.collisionPos } : {}),
+            ...(preview.collisionSize ? { size: preview.collisionSize } : {}),
+            valid: true,
+          },
+        },
+      };
+    }
+  }
+
   return { entity: nextEntity, template: nextTemplate };
 }
 

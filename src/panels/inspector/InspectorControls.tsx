@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { formatNumber } from './inspectorFormatters';
 
 export function AxisNumberInput({
@@ -10,6 +10,7 @@ export function AxisNumberInput({
   min,
   max,
   precision,
+  dragDelta,
   ariaLabel,
   title,
   disabled = false,
@@ -23,16 +24,62 @@ export function AxisNumberInput({
   min?: number;
   max?: number;
   precision?: number;
+  dragDelta?: number;
   ariaLabel?: string;
   title?: string;
   disabled?: boolean;
   readOnly?: boolean;
 }) {
   const isInactive = disabled || readOnly;
+  const isInteractive = !isInactive && !!onChange;
+
+  const dragStartRef = useRef<{ startX: number; startVal: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const deltaStep = dragDelta ?? (typeof step === 'number' ? step : 1);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLSpanElement>) => {
+    if (!isInteractive || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragStartRef.current = { startX: e.clientX, startVal: value };
+    setIsDragging(true);
+    try {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    } catch {
+      // Ignored if unsupported
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLSpanElement>) => {
+    if (!dragStartRef.current || !onChange) return;
+    const pixelDiff = e.clientX - dragStartRef.current.startX;
+    const steps = Math.round(pixelDiff / 4);
+    let nextVal = dragStartRef.current.startVal + steps * deltaStep;
+    if (min !== undefined) nextVal = Math.max(min, nextVal);
+    if (max !== undefined) nextVal = Math.min(max, nextVal);
+    const dec = precision ?? (deltaStep.toString().includes('.')
+      ? deltaStep.toString().split('.')[1].length
+      : 0);
+    nextVal = Number(nextVal.toFixed(dec));
+    onChange(nextVal);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLSpanElement>) => {
+    if (dragStartRef.current) {
+      dragStartRef.current = null;
+      setIsDragging(false);
+      try {
+        e.currentTarget.releasePointerCapture?.(e.pointerId);
+      } catch {
+        // Ignored if already released
+      }
+    }
+  };
 
   const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
     if (isInactive || !onChange) return;
-    const stepVal = typeof step === 'number' ? step : 1;
+    const stepVal = typeof step === 'number' ? step : deltaStep;
     const delta = e.deltaY < 0 ? stepVal : -stepVal;
     let nextVal = value + delta;
     if (min !== undefined) nextVal = Math.max(min, nextVal);
@@ -56,9 +103,21 @@ export function AxisNumberInput({
     ? 'opacity-85 cursor-default'
     : '';
 
+  const badgeDragClass = isInteractive
+    ? 'cursor-ew-resize select-none active:opacity-75'
+    : '';
+
   return (
-    <div className={`axis-input-group ${stateClass}`} title={title}>
-      <span className={`axis-badge ${badgeClass}`}>{axis}</span>
+    <div className={`axis-input-group ${stateClass} ${isDragging ? 'ring-1 ring-cyan-500/50' : ''}`} title={title}>
+      <span
+        className={`axis-badge ${badgeClass} ${badgeDragClass}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        {axis}
+      </span>
       <input
         type="number"
         disabled={disabled}
