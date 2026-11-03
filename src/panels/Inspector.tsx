@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '../components/Icon';
 import './Inspector.css';
-import type { CollisionCompoundShape, CollisionShape, CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityPhysicsConfig, EntityTemplate, SpriteAtlas } from '../types';
+import type { CollisionCompoundShape, CollisionPolygonVertex, CollisionShape, CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityPhysicsConfig, EntityTemplate, SpriteAtlas } from '../types';
 import { useSceneStore } from '../store/sceneStore';
 import { applyPhysicsToEntity, createDefaultPhysics, entityHasFileNameTag, getTemplateKey, resolveEntityTemplate, resolveExternalTemplate, unpackEntityInstance } from '../utils/entityTemplate';
-import { createDefaultCompoundSubShape } from '../utils/collision';
+import { createDefaultCompoundSubShape, createDefaultPolygonVertices } from '../utils/collision';
 import {
   buildCustomDataRefIndex,
   isBaseDataFieldCompatibleWithType,
@@ -1636,19 +1636,42 @@ export function Inspector() {
         if (newShape === 4 && compound.length === 0) {
           compound = [createDefaultCompoundSubShape([])];
         }
+        let polygon = basePhysics.collision.polygon;
+        if (newShape === 3 && polygon.length === 0) {
+          polygon = createDefaultPolygonVertices();
+        }
         const nextPhysics: EntityPhysicsConfig = {
           ...basePhysics,
           shape: newShape,
           collision: {
             ...basePhysics.collision,
+            polygon,
             compound,
-            valid: newShape === 4 ? compound.length > 0 : true,
+            valid: newShape === 4 ? compound.length > 0 : newShape === 3 ? polygon.length >= 3 : true,
           },
         };
         return applyPhysicsToEntity(currentEntity, nextPhysics);
       }
-      const freshPhysics = createDefaultPhysics(newShape as 0 | 1 | 2 | 4);
+      const freshPhysics = createDefaultPhysics(newShape);
       return applyPhysicsToEntity(currentEntity, freshPhysics);
+    });
+  };
+
+  const updateCollisionPolygon = (polygon: CollisionPolygonVertex[]) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics ?? createDefaultPhysics(3);
+      const nextPhysics: EntityPhysicsConfig = {
+        ...basePhysics,
+        shape: 3,
+        collision: {
+          ...basePhysics.collision,
+          polygon,
+          valid: polygon.length >= 3,
+        },
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
     });
   };
 
@@ -1855,6 +1878,7 @@ export function Inspector() {
         onChangeShape={updateCollisionShape}
         onChangePosition={updateCollisionPosition}
         onChangeSize={updateCollisionSize}
+        onChangePolygon={updateCollisionPolygon}
         onChangeCompound={updateCollisionCompound}
         onRemoveCollision={removeCollision}
       />

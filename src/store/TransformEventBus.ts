@@ -1,4 +1,4 @@
-import type { CollisionCompoundShape } from '../types';
+import type { CollisionCompoundShape, CollisionPolygonVertex } from '../types';
 
 export type TransformUpdate = {
   uid: string;
@@ -15,6 +15,7 @@ export type TransformUpdate = {
   blendMode?: number;
   collisionPos?: { x: number; y: number; z: number };
   collisionSize?: { x: number; y: number; z: number };
+  collisionPolygon?: CollisionPolygonVertex[];
   collisionCompound?: CollisionCompoundShape[];
 };
 

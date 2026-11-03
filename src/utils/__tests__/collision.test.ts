@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { parseEntityTemplate, parseScene } from '../../io/parseScene';
 import { applyPhysicsToEntity, createDefaultPhysics, resolveEntityTemplate } from '../entityTemplate';
-import { createDefaultCompoundSubShape, MAX_COMPOUND_SUB_SHAPES, parseEntityPhysics, serializeCompoundEnml } from '../collision';
-import type { CollisionCompoundShape, EntityInstance } from '../../types';
+import {
+  createDefaultCompoundSubShape,
+  createDefaultPolygonVertices,
+  MAX_COMPOUND_SUB_SHAPES,
+  MAX_POLYGON_VERTICES,
+  MIN_POLYGON_VERTICES,
+  parseEntityPhysics,
+  POLYGON_PRESETS,
+  serializeCompoundEnml,
+  serializePolygonEnml,
+  validatePolygon,
+} from '../collision';
+import type { CollisionCompoundShape, CollisionPolygonVertex, EntityInstance } from '../../types';
 
 describe('collision parsing and resolution', () => {
   it('parses complete XYZ box physics', () => {
@@ -438,6 +449,95 @@ describe('collision parsing and resolution', () => {
       expect(typeof col.Compound).toBe('string');
       expect(col.Compound).toContain('sub_0 {');
       expect(col.Compound).toContain('shape = box;');
+    });
+
+    it('validates polygon constraints and serialization correctly', () => {
+      expect(MIN_POLYGON_VERTICES).toBe(3);
+      expect(MAX_POLYGON_VERTICES).toBe(8);
+
+      const validTriangle = createDefaultPolygonVertices();
+      const validResult = validatePolygon(validTriangle);
+      expect(validResult.valid).toBe(true);
+      expect(validResult.isConvex).toBe(true);
+      expect(validResult.isClockwise).toBe(true);
+      expect(validResult.errors).toHaveLength(0);
+
+      // Serialize and round-trip through parseEntityPhysics
+      const enml = serializePolygonEnml(validTriangle);
+      expect(enml).toContain('v0 {');
+      expect(enml).toContain('x = 0;');
+      expect(enml).toContain('y = -1;');
+
+      const parsed = parseEntityPhysics({
+        shape: '3',
+        Collision: {
+          Position: { x: 0, y: 0, z: 0 },
+          Size: { x: 64, y: 64, z: 32 },
+          Polygon: enml,
+        },
+      });
+      expect(parsed.collision.polygon).toHaveLength(3);
+      expect(parsed.collision.polygon[0]).toEqual({ name: 'v0', x: 0, y: -1 });
+
+      // Counter-clockwise triangle
+      const ccwTriangle: CollisionPolygonVertex[] = [
+        { name: 'v0', x: 0, y: -1 },
+        { name: 'v1', x: -1, y: 1 },
+        { name: 'v2', x: 1, y: 1 },
+      ];
+      const ccwResult = validatePolygon(ccwTriangle);
+      expect(ccwResult.valid).toBe(false);
+      expect(ccwResult.isClockwise).toBe(false);
+      expect(ccwResult.errors).toContain('Polygon vertices must use clockwise screen-space winding.');
+
+      // Less than 3 vertices
+      const twoVerts = [{ name: 'v0', x: 0, y: 0 }, { name: 'v1', x: 1, y: 1 }];
+      const tooFewResult = validatePolygon(twoVerts);
+      expect(tooFewResult.valid).toBe(false);
+
+      // More than 8 vertices
+      const nineVerts: CollisionPolygonVertex[] = Array.from({ length: 9 }, (_, i) => ({
+        name: `v${i}`,
+        x: 0,
+        y: 0,
+      }));
+      const tooManyResult = validatePolygon(nineVerts);
+      expect(tooManyResult.valid).toBe(false);
+
+      // Verify all presets are valid
+      for (const preset of POLYGON_PRESETS) {
+        const res = validatePolygon(preset.vertices);
+        expect(res.valid).toBe(true);
+        expect(res.isConvex).toBe(true);
+        expect(res.isClockwise).toBe(true);
+      }
+    });
+
+    it('updates inlineEntityData.Collision.Polygon when applying shape 3 physics with new vertices', () => {
+      const entity: EntityInstance = {
+        id: 2,
+        entityName: 'poly_rock',
+        editorEntityName: 'poly_rock_1',
+        editorEntityUID: 'poly-2',
+        position: { x: 0, y: 0, z: 0 },
+        angle: 0,
+        spriteFrame: 0,
+        hide: false,
+        flipX: false,
+        flipY: false,
+        customData: [],
+      };
+
+      const physics = createDefaultPhysics(3);
+      expect(physics.collision.polygon).toHaveLength(3);
+
+      const updated = applyPhysicsToEntity(entity, physics);
+      const col = updated.inlineEntityData?.Collision as Record<string, unknown>;
+      expect(col).toBeDefined();
+      expect(typeof col.Polygon).toBe('string');
+      expect(col.Polygon).toContain('v0 {');
+      expect(col.Polygon).toContain('v1 {');
+      expect(col.Polygon).toContain('v2 {');
     });
   });
 });

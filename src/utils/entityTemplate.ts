@@ -1,5 +1,12 @@
-import type { EntityInstance, EntityPhysicsConfig, EntityTemplate, InlineEntityTemplate } from '../types';
-import { createDefaultCompoundSubShape, serializeCompoundEnml } from './collision';
+import type { CollisionShape, EntityInstance, EntityPhysicsConfig, EntityTemplate, InlineEntityTemplate } from '../types';
+import {
+  createDefaultCompoundSubShape,
+  createDefaultPolygonVertices,
+  parsePolygonVertices,
+  polygonsEqual,
+  serializeCompoundEnml,
+  serializePolygonEnml,
+} from './collision';
 
 function defaultTemplate(name: string): EntityTemplate {
   return {
@@ -220,12 +227,13 @@ export function unpackEntityInstance(
 
 
 export function createDefaultPhysics(
-  shape: 0 | 1 | 2 | 4 = 1,
+  shape: CollisionShape = 1,
   defaultSize?: { x: number; y: number; z?: number },
 ): EntityPhysicsConfig {
   const sizeX = defaultSize?.x && defaultSize.x > 0 ? defaultSize.x : (shape === 0 ? 0 : 64);
   const sizeY = defaultSize?.y && defaultSize.y > 0 ? defaultSize.y : (shape === 0 ? 0 : 64);
   const sizeZ = defaultSize?.z && defaultSize.z > 0 ? defaultSize.z : (shape === 0 ? 0 : 64);
+  const polygon = shape === 3 ? createDefaultPolygonVertices() : [];
   const compound = shape === 4 ? [createDefaultCompoundSubShape([])] : [];
   return {
     shape,
@@ -241,7 +249,7 @@ export function createDefaultPhysics(
       valid: shape !== 0,
       position: { x: 0, y: 0, z: 0 },
       size: { x: sizeX, y: sizeY, z: sizeZ },
-      polygon: [],
+      polygon,
       compound,
       joints: [],
     },
@@ -280,6 +288,19 @@ export function applyPhysicsToEntity(
   };
 
   const existingCollision = (entity.inlineEntityData?.Collision as Record<string, unknown>) ?? {};
+  const rawExistingPolygon = typeof existingCollision.Polygon === 'string' ? existingCollision.Polygon : undefined;
+  let polygonValue: string | undefined;
+  if (physics.shape === 3) {
+    if (rawExistingPolygon !== undefined && polygonsEqual(parsePolygonVertices(rawExistingPolygon), physics.collision.polygon)) {
+      polygonValue = rawExistingPolygon;
+    } else if (physics.collision.polygon.length > 0) {
+      polygonValue = serializePolygonEnml(physics.collision.polygon);
+    } else {
+      polygonValue = rawExistingPolygon ?? '';
+    }
+  } else {
+    polygonValue = rawExistingPolygon;
+  }
   const compoundValue = physics.shape === 4
     ? (physics.collision.compound.length > 0
         ? serializeCompoundEnml(physics.collision.compound)
@@ -307,7 +328,7 @@ export function applyPhysicsToEntity(
       y: String(physics.collision.size.y),
       z: String(physics.collision.size.z),
     },
-    ...(typeof existingCollision.Polygon === 'string' ? { Polygon: existingCollision.Polygon } : {}),
+    ...(polygonValue !== undefined ? { Polygon: polygonValue } : {}),
     ...(compoundValue !== undefined ? { Compound: compoundValue } : {}),
     ...(typeof existingCollision.Joints === 'string' ? { Joints: existingCollision.Joints } : {}),
   };

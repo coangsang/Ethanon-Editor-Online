@@ -128,10 +128,69 @@ describe('Inspector Physics & Collision Sub-sections', () => {
       expect(screen.getByText('Collision')).toBeDefined();
       expect(screen.getByText('3 - Polygon')).toBeDefined();
       expect(screen.getByText(/Polygon Vertices \(3\)/)).toBeDefined();
-      expect(screen.getByText('[-1.0, 1.0]')).toBeDefined();
       expect(screen.getByText('v0')).toBeDefined();
       // Precision 3 format check: 0.333333333 -> 0.333
       expect(screen.getByDisplayValue('0.333')).toBeDefined();
+    });
+
+    it('supports polygon interactive operations (add, move, delete, presets)', () => {
+      const template = createBaseTemplate();
+      if (!template.physics) throw new Error('Physics required');
+      template.physics.shape = 3;
+      template.physics.collision.polygon = [
+        { name: 'v0', x: 0, y: -1 },
+        { name: 'v1', x: 1, y: 1 },
+        { name: 'v2', x: -1, y: 1 },
+      ];
+
+      const onChangePolygon = vi.fn();
+      render(
+        <CollisionGeometrySection
+          template={template}
+          source="Inline"
+          onChangePolygon={onChangePolygon}
+        />
+      );
+
+      // Verify convex badge
+      expect(screen.getByText('Convex')).toBeDefined();
+
+      // Delete button for v0 should be disabled when at minimum 3 vertices
+      const deleteButtons = screen.getAllByRole('button', { name: /Delete v/ });
+      expect(deleteButtons).toHaveLength(3);
+      expect((deleteButtons[0] as HTMLButtonElement).disabled).toBe(true);
+
+      // Click + Vertex
+      const addBtn = screen.getByRole('button', { name: 'Add Polygon Vertex' });
+      fireEvent.click(addBtn);
+      expect(onChangePolygon).toHaveBeenCalled();
+      const updatedAfterAdd = onChangePolygon.mock.calls[0][0];
+      expect(updatedAfterAdd).toHaveLength(4);
+      expect(updatedAfterAdd[3].name).toBe('v3');
+
+      // Click Preset Diamond
+      onChangePolygon.mockClear();
+      const diamondBtn = screen.getByRole('button', { name: /Apply Diamond/ });
+      fireEvent.click(diamondBtn);
+      expect(onChangePolygon).toHaveBeenCalled();
+      const diamondVertices = onChangePolygon.mock.calls[0][0];
+      expect(diamondVertices).toHaveLength(4);
+    });
+
+    it('shows validation warning when polygon vertices are counter-clockwise or invalid', () => {
+      const template = createBaseTemplate();
+      if (!template.physics) throw new Error('Physics required');
+      template.physics.shape = 3;
+      template.physics.collision.polygon = [
+        { name: 'v0', x: 0, y: -1 },
+        { name: 'v1', x: -1, y: 1 },
+        { name: 'v2', x: 1, y: 1 },
+      ];
+
+      render(<CollisionGeometrySection template={template} source="Inline" />);
+
+      expect(screen.getByText('Invalid Geometry')).toBeDefined();
+      expect(screen.getByText(/• Polygon vertices must use clockwise screen-space winding./)).toBeDefined();
     });
 
     it('renders compound sub-shapes with angle in degrees and radians', () => {

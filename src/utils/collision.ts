@@ -130,66 +130,108 @@ function inNormalizedRange(value: number) {
   return value >= -1 && value <= 1;
 }
 
-function validatePolygonGeometry(
-  vertices: CollisionPolygonVertex[],
-  warnings: string[],
-): boolean {
-  const epsilon = 1e-8;
-  let valid = true;
+export const MIN_POLYGON_VERTICES = 3;
+export const MAX_POLYGON_VERTICES = 8;
 
-  for (const vertex of vertices) {
-    if (!inNormalizedRange(vertex.x) || !inNormalizedRange(vertex.y)) {
-      warnings.push(`Polygon vertex ${vertex.name} must be within [-1, 1].`);
-      valid = false;
+export interface PolygonValidationResult {
+  valid: boolean;
+  errors: string[];
+  isConvex: boolean;
+  isClockwise: boolean;
+}
+
+export function validatePolygon(
+  vertices: CollisionPolygonVertex[],
+): PolygonValidationResult {
+  const errors: string[] = [];
+  const epsilon = 1e-8;
+  let isConvex = true;
+  let isClockwise = true;
+
+  if (vertices.length < MIN_POLYGON_VERTICES || vertices.length > MAX_POLYGON_VERTICES) {
+    errors.push(`Polygon must contain ${MIN_POLYGON_VERTICES} to ${MAX_POLYGON_VERTICES} sequential vertices.`);
+  }
+
+  for (let index = 0; index < vertices.length; index++) {
+    const vertex = vertices[index];
+    if (vertex.name !== `v${index}`) {
+      errors.push(`Polygon vertices must be sequential; expected v${index} but found ${vertex.name}.`);
+    }
+    if (!Number.isFinite(vertex.x) || !Number.isFinite(vertex.y)) {
+      errors.push(`Polygon vertex ${vertex.name} has invalid coordinates.`);
+    } else if (!inNormalizedRange(vertex.x) || !inNormalizedRange(vertex.y)) {
+      errors.push(`Polygon vertex ${vertex.name} must be within [-1, 1].`);
     }
   }
 
   const seen = new Set<string>();
   for (const vertex of vertices) {
-    const key = `${vertex.x}:${vertex.y}`;
+    const key = `${vertex.x.toFixed(6)}:${vertex.y.toFixed(6)}`;
     if (seen.has(key)) {
-      warnings.push(`Polygon vertex ${vertex.name} duplicates another vertex.`);
-      valid = false;
+      errors.push(`Polygon vertex ${vertex.name} duplicates another vertex.`);
     }
     seen.add(key);
   }
 
-  let windingSign = 0;
-  for (let index = 0; index < vertices.length; index++) {
-    const a = vertices[index];
-    const b = vertices[(index + 1) % vertices.length];
-    const c = vertices[(index + 2) % vertices.length];
-    const abX = b.x - a.x;
-    const abY = b.y - a.y;
-    const bcX = c.x - b.x;
-    const bcY = c.y - b.y;
-    if (Math.abs(abX) <= epsilon && Math.abs(abY) <= epsilon) {
-      valid = false;
-      continue;
+  if (vertices.length >= 3) {
+    let windingSign = 0;
+    for (let index = 0; index < vertices.length; index++) {
+      const a = vertices[index];
+      const b = vertices[(index + 1) % vertices.length];
+      const c = vertices[(index + 2) % vertices.length];
+      const abX = b.x - a.x;
+      const abY = b.y - a.y;
+      const bcX = c.x - b.x;
+      const bcY = c.y - b.y;
+
+      if (Math.abs(abX) <= epsilon && Math.abs(abY) <= epsilon) {
+        continue;
+      }
+      const cross = abX * bcY - abY * bcX;
+      if (Math.abs(cross) <= epsilon) {
+        errors.push("Polygon must not contain three consecutive collinear vertices.");
+        isConvex = false;
+        continue;
+      }
+      const sign = Math.sign(cross);
+      if (windingSign === 0) {
+        windingSign = sign;
+      } else if (windingSign !== sign) {
+        errors.push("Polygon must be convex.");
+        isConvex = false;
+        break;
+      }
     }
-    const cross = abX * bcY - abY * bcX;
-    if (Math.abs(cross) <= epsilon) {
-      warnings.push(
-        "Polygon must not contain three consecutive collinear vertices.",
-      );
-      valid = false;
-      continue;
+
+    // With screen coordinates (Y grows down), a positive cross product is clockwise.
+    if (windingSign < 0) {
+      errors.push("Polygon vertices must use clockwise screen-space winding.");
+      isClockwise = false;
     }
-    const sign = Math.sign(cross);
-    if (windingSign === 0) windingSign = sign;
-    else if (windingSign !== sign) {
-      warnings.push("Polygon must be convex.");
-      valid = false;
-      break;
-    }
+  } else {
+    isConvex = false;
+    isClockwise = false;
   }
 
-  // With screen coordinates (Y grows down), a positive cross product is clockwise.
-  if (windingSign < 0) {
-    warnings.push("Polygon vertices must use clockwise screen-space winding.");
-    valid = false;
+  return {
+    valid: errors.length === 0,
+    errors,
+    isConvex,
+    isClockwise,
+  };
+}
+
+function validatePolygonGeometry(
+  vertices: CollisionPolygonVertex[],
+  warnings: string[],
+): boolean {
+  const result = validatePolygon(vertices);
+  for (const err of result.errors) {
+    if (!warnings.includes(err)) {
+      warnings.push(err);
+    }
   }
-  return valid;
+  return result.valid;
 }
 
 function parseCompound(
@@ -244,6 +286,98 @@ function parseCompound(
     return [item];
   });
 }
+
+export function polygonsEqual(
+  a: CollisionPolygonVertex[],
+  b: CollisionPolygonVertex[],
+): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i].name !== b[i].name ||
+      Math.abs(a[i].x - b[i].x) > 1e-6 ||
+      Math.abs(a[i].y - b[i].y) > 1e-6
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function parsePolygonVertices(value: unknown): CollisionPolygonVertex[] {
+  const blocks = parseCollisionEnml(value);
+  return blocks
+    .filter((b) => /^v\d+$/.test(b.name))
+    .map((b) => ({
+      name: b.name,
+      x: Number(b.values.x),
+      y: Number(b.values.y),
+    }))
+    .filter((v) => Number.isFinite(v.x) && Number.isFinite(v.y));
+}
+
+export function serializePolygonEnml(vertices: CollisionPolygonVertex[]): string {
+  if (!vertices || vertices.length === 0) return "";
+  const formatVal = (n: number) => Number(Number(n).toFixed(4)).toString();
+  return vertices
+    .map((v, i) => `${v.name || `v${i}`} {\n\tx = ${formatVal(v.x)};\n\ty = ${formatVal(v.y)};\n}`)
+    .join("\n");
+}
+
+export function createDefaultPolygonVertices(): CollisionPolygonVertex[] {
+  return [
+    { name: "v0", x: 0, y: -1 },
+    { name: "v1", x: 1, y: 1 },
+    { name: "v2", x: -1, y: 1 },
+  ];
+}
+
+export interface PolygonPreset {
+  name: string;
+  vertices: CollisionPolygonVertex[];
+}
+
+export const POLYGON_PRESETS: PolygonPreset[] = [
+  {
+    name: "Triangle",
+    vertices: [
+      { name: "v0", x: 0, y: -1 },
+      { name: "v1", x: 1, y: 1 },
+      { name: "v2", x: -1, y: 1 },
+    ],
+  },
+  {
+    name: "Diamond",
+    vertices: [
+      { name: "v0", x: 0, y: -1 },
+      { name: "v1", x: 1, y: 0 },
+      { name: "v2", x: 0, y: 1 },
+      { name: "v3", x: -1, y: 0 },
+    ],
+  },
+  {
+    name: "Pentagon",
+    vertices: [
+      { name: "v0", x: 0, y: -1 },
+      { name: "v1", x: 0.95, y: -0.31 },
+      { name: "v2", x: 0.59, y: 0.81 },
+      { name: "v3", x: -0.59, y: 0.81 },
+      { name: "v4", x: -0.95, y: -0.31 },
+    ],
+  },
+  {
+    name: "Hexagon",
+    vertices: [
+      { name: "v0", x: 0, y: -1 },
+      { name: "v1", x: 0.87, y: -0.5 },
+      { name: "v2", x: 0.87, y: 0.5 },
+      { name: "v3", x: 0, y: 1 },
+      { name: "v4", x: -0.87, y: 0.5 },
+      { name: "v5", x: -0.87, y: -0.5 },
+    ],
+  },
+];
 
 export function serializeCompoundEnml(compound: CollisionCompoundShape[]): string {
   if (!compound || compound.length === 0) return "";

@@ -136,6 +136,7 @@ function applyPreview(
   if (
     preview.collisionPos !== undefined ||
     preview.collisionSize !== undefined ||
+    preview.collisionPolygon !== undefined ||
     preview.collisionCompound !== undefined
   ) {
     if (nextTemplate.physics) {
@@ -147,6 +148,7 @@ function applyPreview(
             ...nextTemplate.physics.collision,
             ...(preview.collisionPos ? { position: preview.collisionPos } : {}),
             ...(preview.collisionSize ? { size: preview.collisionSize } : {}),
+            ...(preview.collisionPolygon ? { polygon: preview.collisionPolygon } : {}),
             ...(preview.collisionCompound ? { compound: preview.collisionCompound } : {}),
             valid: true,
           },

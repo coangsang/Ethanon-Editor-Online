@@ -1,10 +1,21 @@
 import { useState, useRef, useEffect } from 'react';
-import type { CollisionCompoundShape, CollisionShape, EntityTemplate } from '../../types';
+import type {
+  CollisionCompoundShape,
+  CollisionPolygonVertex,
+  CollisionShape,
+  EntityTemplate,
+} from '../../types';
 import {
   collisionShapeName,
   createDefaultCompoundSubShape,
+  createDefaultPolygonVertices,
   generateSubShapeName,
   MAX_COMPOUND_SUB_SHAPES,
+  MAX_POLYGON_VERTICES,
+  MIN_POLYGON_VERTICES,
+  POLYGON_PRESETS,
+  type PolygonPreset,
+  validatePolygon,
 } from '../../utils/collision';
 import { Icon } from '../../components/Icon';
 import { AxisNumberInput } from './InspectorControls';
@@ -141,6 +152,18 @@ function SubShapeMaterialControl({
 type LocalCompoundShape = CollisionCompoundShape & { _key: string };
 
 const EMPTY_COMPOUND: CollisionCompoundShape[] = [];
+const EMPTY_POLYGON: CollisionPolygonVertex[] = [];
+
+function polygonsEqual(a: CollisionPolygonVertex[], b: CollisionPolygonVertex[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].name !== b[i].name || a[i].x !== b[i].x || a[i].y !== b[i].y) {
+      return false;
+    }
+  }
+  return true;
+}
 
 function compoundsEqual(a: CollisionCompoundShape[], b: CollisionCompoundShape[]): boolean {
   if (a === b) return true;
@@ -199,6 +222,7 @@ export function CollisionGeometrySection({
   onChangeShape,
   onChangePosition,
   onChangeSize,
+  onChangePolygon,
   onChangeCompound,
   onRemoveCollision,
 }: {
@@ -209,6 +233,7 @@ export function CollisionGeometrySection({
   onChangeShape?: (shape: CollisionShape) => void;
   onChangePosition?: (pos: { x: number; y: number; z: number }) => void;
   onChangeSize?: (size: { x: number; y: number; z: number }) => void;
+  onChangePolygon?: (polygon: CollisionPolygonVertex[]) => void;
   onChangeCompound?: (compound: CollisionCompoundShape[]) => void;
   onRemoveCollision?: () => void;
 }) {
@@ -226,6 +251,7 @@ export function CollisionGeometrySection({
   };
 
   const rawCompound = physics?.collision?.compound ?? EMPTY_COMPOUND;
+  const rawPolygon = physics?.collision?.polygon ?? EMPTY_POLYGON;
 
   const [localPos, setLocalPos] = useState({
     x: collision.position.x,
@@ -240,6 +266,7 @@ export function CollisionGeometrySection({
   const [localCompound, setLocalCompound] = useState<LocalCompoundShape[]>(() =>
     toLocalCompound(rawCompound)
   );
+  const [localPolygon, setLocalPolygon] = useState<CollisionPolygonVertex[]>(rawPolygon);
 
   const [sourceCollision, setSourceCollision] = useState({
     uid: entityUid,
@@ -253,6 +280,10 @@ export function CollisionGeometrySection({
   const [sourceCompoundSnapshot, setSourceCompoundSnapshot] = useState({
     uid: entityUid,
     compound: rawCompound,
+  });
+  const [sourcePolygonSnapshot, setSourcePolygonSnapshot] = useState({
+    uid: entityUid,
+    polygon: rawPolygon,
   });
 
   if (
@@ -296,15 +327,28 @@ export function CollisionGeometrySection({
     setLocalCompound(prev => toLocalCompound(rawCompound, prev));
   }
 
+  if (
+    sourcePolygonSnapshot.uid !== entityUid ||
+    !polygonsEqual(sourcePolygonSnapshot.polygon, rawPolygon)
+  ) {
+    setSourcePolygonSnapshot({
+      uid: entityUid,
+      polygon: rawPolygon,
+    });
+    setLocalPolygon(rawPolygon);
+  }
+
   const latestPosRef = useRef(localPos);
   const latestSizeRef = useRef(localSize);
   const latestLocalCompoundRef = useRef(localCompound);
+  const latestLocalPolygonRef = useRef(localPolygon);
 
   useEffect(() => {
     latestPosRef.current = localPos;
     latestSizeRef.current = localSize;
     latestLocalCompoundRef.current = localCompound;
-  }, [localPos, localSize, localCompound]);
+    latestLocalPolygonRef.current = localPolygon;
+  }, [localPos, localSize, localCompound, localPolygon]);
 
   const isReadOnly = readOnly || source === 'Template';
 
@@ -384,6 +428,93 @@ export function CollisionGeometrySection({
     onChangeSize(newSize);
   };
 
+  const handleVertexChange = (index: number, axis: 'x' | 'y', val: number) => {
+    if (isReadOnly) return;
+    const clamped = Math.max(-1, Math.min(1, Number(val.toFixed(3))));
+    const updated = latestLocalPolygonRef.current.map((item, i) =>
+      i === index ? { ...item, [axis]: clamped } : item
+    );
+    latestLocalPolygonRef.current = updated;
+    setLocalPolygon(updated);
+    if (entityUid) {
+      transformEventBus.emit([{ uid: entityUid, collisionPolygon: updated }]);
+    }
+  };
+
+  const commitVertexChange = (index: number, axis: 'x' | 'y', val: number) => {
+    if (isReadOnly || !onChangePolygon) return;
+    const clamped = Math.max(-1, Math.min(1, Number(val.toFixed(3))));
+    const updated = latestLocalPolygonRef.current.map((item, i) =>
+      i === index ? { ...item, [axis]: clamped } : item
+    );
+    latestLocalPolygonRef.current = updated;
+    setLocalPolygon(updated);
+    if (entityUid) {
+      transformEventBus.emit([{ uid: entityUid, collisionPolygon: updated }]);
+    }
+    onChangePolygon(updated);
+  };
+
+  const handleAddVertex = () => {
+    if (isReadOnly || localPolygon.length >= MAX_POLYGON_VERTICES) return;
+    let nextVertices: CollisionPolygonVertex[];
+    if (localPolygon.length === 0) {
+      nextVertices = createDefaultPolygonVertices();
+    } else {
+      const count = localPolygon.length;
+      const last = localPolygon[count - 1];
+      const first = localPolygon[0];
+      const midX = Number(((last.x + first.x) / 2).toFixed(3));
+      const midY = Number(((last.y + first.y) / 2).toFixed(3));
+      nextVertices = [...localPolygon, { name: `v${count}`, x: midX, y: midY }];
+    }
+    const normalized = nextVertices.map((v, i) => ({ ...v, name: `v${i}` }));
+    latestLocalPolygonRef.current = normalized;
+    setLocalPolygon(normalized);
+    if (entityUid) {
+      transformEventBus.emit([{ uid: entityUid, collisionPolygon: normalized }]);
+    }
+    onChangePolygon?.(normalized);
+  };
+
+  const handleDeleteVertex = (index: number) => {
+    if (isReadOnly || localPolygon.length <= MIN_POLYGON_VERTICES) return;
+    const updated = localPolygon.filter((_, i) => i !== index).map((v, i) => ({ ...v, name: `v${i}` }));
+    latestLocalPolygonRef.current = updated;
+    setLocalPolygon(updated);
+    if (entityUid) {
+      transformEventBus.emit([{ uid: entityUid, collisionPolygon: updated }]);
+    }
+    onChangePolygon?.(updated);
+  };
+
+  const handleMoveVertex = (index: number, direction: 'up' | 'down') => {
+    if (isReadOnly) return;
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= localPolygon.length) return;
+    const copy = [...localPolygon];
+    const temp = copy[index];
+    copy[index] = copy[target];
+    copy[target] = temp;
+    const normalized = copy.map((v, i) => ({ ...v, name: `v${i}` }));
+    latestLocalPolygonRef.current = normalized;
+    setLocalPolygon(normalized);
+    if (entityUid) {
+      transformEventBus.emit([{ uid: entityUid, collisionPolygon: normalized }]);
+    }
+    onChangePolygon?.(normalized);
+  };
+
+  const handleApplyPreset = (preset: PolygonPreset) => {
+    if (isReadOnly) return;
+    latestLocalPolygonRef.current = preset.vertices;
+    setLocalPolygon(preset.vertices);
+    if (entityUid) {
+      transformEventBus.emit([{ uid: entityUid, collisionPolygon: preset.vertices }]);
+    }
+    onChangePolygon?.(preset.vertices);
+  };
+
   const handleAddSubShape = (shapeType: 'box' | 'circle' = 'box') => {
     if (isReadOnly || collision.compound.length >= MAX_COMPOUND_SUB_SHAPES) return;
     const newShape = createDefaultCompoundSubShape(collision.compound, shapeType);
@@ -454,6 +585,8 @@ export function CollisionGeometrySection({
     onChangeCompound?.(cleanUpdated);
   };
 
+  const polygonValidation = shape === 3 ? validatePolygon(localPolygon) : null;
+
   return (
     <div className="inspector-section px-3 py-2 flex flex-col gap-2 border-b border-gray-700">
       <div className="inspector-section-title text-xs text-gray-500 mb-0.5 flex items-center justify-between">
@@ -501,7 +634,7 @@ export function CollisionGeometrySection({
             <option value={0}>0 - None</option>
             <option value={1}>1 - Box</option>
             <option value={2}>2 - Circle</option>
-            {shape === 3 && <option value={3}>3 - Polygon</option>}
+            <option value={3}>3 - Polygon</option>
             <option value={4}>4 - Compound</option>
           </select>
         )}
@@ -627,33 +760,167 @@ export function CollisionGeometrySection({
         </div>
       )}
 
-      {/* Polygon Vertices (Shape 3 - Read Only) */}
-      {shape === 3 && collision.polygon.length > 0 && (
-        <div className="inspector-subsection rounded p-2 flex flex-col gap-1.5">
-          <div className="flex items-center justify-between text-[10px] text-gray-400 font-medium">
-            <span>Polygon Vertices ({collision.polygon.length})</span>
-            <span className="text-[9px] text-gray-500 font-mono">[-1.0, 1.0]</span>
+      {/* Polygon Vertices Manager (Shape 3) */}
+      {shape === 3 && (
+        <div className="flex flex-col gap-2 pt-1 border-t border-[var(--inspector-border)]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-semibold text-gray-400">
+                Polygon Vertices ({localPolygon.length})
+              </span>
+              <span
+                className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
+                  localPolygon.length >= MAX_POLYGON_VERTICES
+                    ? 'bg-amber-950/70 text-amber-300 border-amber-800/50'
+                    : 'inspector-data-type-badge'
+                }`}
+              >
+                {localPolygon.length} / {MAX_POLYGON_VERTICES}
+              </span>
+              {polygonValidation && (
+                <span
+                  className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
+                    polygonValidation.valid
+                      ? 'inspector-data-type-badge'
+                      : 'bg-amber-950/70 text-amber-300 border-amber-800/50'
+                  }`}
+                  title={polygonValidation.valid ? 'Convex polygon with clockwise winding' : polygonValidation.errors.join(', ')}
+                >
+                  {polygonValidation.valid ? 'Convex' : 'Invalid Geometry'}
+                </span>
+              )}
+            </div>
+
+            {!isReadOnly && onChangePolygon && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={localPolygon.length >= MAX_POLYGON_VERTICES}
+                  onClick={handleAddVertex}
+                  title={
+                    localPolygon.length >= MAX_POLYGON_VERTICES
+                      ? `Maximum ${MAX_POLYGON_VERTICES} vertices reached`
+                      : 'Add Polygon Vertex'
+                  }
+                  aria-label="Add Polygon Vertex"
+                  className="inspector-button px-2 py-0.5 text-[10px] flex items-center gap-1 font-medium"
+                >
+                  + Vertex
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* Preset Selector */}
+          {!isReadOnly && onChangePolygon && (
+            <div className="flex items-center gap-1 text-[10px] text-gray-400">
+              <span className="shrink-0 text-[9px] text-gray-500">Presets:</span>
+              <div className="flex items-center gap-1 flex-wrap">
+                {POLYGON_PRESETS.map(preset => (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => handleApplyPreset(preset)}
+                    className="inspector-button px-1.5 py-0.5 text-[9px] font-mono text-gray-400 hover:text-gray-200"
+                    title={`Apply ${preset.name} (${preset.vertices.length} vertices)`}
+                    aria-label={`Apply ${preset.name}`}
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Validation Errors */}
+          {polygonValidation && !polygonValidation.valid && (
+            <div className="rounded border border-amber-800/70 bg-amber-950/30 p-2 text-[10px] text-amber-300 flex flex-col gap-0.5">
+              {polygonValidation.errors.map((err, idx) => (
+                <div key={idx}>• {err}</div>
+              ))}
+            </div>
+          )}
+
+          {localPolygon.length === 0 && (
+            <div className="text-xs text-gray-500 italic py-1 text-center">
+              No vertices. Click &quot;+ Vertex&quot; or choose a Preset to begin.
+            </div>
+          )}
+
+          {/* Vertices List */}
           <div className="flex flex-col gap-1.5">
-            {collision.polygon.map(vertex => (
-              <div key={vertex.name} className="flex items-center gap-2">
-                <span className="text-xs font-mono text-gray-400 w-7 shrink-0">{vertex.name}</span>
+            {localPolygon.map((vertex, index) => (
+              <div
+                key={vertex.name}
+                className="inspector-subsection rounded p-1.5 flex items-center gap-2"
+              >
+                <span className="text-xs font-mono text-gray-400 w-6 shrink-0 font-medium">
+                  {vertex.name}
+                </span>
+
                 <div className="grid grid-cols-2 gap-1.5 flex-1 min-w-0">
                   <AxisNumberInput
                     axis="X"
                     badgeClass="axis-badge-x"
                     value={vertex.x}
-                    readOnly
+                    step={0.05}
+                    dragDelta={0.01}
                     precision={3}
+                    readOnly={isReadOnly}
+                    onChange={v => handleVertexChange(index, 'x', v)}
+                    onCommit={v => commitVertexChange(index, 'x', v)}
                   />
                   <AxisNumberInput
                     axis="Y"
                     badgeClass="axis-badge-y"
                     value={vertex.y}
-                    readOnly
+                    step={0.05}
+                    dragDelta={0.01}
                     precision={3}
+                    readOnly={isReadOnly}
+                    onChange={v => handleVertexChange(index, 'y', v)}
+                    onCommit={v => commitVertexChange(index, 'y', v)}
                   />
                 </div>
+
+                {!isReadOnly && onChangePolygon && (
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => handleMoveVertex(index, 'up')}
+                      title="Move vertex up in sequence"
+                      aria-label={`Move ${vertex.name} Up`}
+                      className="inspector-icon-button p-0.5 text-gray-400 hover:text-gray-200 disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <Icon name="chevron-up" size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === localPolygon.length - 1}
+                      onClick={() => handleMoveVertex(index, 'down')}
+                      title="Move vertex down in sequence"
+                      aria-label={`Move ${vertex.name} Down`}
+                      className="inspector-icon-button p-0.5 text-gray-400 hover:text-gray-200 disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <Icon name="chevron-down" size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={localPolygon.length <= MIN_POLYGON_VERTICES}
+                      onClick={() => handleDeleteVertex(index)}
+                      title={
+                        localPolygon.length <= MIN_POLYGON_VERTICES
+                          ? `Minimum ${MIN_POLYGON_VERTICES} vertices required`
+                          : `Delete ${vertex.name}`
+                      }
+                      aria-label={`Delete ${vertex.name}`}
+                      className="inspector-icon-button inspector-danger-icon p-0.5 hover:text-red-400 disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      <Icon name="trash" size={12} />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
