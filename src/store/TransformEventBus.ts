@@ -1,3 +1,5 @@
+import type { CollisionCompoundShape } from '../types';
+
 export type TransformUpdate = {
   uid: string;
   x?: number;
@@ -13,6 +15,7 @@ export type TransformUpdate = {
   blendMode?: number;
   collisionPos?: { x: number; y: number; z: number };
   collisionSize?: { x: number; y: number; z: number };
+  collisionCompound?: CollisionCompoundShape[];
 };
 
 type Listener = (updates: TransformUpdate[]) => void;

@@ -222,6 +222,153 @@ describe('Inspector Physics & Collision Sub-sections', () => {
       fireEvent.click(removeBtn);
       expect(onRemoveCollision).toHaveBeenCalled();
     });
+
+    it('supports CRUD operations for compound sub-shapes and disables add when reaching 8', () => {
+      const template = createBaseTemplate();
+      if (!template.physics) throw new Error('Physics required');
+      template.physics.shape = 4;
+      template.physics.collision.compound = [
+        {
+          name: 'sub_0',
+          shape: 'box',
+          posX: 0,
+          posY: 0,
+          sizeX: 1,
+          sizeY: 1,
+          angle: 0,
+        },
+      ];
+
+      const onChangeShape = vi.fn();
+      const onChangeCompound = vi.fn();
+
+      const { rerender } = render(
+        <CollisionGeometrySection
+          template={template}
+          source="Inline"
+          onChangeShape={onChangeShape}
+          onChangeCompound={onChangeCompound}
+        />
+      );
+
+      // 1. Changing Shape to Compound
+      const shapeSelect = screen.getByLabelText('Collision Shape');
+      fireEvent.change(shapeSelect, { target: { value: '4' } });
+      expect(onChangeShape).toHaveBeenCalledWith(4);
+
+      // 2. Add Box
+      const addBoxBtn = screen.getByRole('button', { name: 'Add Box Sub-shape' });
+      fireEvent.click(addBoxBtn);
+      expect(onChangeCompound).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'sub_0' }),
+          expect.objectContaining({ name: 'sub_1', shape: 'box' }),
+        ])
+      );
+
+      // 3. Add Circle
+      const addCircleBtn = screen.getByRole('button', { name: 'Add Circle Sub-shape' });
+      fireEvent.click(addCircleBtn);
+      expect(onChangeCompound).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'sub_0' }),
+          expect.objectContaining({ name: 'sub_1', shape: 'circle', radius: 0.5 }),
+        ])
+      );
+
+      // 4. Update Name
+      const nameInput = screen.getByLabelText('Sub-shape 1 Name');
+      fireEvent.change(nameInput, { target: { value: 'torso_box' } });
+      expect(onChangeCompound).toHaveBeenCalledWith([
+        expect.objectContaining({ name: 'torso_box' }),
+      ]);
+
+      // 5. Update Position
+      const posXInput = screen.getByLabelText('Sub-shape 1 Pos X');
+      fireEvent.change(posXInput, { target: { value: '0.25' } });
+      expect(onChangeCompound).toHaveBeenCalledWith([
+        expect.objectContaining({ posX: 0.25 }),
+      ]);
+
+      // 6. Delete Sub-shape
+      const deleteBtn = screen.getByLabelText('Delete Sub-shape 1');
+      fireEvent.click(deleteBtn);
+      expect(onChangeCompound).toHaveBeenCalledWith([]);
+
+      // 7. Max 8 limit disables add & duplicate buttons
+      const fullTemplate = createBaseTemplate();
+      if (!fullTemplate.physics) throw new Error('Physics required');
+      fullTemplate.physics.shape = 4;
+      fullTemplate.physics.collision.compound = Array.from({ length: 8 }, (_, i) => ({
+        name: `sub_${i}`,
+        shape: 'box',
+        posX: 0,
+        posY: 0,
+        sizeX: 1,
+        sizeY: 1,
+        angle: 0,
+      }));
+
+      rerender(
+        <CollisionGeometrySection
+          template={fullTemplate}
+          source="Inline"
+          onChangeCompound={onChangeCompound}
+        />
+      );
+
+      expect((screen.getByRole('button', { name: 'Add Box Sub-shape' }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole('button', { name: 'Add Circle Sub-shape' }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByLabelText('Duplicate Sub-shape 1') as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByText('8 / 8')).toBeDefined();
+    });
+
+    it('maintains stable input DOM instance across continuous typing and uses copy icon', () => {
+      const template = createBaseTemplate();
+      if (!template.physics) throw new Error('Physics required');
+      template.physics.shape = 4;
+      template.physics.collision.compound = [
+        {
+          name: 'head',
+          shape: 'box',
+          posX: 0,
+          posY: 0,
+          sizeX: 1,
+          sizeY: 1,
+          angle: 0,
+        },
+      ];
+
+      const onChangeCompound = vi.fn();
+
+      render(
+        <CollisionGeometrySection
+          template={template}
+          source="Inline"
+          onChangeCompound={onChangeCompound}
+        />
+      );
+
+      // Verify copy icon on duplicate button
+      const duplicateBtn = screen.getByLabelText('Duplicate Sub-shape 1');
+      const copyIcon = duplicateBtn.querySelector('svg.lucide-copy');
+      expect(copyIcon).not.toBeNull();
+
+      // Verify DOM input node stability when typing multiple characters
+      const nameInput = screen.getByLabelText('Sub-shape 1 Name') as HTMLInputElement;
+      nameInput.focus();
+      expect(document.activeElement).toBe(nameInput);
+
+      fireEvent.change(nameInput, { target: { value: 'h' } });
+      expect(screen.getByLabelText('Sub-shape 1 Name')).toBe(nameInput);
+
+      fireEvent.change(nameInput, { target: { value: 'he' } });
+      expect(screen.getByLabelText('Sub-shape 1 Name')).toBe(nameInput);
+
+      fireEvent.change(nameInput, { target: { value: 'head_box' } });
+      expect(screen.getByLabelText('Sub-shape 1 Name')).toBe(nameInput);
+      expect(nameInput.value).toBe('head_box');
+    });
   });
 
   describe('RevoluteJointsSection', () => {

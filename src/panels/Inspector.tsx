@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '../components/Icon';
 import './Inspector.css';
-import type { CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityPhysicsConfig, EntityTemplate, SpriteAtlas } from '../types';
+import type { CollisionCompoundShape, CollisionShape, CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityPhysicsConfig, EntityTemplate, SpriteAtlas } from '../types';
 import { useSceneStore } from '../store/sceneStore';
 import { applyPhysicsToEntity, createDefaultPhysics, entityHasFileNameTag, getTemplateKey, resolveEntityTemplate, resolveExternalTemplate, unpackEntityInstance } from '../utils/entityTemplate';
+import { createDefaultCompoundSubShape } from '../utils/collision';
 import {
   buildCustomDataRefIndex,
   isBaseDataFieldCompatibleWithType,
@@ -1622,7 +1623,7 @@ export function Inspector() {
     });
   };
 
-  const updateCollisionShape = (newShape: 0 | 1 | 2) => {
+  const updateCollisionShape = (newShape: CollisionShape) => {
     useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       if (newShape === 0) {
@@ -1631,14 +1632,41 @@ export function Inspector() {
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics;
       if (basePhysics && basePhysics.shape !== 0) {
+        let compound = basePhysics.collision.compound;
+        if (newShape === 4 && compound.length === 0) {
+          compound = [createDefaultCompoundSubShape([])];
+        }
         const nextPhysics: EntityPhysicsConfig = {
           ...basePhysics,
           shape: newShape,
+          collision: {
+            ...basePhysics.collision,
+            compound,
+            valid: newShape === 4 ? compound.length > 0 : true,
+          },
         };
         return applyPhysicsToEntity(currentEntity, nextPhysics);
       }
-      const freshPhysics = createDefaultPhysics(newShape);
+      const freshPhysics = createDefaultPhysics(newShape as 0 | 1 | 2 | 4);
       return applyPhysicsToEntity(currentEntity, freshPhysics);
+    });
+  };
+
+  const updateCollisionCompound = (compound: CollisionCompoundShape[]) => {
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, 'collision', currentEntity => {
+      if (entityHasFileNameTag(currentEntity)) return currentEntity;
+      const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
+      const basePhysics = resolved?.physics ?? createDefaultPhysics(4);
+      const nextPhysics: EntityPhysicsConfig = {
+        ...basePhysics,
+        shape: 4,
+        collision: {
+          ...basePhysics.collision,
+          compound,
+          valid: compound.length > 0,
+        },
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
     });
   };
 
@@ -1827,6 +1855,7 @@ export function Inspector() {
         onChangeShape={updateCollisionShape}
         onChangePosition={updateCollisionPosition}
         onChangeSize={updateCollisionSize}
+        onChangeCompound={updateCollisionCompound}
         onRemoveCollision={removeCollision}
       />
       {effectiveTemplate.physics && effectiveTemplate.physics.collision.joints.length > 0 && (

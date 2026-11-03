@@ -187,6 +187,63 @@ describe('useCollisionRenderer', () => {
     expect(data.graphics.poly).toHaveBeenCalledTimes(6);
   });
 
+  it('updates compound collision preview live through the event bus', () => {
+    const data = fixture();
+    const compoundTemplate = {
+      ...data.templates.box,
+      physics: {
+        ...data.templates.box.physics!,
+        shape: 4 as const,
+        collision: {
+          ...data.templates.box.physics!.collision,
+          compound: [
+            {
+              name: 'sub_0',
+              shape: 'box' as const,
+              posX: 0,
+              posY: 0,
+              sizeX: 1,
+              sizeY: 1,
+              angle: 0,
+            },
+          ],
+        },
+      },
+    };
+    renderHook(() => useCollisionRenderer({
+      refs: data.refs,
+      scene: data.scene,
+      templates: { box: compoundTemplate },
+      selectedUIDs: [],
+      showCollisions: true,
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    }));
+    flushAnimationFrames();
+    data.graphics.poly.mockClear();
+
+    act(() => transformEventBus.emit([{
+      uid: 'uid',
+      collisionCompound: [
+        {
+          name: 'sub_0',
+          shape: 'box',
+          posX: 0.5,
+          posY: 0.5,
+          sizeX: 2,
+          sizeY: 2,
+          angle: 0,
+        },
+      ],
+    }]));
+    flushAnimationFrames();
+
+    expect(data.graphics.poly).toHaveBeenCalledTimes(6);
+  });
+
   it('redraws parallax geometry when the camera changes', () => {
     const data = fixture();
     data.scene.entities[0].position.z = 10;

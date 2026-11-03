@@ -13,6 +13,8 @@ type EnmlBlock = {
   values: Record<string, string>;
 };
 
+export const MAX_COMPOUND_SUB_SHAPES = 8;
+
 const SHAPE_NAMES = ["None", "Box", "Circle", "Polygon", "Compound"] as const;
 
 function asMap(value: unknown): RawMap | null {
@@ -241,6 +243,76 @@ function parseCompound(
     }
     return [item];
   });
+}
+
+export function serializeCompoundEnml(compound: CollisionCompoundShape[]): string {
+  if (!compound || compound.length === 0) return "";
+  const formatVal = (n: number) => Number(Number(n).toFixed(4)).toString();
+  return compound
+    .map((item) => {
+      const lines: string[] = [
+        `\tshape = ${item.shape};`,
+        `\tposX = ${formatVal(item.posX)};`,
+        `\tposY = ${formatVal(item.posY)};`,
+      ];
+      if (item.shape === "box") {
+        lines.push(`\tsizeX = ${formatVal(item.sizeX ?? 1)};`);
+        lines.push(`\tsizeY = ${formatVal(item.sizeY ?? 1)};`);
+      } else {
+        lines.push(`\tradius = ${formatVal(item.radius ?? 0.5)};`);
+      }
+      lines.push(`\tangle = ${formatVal(item.angle ?? 0)};`);
+      if (item.friction !== undefined && Number.isFinite(item.friction)) {
+        lines.push(`\tfriction = ${formatVal(item.friction)};`);
+      }
+      if (item.density !== undefined && Number.isFinite(item.density)) {
+        lines.push(`\tdensity = ${formatVal(item.density)};`);
+      }
+      if (item.restitution !== undefined && Number.isFinite(item.restitution)) {
+        lines.push(`\trestitution = ${formatVal(item.restitution)};`);
+      }
+      return `${item.name} {\n${lines.join("\n")}\n}`;
+    })
+    .join("\n");
+}
+
+export function generateSubShapeName(
+  existing: CollisionCompoundShape[],
+): string {
+  const existingNames = new Set(
+    existing.map((s) => s.name.trim().toLowerCase()),
+  );
+  for (let i = 0; i < 100; i++) {
+    const candidate = `sub_${i}`;
+    if (!existingNames.has(candidate)) return candidate;
+  }
+  return `sub_${Date.now()}`;
+}
+
+export function createDefaultCompoundSubShape(
+  existing: CollisionCompoundShape[],
+  shapeType: "box" | "circle" = "box",
+): CollisionCompoundShape {
+  const name = generateSubShapeName(existing);
+  if (shapeType === "circle") {
+    return {
+      name,
+      shape: "circle",
+      posX: 0,
+      posY: 0,
+      radius: 0.5,
+      angle: 0,
+    };
+  }
+  return {
+    name,
+    shape: "box",
+    posX: 0,
+    posY: 0,
+    sizeX: 1,
+    sizeY: 1,
+    angle: 0,
+  };
 }
 
 function parseJoints(value: unknown, warnings: string[]): CollisionJoint[] {

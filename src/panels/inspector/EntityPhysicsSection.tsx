@@ -82,7 +82,7 @@ export function EntityPhysicsSection({
       <div className="inspector-section-title text-xs text-gray-500 mb-0.5 flex items-center justify-between">
         <span>Physics</span>
         {source && (
-          <span className="text-[10px] rounded bg-cyan-950/70 px-1.5 py-0.5 text-cyan-300 font-normal">
+          <span className="inspector-data-type-badge text-[10px] rounded px-1.5 py-0.5 font-normal">
             {source}
           </span>
         )}

@@ -2,6 +2,7 @@ import {
   Boxes,
   ChevronDown,
   ChevronUp,
+  Copy,
   FolderOpen,
   Hand,
   Lock,
@@ -19,6 +20,7 @@ import {
 export type IconName =
   | "chevron-down"
   | "chevron-up"
+  | "copy"
   | "cursor"
   | "fit-view"
   | "hand"
@@ -42,6 +44,7 @@ interface IconProps {
 const ICONS: Record<IconName, LucideIcon> = {
   "chevron-down": ChevronDown,
   "chevron-up": ChevronUp,
+  copy: Copy,
   cursor: MousePointer2,
   "fit-view": Maximize,
   hand: Hand,

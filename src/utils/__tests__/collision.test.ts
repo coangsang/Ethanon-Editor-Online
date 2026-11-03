@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { parseEntityTemplate, parseScene } from '../../io/parseScene';
 import { applyPhysicsToEntity, createDefaultPhysics, resolveEntityTemplate } from '../entityTemplate';
-import { parseEntityPhysics } from '../collision';
-import type { EntityInstance } from '../../types';
+import { createDefaultCompoundSubShape, MAX_COMPOUND_SUB_SHAPES, parseEntityPhysics, serializeCompoundEnml } from '../collision';
+import type { CollisionCompoundShape, EntityInstance } from '../../types';
 
 describe('collision parsing and resolution', () => {
   it('parses complete XYZ box physics', () => {
@@ -318,5 +318,126 @@ describe('collision parsing and resolution', () => {
     // Resolving template must preserve shape 0 instead of reviving shape 1 from template
     const resolved = resolveEntityTemplate(disabled, templates);
     expect(resolved.physics?.shape).toBe(0);
+  });
+
+  describe('compound collision serialization and helpers', () => {
+    it('has MAX_COMPOUND_SUB_SHAPES configured as 8', () => {
+      expect(MAX_COMPOUND_SUB_SHAPES).toBe(8);
+    });
+
+    it('creates default compound sub-shapes with unique names and valid bounds', () => {
+      const first = createDefaultCompoundSubShape([]);
+      expect(first).toEqual({
+        name: 'sub_0',
+        shape: 'box',
+        posX: 0,
+        posY: 0,
+        sizeX: 1,
+        sizeY: 1,
+        angle: 0,
+      });
+
+      const second = createDefaultCompoundSubShape([first], 'circle');
+      expect(second).toEqual({
+        name: 'sub_1',
+        shape: 'circle',
+        posX: 0,
+        posY: 0,
+        radius: 0.5,
+        angle: 0,
+      });
+    });
+
+    it('serializes compound sub-shapes to ENML format and roundtrips through parseEntityPhysics', () => {
+      const original: CollisionCompoundShape[] = [
+        {
+          name: 'torso',
+          shape: 'box',
+          posX: 0.1,
+          posY: -0.2,
+          sizeX: 1.5,
+          sizeY: 0.8,
+          angle: 0.785,
+          friction: 0.4,
+          density: 2.5,
+          restitution: 0.1,
+        },
+        {
+          name: 'head',
+          shape: 'circle',
+          posX: 0,
+          posY: 0.6,
+          radius: 0.35,
+          angle: 0,
+        },
+      ];
+
+      const enml = serializeCompoundEnml(original);
+      expect(enml).toContain('torso {');
+      expect(enml).toContain('shape = box;');
+      expect(enml).toContain('sizeX = 1.5;');
+      expect(enml).toContain('friction = 0.4;');
+      expect(enml).toContain('head {');
+      expect(enml).toContain('shape = circle;');
+      expect(enml).toContain('radius = 0.35;');
+
+      const parsed = parseEntityPhysics({
+        shape: '4',
+        Collision: {
+          Position: { x: 0, y: 0, z: 0 },
+          Size: { x: 50, y: 50, z: 50 },
+          Compound: enml,
+        },
+      });
+
+      expect(parsed.collision.compound).toHaveLength(2);
+      expect(parsed.collision.compound[0]).toMatchObject({
+        name: 'torso',
+        shape: 'box',
+        posX: 0.1,
+        posY: -0.2,
+        sizeX: 1.5,
+        sizeY: 0.8,
+        angle: 0.785,
+        friction: 0.4,
+        density: 2.5,
+        restitution: 0.1,
+      });
+      expect(parsed.collision.compound[1]).toMatchObject({
+        name: 'head',
+        shape: 'circle',
+        posX: 0,
+        posY: 0.6,
+        radius: 0.35,
+        angle: 0,
+      });
+    });
+
+    it('updates inlineEntityData.Collision.Compound when applying shape 4 physics', () => {
+      const entity: EntityInstance = {
+        id: 1,
+        entityName: 'custom_crate',
+        editorEntityName: 'custom_crate_1',
+        editorEntityUID: 'custom-1',
+        position: { x: 0, y: 0, z: 0 },
+        angle: 0,
+        spriteFrame: 0,
+        hide: false,
+        flipX: false,
+        flipY: false,
+        customData: [],
+      };
+
+      const physics = createDefaultPhysics(4);
+      expect(physics.collision.compound).toHaveLength(1);
+      expect(physics.collision.compound[0].name).toBe('sub_0');
+
+      const updated = applyPhysicsToEntity(entity, physics);
+      const col = updated.inlineEntityData?.Collision as Record<string, unknown>;
+      expect(col).toBeDefined();
+      expect(typeof col.Compound).toBe('string');
+      expect(col.Compound).toContain('sub_0 {');
+      expect(col.Compound).toContain('shape = box;');
+    });
   });
 });

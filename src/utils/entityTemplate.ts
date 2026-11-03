@@ -1,4 +1,5 @@
 import type { EntityInstance, EntityPhysicsConfig, EntityTemplate, InlineEntityTemplate } from '../types';
+import { createDefaultCompoundSubShape, serializeCompoundEnml } from './collision';
 
 function defaultTemplate(name: string): EntityTemplate {
   return {
@@ -219,12 +220,13 @@ export function unpackEntityInstance(
 
 
 export function createDefaultPhysics(
-  shape: 0 | 1 | 2 = 1,
+  shape: 0 | 1 | 2 | 4 = 1,
   defaultSize?: { x: number; y: number; z?: number },
 ): EntityPhysicsConfig {
   const sizeX = defaultSize?.x && defaultSize.x > 0 ? defaultSize.x : (shape === 0 ? 0 : 64);
   const sizeY = defaultSize?.y && defaultSize.y > 0 ? defaultSize.y : (shape === 0 ? 0 : 64);
   const sizeZ = defaultSize?.z && defaultSize.z > 0 ? defaultSize.z : (shape === 0 ? 0 : 64);
+  const compound = shape === 4 ? [createDefaultCompoundSubShape([])] : [];
   return {
     shape,
     static: false,
@@ -240,7 +242,7 @@ export function createDefaultPhysics(
       position: { x: 0, y: 0, z: 0 },
       size: { x: sizeX, y: sizeY, z: sizeZ },
       polygon: [],
-      compound: [],
+      compound,
       joints: [],
     },
     warnings: [],
@@ -278,6 +280,11 @@ export function applyPhysicsToEntity(
   };
 
   const existingCollision = (entity.inlineEntityData?.Collision as Record<string, unknown>) ?? {};
+  const compoundValue = physics.shape === 4
+    ? (physics.collision.compound.length > 0
+        ? serializeCompoundEnml(physics.collision.compound)
+        : (typeof existingCollision.Compound === 'string' ? existingCollision.Compound : ''))
+    : (typeof existingCollision.Compound === 'string' ? existingCollision.Compound : undefined);
 
   inlineEntityData.shape = String(physics.shape);
   inlineEntityData.static = physics.static ? '1' : '0';
@@ -301,7 +308,7 @@ export function applyPhysicsToEntity(
       z: String(physics.collision.size.z),
     },
     ...(typeof existingCollision.Polygon === 'string' ? { Polygon: existingCollision.Polygon } : {}),
-    ...(typeof existingCollision.Compound === 'string' ? { Compound: existingCollision.Compound } : {}),
+    ...(compoundValue !== undefined ? { Compound: compoundValue } : {}),
     ...(typeof existingCollision.Joints === 'string' ? { Joints: existingCollision.Joints } : {}),
   };
 
