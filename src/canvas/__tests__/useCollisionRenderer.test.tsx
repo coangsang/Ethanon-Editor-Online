@@ -73,7 +73,7 @@ afterEach(() => {
 });
 
 describe('useCollisionRenderer', () => {
-  it('honors the toggle and highlights selected collisions with inner 3px stroke even when toggle is off', () => {
+  it('honors the toggle and highlights selected collisions with green stroke even when toggle is off', () => {
     const data = fixture();
     const initialProps = {
       refs: data.refs,
@@ -94,8 +94,8 @@ describe('useCollisionRenderer', () => {
       { x: -10, y: 15 }, { x: 30, y: 15 }, { x: 30, y: 25 }, { x: -10, y: 25 },
     ], true);
     expect(data.selectedGraphics.stroke).toHaveBeenCalledWith(expect.objectContaining({
-      color: 0xfbbf24,
-      width: 1.5,
+      color: 0x00bb00,
+      width: 1,
       alignment: 1,
     }));
 
@@ -105,8 +105,8 @@ describe('useCollisionRenderer', () => {
     expect(data.unselectedGraphics.clear).toHaveBeenCalled();
     expect(data.selectedGraphics.poly).toHaveBeenCalled();
     expect(data.selectedGraphics.stroke).toHaveBeenCalledWith(expect.objectContaining({
-      color: 0xfbbf24,
-      width: 1.5,
+      color: 0x00bb00,
+      width: 1,
       alignment: 1,
     }));
 

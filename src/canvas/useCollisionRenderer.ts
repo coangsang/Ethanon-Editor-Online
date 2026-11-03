@@ -388,23 +388,10 @@ function flushCollisionRenderer(
   }
 
   selectedGraphics.clear();
-  selectedGraphics.position.set(params.camera.x, params.camera.y);
-  selectedGraphics.scale.set(zoom);
   if (hasSelection) {
     let selectedHasGeometry = false;
     for (const uid of params.selectedUIDs) {
-      let entry = runtime.entries.get(uid);
-      if (!entry) {
-        const ent = params.scene.entities.find(
-          (e) => e.editorEntityUID === uid,
-        );
-        if (ent) {
-          runtime.entitiesByUid.set(uid, ent);
-          rebuildEntry(runtime, params, uid);
-          entry = runtime.entries.get(uid);
-          if (entry) updateEntryProjection(runtime, params, entry);
-        }
-      }
+      const entry = runtime.entries.get(uid);
       if (!entry) continue;
       if (!entry.projected) {
         entry.projected = projectCollisionGeometry(
@@ -540,12 +527,6 @@ export function useCollisionRenderer(params: UseCollisionRendererParams) {
     runtime,
     schedule,
   ]);
-
-  useEffect(() => {
-    runtime.forceDraw = true;
-    runtime.styleDirty = true;
-    schedule();
-  }, [params.selectedUIDs, runtime, schedule]);
 
   useEffect(
     () =>
