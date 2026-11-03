@@ -6,6 +6,7 @@ import { EntityPhysicsSection } from '../inspector/EntityPhysicsSection';
 import { CollisionGeometrySection } from '../inspector/CollisionGeometrySection';
 import { RevoluteJointsSection } from '../inspector/RevoluteJointsSection';
 import { AxisNumberInput } from '../inspector/InspectorControls';
+import { validatePolygon } from '../../utils/collision';
 import type { EntityTemplate } from '../../types';
 
 describe('Inspector Physics & Collision Sub-sections', () => {
@@ -167,6 +168,12 @@ describe('Inspector Physics & Collision Sub-sections', () => {
       const updatedAfterAdd = onChangePolygon.mock.calls[0][0];
       expect(updatedAfterAdd).toHaveLength(4);
       expect(updatedAfterAdd[3].name).toBe('v3');
+      // Added vertex must produce a strictly convex, clockwise, non-collinear valid polygon
+      const addValidation = validatePolygon(updatedAfterAdd);
+      expect(addValidation.valid).toBe(true);
+      expect(addValidation.isConvex).toBe(true);
+      expect(addValidation.isClockwise).toBe(true);
+      expect(addValidation.errors).toHaveLength(0);
 
       // Click Preset Diamond
       onChangePolygon.mockClear();

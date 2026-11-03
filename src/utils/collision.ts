@@ -144,23 +144,26 @@ export function validatePolygon(
   vertices: CollisionPolygonVertex[],
 ): PolygonValidationResult {
   const errors: string[] = [];
+  const addError = (msg: string) => {
+    if (!errors.includes(msg)) errors.push(msg);
+  };
   const epsilon = 1e-8;
   let isConvex = true;
   let isClockwise = true;
 
   if (vertices.length < MIN_POLYGON_VERTICES || vertices.length > MAX_POLYGON_VERTICES) {
-    errors.push(`Polygon must contain ${MIN_POLYGON_VERTICES} to ${MAX_POLYGON_VERTICES} sequential vertices.`);
+    addError(`Polygon must contain ${MIN_POLYGON_VERTICES} to ${MAX_POLYGON_VERTICES} sequential vertices.`);
   }
 
   for (let index = 0; index < vertices.length; index++) {
     const vertex = vertices[index];
     if (vertex.name !== `v${index}`) {
-      errors.push(`Polygon vertices must be sequential; expected v${index} but found ${vertex.name}.`);
+      addError(`Polygon vertices must be sequential; expected v${index} but found ${vertex.name}.`);
     }
     if (!Number.isFinite(vertex.x) || !Number.isFinite(vertex.y)) {
-      errors.push(`Polygon vertex ${vertex.name} has invalid coordinates.`);
+      addError(`Polygon vertex ${vertex.name} has invalid coordinates.`);
     } else if (!inNormalizedRange(vertex.x) || !inNormalizedRange(vertex.y)) {
-      errors.push(`Polygon vertex ${vertex.name} must be within [-1, 1].`);
+      addError(`Polygon vertex ${vertex.name} must be within [-1, 1].`);
     }
   }
 
@@ -168,12 +171,28 @@ export function validatePolygon(
   for (const vertex of vertices) {
     const key = `${vertex.x.toFixed(6)}:${vertex.y.toFixed(6)}`;
     if (seen.has(key)) {
-      errors.push(`Polygon vertex ${vertex.name} duplicates another vertex.`);
+      addError(`Polygon vertex ${vertex.name} duplicates another vertex.`);
     }
     seen.add(key);
   }
 
   if (vertices.length >= 3) {
+    // 1. Overall winding order using Shoelace formula (signed area)
+    // In screen coordinates (Y grows down):
+    // Shoelace area = 0.5 * sum(x_i * y_{i+1} - x_{i+1} * y_i)
+    // Positive area indicates clockwise winding.
+    let signedArea = 0;
+    for (let index = 0; index < vertices.length; index++) {
+      const cur = vertices[index];
+      const next = vertices[(index + 1) % vertices.length];
+      signedArea += cur.x * next.y - next.x * cur.y;
+    }
+    if (signedArea < 0) {
+      addError("Polygon vertices must use clockwise screen-space winding.");
+      isClockwise = false;
+    }
+
+    // 2. Convexity check: verify all cross products match the expected winding sign
     let windingSign = 0;
     for (let index = 0; index < vertices.length; index++) {
       const a = vertices[index];
@@ -184,12 +203,15 @@ export function validatePolygon(
       const bcX = c.x - b.x;
       const bcY = c.y - b.y;
 
-      if (Math.abs(abX) <= epsilon && Math.abs(abY) <= epsilon) {
+      if (
+        (Math.abs(abX) <= epsilon && Math.abs(abY) <= epsilon) ||
+        (Math.abs(bcX) <= epsilon && Math.abs(bcY) <= epsilon)
+      ) {
         continue;
       }
       const cross = abX * bcY - abY * bcX;
       if (Math.abs(cross) <= epsilon) {
-        errors.push("Polygon must not contain three consecutive collinear vertices.");
+        addError("Polygon must not contain three consecutive collinear vertices.");
         isConvex = false;
         continue;
       }
@@ -197,16 +219,9 @@ export function validatePolygon(
       if (windingSign === 0) {
         windingSign = sign;
       } else if (windingSign !== sign) {
-        errors.push("Polygon must be convex.");
+        addError("Polygon must be convex.");
         isConvex = false;
-        break;
       }
-    }
-
-    // With screen coordinates (Y grows down), a positive cross product is clockwise.
-    if (windingSign < 0) {
-      errors.push("Polygon vertices must use clockwise screen-space winding.");
-      isClockwise = false;
     }
   } else {
     isConvex = false;

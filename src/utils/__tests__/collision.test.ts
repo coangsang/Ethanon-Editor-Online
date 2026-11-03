@@ -511,6 +511,36 @@ describe('collision parsing and resolution', () => {
         expect(res.isConvex).toBe(true);
         expect(res.isClockwise).toBe(true);
       }
+
+      // Concave polygon with overall clockwise winding:
+      // (0, -1) -> (1, 0) -> (0.2, 0) [concave notch] -> (1, 1) -> (-1, 1)
+      const concaveCw: CollisionPolygonVertex[] = [
+        { name: 'v0', x: 0, y: -1 },
+        { name: 'v1', x: 1, y: 0 },
+        { name: 'v2', x: 0.2, y: 0 },
+        { name: 'v3', x: 1, y: 1 },
+        { name: 'v4', x: -1, y: 1 },
+      ];
+      const concaveResult = validatePolygon(concaveCw);
+      expect(concaveResult.valid).toBe(false);
+      expect(concaveResult.isClockwise).toBe(true);
+      expect(concaveResult.isConvex).toBe(false);
+      expect(concaveResult.errors).toContain('Polygon must be convex.');
+      expect(concaveResult.errors).not.toContain('Polygon vertices must use clockwise screen-space winding.');
+
+      // Collinear vertices error deduplication:
+      // A flat line polygon where multiple consecutive edges are collinear
+      const multiCollinear: CollisionPolygonVertex[] = [
+        { name: 'v0', x: -0.8, y: 0 },
+        { name: 'v1', x: -0.4, y: 0 },
+        { name: 'v2', x: 0, y: 0 },
+        { name: 'v3', x: 0.4, y: 0 },
+      ];
+      const collinearResult = validatePolygon(multiCollinear);
+      const collinearErrors = collinearResult.errors.filter(
+        (e) => e === 'Polygon must not contain three consecutive collinear vertices.'
+      );
+      expect(collinearErrors).toHaveLength(1);
     });
 
     it('updates inlineEntityData.Collision.Polygon when applying shape 3 physics with new vertices', () => {

@@ -14,6 +14,7 @@ import {
   MAX_POLYGON_VERTICES,
   MIN_POLYGON_VERTICES,
   POLYGON_PRESETS,
+  polygonsEqual,
   type PolygonPreset,
   validatePolygon,
 } from '../../utils/collision';
@@ -150,20 +151,10 @@ function SubShapeMaterialControl({
 }
 
 type LocalCompoundShape = CollisionCompoundShape & { _key: string };
+type LocalPolygonVertex = CollisionPolygonVertex & { _key: string };
 
 const EMPTY_COMPOUND: CollisionCompoundShape[] = [];
 const EMPTY_POLYGON: CollisionPolygonVertex[] = [];
-
-function polygonsEqual(a: CollisionPolygonVertex[], b: CollisionPolygonVertex[]): boolean {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i].name !== b[i].name || a[i].x !== b[i].x || a[i].y !== b[i].y) {
-      return false;
-    }
-  }
-  return true;
-}
 
 function compoundsEqual(a: CollisionCompoundShape[], b: CollisionCompoundShape[]): boolean {
   if (a === b) return true;
@@ -212,6 +203,65 @@ function stripLocalKey(local: LocalCompoundShape[]): CollisionCompoundShape[] {
     delete (copy as { _key?: string })._key;
     return copy;
   });
+}
+
+function toLocalPolygon(
+  polygon: CollisionPolygonVertex[],
+  existing?: LocalPolygonVertex[]
+): LocalPolygonVertex[] {
+  const existingMap = new Map<number, string>();
+  if (existing) {
+    existing.forEach((item, idx) => {
+      existingMap.set(idx, item._key);
+    });
+  }
+  return polygon.map((item, idx) => ({
+    ...item,
+    _key: existingMap.get(idx) ?? crypto.randomUUID(),
+  }));
+}
+
+function stripLocalPolygonKey(local: LocalPolygonVertex[]): CollisionPolygonVertex[] {
+  return local.map((item) => {
+    const copy = { ...item };
+    delete (copy as { _key?: string })._key;
+    return copy;
+  });
+}
+
+function computeNewVertexPosition(vertices: CollisionPolygonVertex[]): { x: number; y: number } {
+  const count = vertices.length;
+  if (count === 0) return { x: 0, y: -1 };
+  const last = vertices[count - 1];
+  const first = vertices[0];
+  const midX = (last.x + first.x) / 2;
+  const midY = (last.y + first.y) / 2;
+  const avgX = vertices.reduce((sum, v) => sum + v.x, 0) / count;
+  const avgY = vertices.reduce((sum, v) => sum + v.y, 0) / count;
+  let dirX = midX - avgX;
+  let dirY = midY - avgY;
+  const len = Math.hypot(dirX, dirY);
+  if (len > 1e-4) {
+    dirX /= len;
+    dirY /= len;
+  } else {
+    const edx = first.x - last.x;
+    const edy = first.y - last.y;
+    const elen = Math.hypot(edx, edy) || 1;
+    dirX = edy / elen;
+    dirY = -edx / elen;
+  }
+  const offset = 0.2;
+  let candX = Math.max(-1, Math.min(1, Number((midX + dirX * offset).toFixed(3))));
+  let candY = Math.max(-1, Math.min(1, Number((midY + dirY * offset).toFixed(3))));
+  const cross = (candX - last.x) * (first.y - candY) - (candY - last.y) * (first.x - candX);
+  if (Math.abs(cross) <= 1e-4) {
+    if (Math.abs(candX) >= 0.99) candY = Math.max(-1, Math.min(1, candY + (candY > 0 ? -0.1 : 0.1)));
+    else if (Math.abs(candY) >= 0.99) candX = Math.max(-1, Math.min(1, candX + (candX > 0 ? -0.1 : 0.1)));
+    candX = Number(candX.toFixed(3));
+    candY = Number(candY.toFixed(3));
+  }
+  return { x: candX, y: candY };
 }
 
 export function CollisionGeometrySection({
@@ -266,7 +316,9 @@ export function CollisionGeometrySection({
   const [localCompound, setLocalCompound] = useState<LocalCompoundShape[]>(() =>
     toLocalCompound(rawCompound)
   );
-  const [localPolygon, setLocalPolygon] = useState<CollisionPolygonVertex[]>(rawPolygon);
+  const [localPolygon, setLocalPolygon] = useState<LocalPolygonVertex[]>(() =>
+    toLocalPolygon(rawPolygon)
+  );
 
   const [sourceCollision, setSourceCollision] = useState({
     uid: entityUid,
@@ -335,7 +387,7 @@ export function CollisionGeometrySection({
       uid: entityUid,
       polygon: rawPolygon,
     });
-    setLocalPolygon(rawPolygon);
+    setLocalPolygon(prev => toLocalPolygon(rawPolygon, prev));
   }
 
   const latestPosRef = useRef(localPos);
@@ -437,7 +489,7 @@ export function CollisionGeometrySection({
     latestLocalPolygonRef.current = updated;
     setLocalPolygon(updated);
     if (entityUid) {
-      transformEventBus.emit([{ uid: entityUid, collisionPolygon: updated }]);
+      transformEventBus.emit([{ uid: entityUid, collisionPolygon: stripLocalPolygonKey(updated) }]);
     }
   };
 
@@ -449,66 +501,78 @@ export function CollisionGeometrySection({
     );
     latestLocalPolygonRef.current = updated;
     setLocalPolygon(updated);
+    const cleanUpdated = stripLocalPolygonKey(updated);
     if (entityUid) {
-      transformEventBus.emit([{ uid: entityUid, collisionPolygon: updated }]);
+      transformEventBus.emit([{ uid: entityUid, collisionPolygon: cleanUpdated }]);
     }
-    onChangePolygon(updated);
+    onChangePolygon(cleanUpdated);
   };
 
   const handleAddVertex = () => {
-    if (isReadOnly || localPolygon.length >= MAX_POLYGON_VERTICES) return;
-    let nextVertices: CollisionPolygonVertex[];
-    if (localPolygon.length === 0) {
-      nextVertices = createDefaultPolygonVertices();
+    const currentVertices = latestLocalPolygonRef.current;
+    if (isReadOnly || currentVertices.length >= MAX_POLYGON_VERTICES) return;
+    let nextVertices: LocalPolygonVertex[];
+    if (currentVertices.length === 0) {
+      nextVertices = toLocalPolygon(createDefaultPolygonVertices());
     } else {
-      const count = localPolygon.length;
-      const last = localPolygon[count - 1];
-      const first = localPolygon[0];
-      const midX = Number(((last.x + first.x) / 2).toFixed(3));
-      const midY = Number(((last.y + first.y) / 2).toFixed(3));
-      nextVertices = [...localPolygon, { name: `v${count}`, x: midX, y: midY }];
+      const pos = computeNewVertexPosition(currentVertices);
+      const newVertex: LocalPolygonVertex = {
+        name: `v${currentVertices.length}`,
+        x: pos.x,
+        y: pos.y,
+        _key: crypto.randomUUID(),
+      };
+      nextVertices = [...currentVertices, newVertex];
     }
     const normalized = nextVertices.map((v, i) => ({ ...v, name: `v${i}` }));
     latestLocalPolygonRef.current = normalized;
     setLocalPolygon(normalized);
+    const cleanUpdated = stripLocalPolygonKey(normalized);
     if (entityUid) {
-      transformEventBus.emit([{ uid: entityUid, collisionPolygon: normalized }]);
+      transformEventBus.emit([{ uid: entityUid, collisionPolygon: cleanUpdated }]);
     }
-    onChangePolygon?.(normalized);
+    onChangePolygon?.(cleanUpdated);
   };
 
   const handleDeleteVertex = (index: number) => {
-    if (isReadOnly || localPolygon.length <= MIN_POLYGON_VERTICES) return;
-    const updated = localPolygon.filter((_, i) => i !== index).map((v, i) => ({ ...v, name: `v${i}` }));
+    const currentVertices = latestLocalPolygonRef.current;
+    if (isReadOnly || currentVertices.length <= MIN_POLYGON_VERTICES) return;
+    const updated = currentVertices
+      .filter((_, i) => i !== index)
+      .map((v, i) => ({ ...v, name: `v${i}` }));
     latestLocalPolygonRef.current = updated;
     setLocalPolygon(updated);
+    const cleanUpdated = stripLocalPolygonKey(updated);
     if (entityUid) {
-      transformEventBus.emit([{ uid: entityUid, collisionPolygon: updated }]);
+      transformEventBus.emit([{ uid: entityUid, collisionPolygon: cleanUpdated }]);
     }
-    onChangePolygon?.(updated);
+    onChangePolygon?.(cleanUpdated);
   };
 
   const handleMoveVertex = (index: number, direction: 'up' | 'down') => {
     if (isReadOnly) return;
+    const currentVertices = latestLocalPolygonRef.current;
     const target = direction === 'up' ? index - 1 : index + 1;
-    if (target < 0 || target >= localPolygon.length) return;
-    const copy = [...localPolygon];
+    if (target < 0 || target >= currentVertices.length) return;
+    const copy = [...currentVertices];
     const temp = copy[index];
     copy[index] = copy[target];
     copy[target] = temp;
     const normalized = copy.map((v, i) => ({ ...v, name: `v${i}` }));
     latestLocalPolygonRef.current = normalized;
     setLocalPolygon(normalized);
+    const cleanUpdated = stripLocalPolygonKey(normalized);
     if (entityUid) {
-      transformEventBus.emit([{ uid: entityUid, collisionPolygon: normalized }]);
+      transformEventBus.emit([{ uid: entityUid, collisionPolygon: cleanUpdated }]);
     }
-    onChangePolygon?.(normalized);
+    onChangePolygon?.(cleanUpdated);
   };
 
   const handleApplyPreset = (preset: PolygonPreset) => {
     if (isReadOnly) return;
-    latestLocalPolygonRef.current = preset.vertices;
-    setLocalPolygon(preset.vertices);
+    const localPreset = toLocalPolygon(preset.vertices);
+    latestLocalPolygonRef.current = localPreset;
+    setLocalPolygon(localPreset);
     if (entityUid) {
       transformEventBus.emit([{ uid: entityUid, collisionPolygon: preset.vertices }]);
     }
@@ -851,7 +915,7 @@ export function CollisionGeometrySection({
           <div className="flex flex-col gap-1.5">
             {localPolygon.map((vertex, index) => (
               <div
-                key={vertex.name}
+                key={vertex._key}
                 className="inspector-subsection rounded p-1.5 flex items-center gap-2"
               >
                 <span className="text-xs font-mono text-gray-400 w-6 shrink-0 font-medium">
@@ -863,6 +927,8 @@ export function CollisionGeometrySection({
                     axis="X"
                     badgeClass="axis-badge-x"
                     value={vertex.x}
+                    min={-1}
+                    max={1}
                     step={0.05}
                     dragDelta={0.01}
                     precision={3}
@@ -874,6 +940,8 @@ export function CollisionGeometrySection({
                     axis="Y"
                     badgeClass="axis-badge-y"
                     value={vertex.y}
+                    min={-1}
+                    max={1}
                     step={0.05}
                     dragDelta={0.01}
                     precision={3}
