@@ -15,6 +15,8 @@ function createMockRefs(): ViewportRefs {
     worldRef: { current: null },
     gridRef: { current: null },
     entitiesContainerRef: { current: null },
+    collisionGraphicsRef: { current: null },
+    selectedCollisionGraphicsRef: { current: null },
     selectionRef: { current: null },
     marqueeGraphicsRef: { current: null },
     moveGizmoContainerRef: { current: null },

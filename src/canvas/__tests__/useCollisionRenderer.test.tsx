@@ -57,12 +57,14 @@ function fixture() {
       inlineEntityData: { FileName: 'box.ent' },
     }],
   };
-  const graphics = { clear: vi.fn(), poly: vi.fn(), circle: vi.fn(), stroke: vi.fn() };
+  const unselectedGraphics = { clear: vi.fn(), poly: vi.fn(), circle: vi.fn(), stroke: vi.fn(), position: { set: vi.fn() }, scale: { set: vi.fn() } };
+  const selectedGraphics = { clear: vi.fn(), poly: vi.fn(), circle: vi.fn(), stroke: vi.fn(), position: { set: vi.fn() }, scale: { set: vi.fn() } };
   const refs = {
-    collisionGraphicsRef: { current: graphics },
+    collisionGraphicsRef: { current: unselectedGraphics },
+    selectedCollisionGraphicsRef: { current: selectedGraphics },
     appRef: { current: { renderer: { width: 100, height: 100 } } },
   } as unknown as ViewportRefs;
-  return { scene, templates: { box: template }, graphics, refs };
+  return { scene, templates: { box: template }, graphics: unselectedGraphics, unselectedGraphics, selectedGraphics, refs };
 }
 
 afterEach(() => {
@@ -71,7 +73,7 @@ afterEach(() => {
 });
 
 describe('useCollisionRenderer', () => {
-  it('honors the toggle and highlights selected collisions', () => {
+  it('honors the toggle and highlights selected collisions with inner 3px stroke even when toggle is off', () => {
     const data = fixture();
     const initialProps = {
       refs: data.refs,
@@ -88,16 +90,52 @@ describe('useCollisionRenderer', () => {
     const { rerender } = renderHook(props => useCollisionRenderer(props), { initialProps });
     flushAnimationFrames();
 
-    expect(data.graphics.poly).toHaveBeenCalledWith([
+    expect(data.selectedGraphics.poly).toHaveBeenCalledWith([
       { x: -10, y: 15 }, { x: 30, y: 15 }, { x: 30, y: 25 }, { x: -10, y: 25 },
     ], true);
-    expect(data.graphics.stroke).toHaveBeenCalledWith(expect.objectContaining({ color: 0xfbbf24, width: 1 }));
+    expect(data.selectedGraphics.stroke).toHaveBeenCalledWith(expect.objectContaining({
+      color: 0xfbbf24,
+      width: 1.5,
+      alignment: 1,
+    }));
 
-    const polyCalls = data.graphics.poly.mock.calls.length;
+    data.selectedGraphics.poly.mockClear();
     rerender({ ...initialProps, showCollisions: false });
     flushAnimationFrames();
-    expect(data.graphics.clear).toHaveBeenCalled();
-    expect(data.graphics.poly).toHaveBeenCalledTimes(polyCalls);
+    expect(data.unselectedGraphics.clear).toHaveBeenCalled();
+    expect(data.selectedGraphics.poly).toHaveBeenCalled();
+    expect(data.selectedGraphics.stroke).toHaveBeenCalledWith(expect.objectContaining({
+      color: 0xfbbf24,
+      width: 1.5,
+      alignment: 1,
+    }));
+
+    rerender({ ...initialProps, showCollisions: false, selectedUIDs: [] });
+    flushAnimationFrames();
+    expect(data.selectedGraphics.clear).toHaveBeenCalled();
+  });
+
+  it('renders selected collision when initialized with showCollisions=false and selected later', () => {
+    const data = fixture();
+    const initialProps = {
+      refs: data.refs,
+      scene: data.scene,
+      templates: data.templates,
+      selectedUIDs: [] as string[],
+      showCollisions: false,
+      camera: { x: 0, y: 0, zoom: 2 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    };
+    const { rerender } = renderHook(props => useCollisionRenderer(props), { initialProps });
+    flushAnimationFrames();
+
+    rerender({ ...initialProps, selectedUIDs: ['uid'] });
+    flushAnimationFrames();
+
+    expect(data.selectedGraphics.poly).toHaveBeenCalled();
   });
 
   it('redraws move, rotate, and scale previews from the transform event bus', () => {
@@ -227,10 +265,10 @@ describe('useCollisionRenderer', () => {
     act(() => transformEventBus.emit([{ uid: 'uid', x: 100 }]));
     flushAnimationFrames();
 
-    data.graphics.poly.mockClear();
+    data.selectedGraphics.poly.mockClear();
     rerender({ ...initialProps, selectedUIDs: ['uid'], camera: { x: -10, y: 0, zoom: 1 } });
     flushAnimationFrames();
-    const points = data.graphics.poly.mock.calls[0][0] as Array<{ x: number; y: number }>;
+    const points = data.selectedGraphics.poly.mock.calls[0][0] as Array<{ x: number; y: number }>;
     expect(points[0].x).toBeCloseTo(80);
   });
 
