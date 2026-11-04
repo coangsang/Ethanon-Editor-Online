@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ProjectSpriteItem } from '../types';
 import { useSceneStore } from '../store/sceneStore';
+import { ViewModeToggle } from '../components/ViewModeToggle';
 
 const GRID_CARD_HEIGHT = 110;
 const GRID_ROW_HEIGHT = 118;
@@ -38,16 +39,16 @@ const SpriteGridCard = React.memo(function SpriteGridCard({
       style={style}
       onClick={() => onSelect(sprite, isActive)}
       title={`${sprite.name}\nPath: ${sprite.relativePath}\nUsed by: ${usageCount > 0 ? sprite.usedByTemplates.join(', ') : 'No entities'}`}
-      className={`sprite-resource-card group absolute flex flex-col items-center p-2 rounded cursor-pointer border bg-gray-800/80 transition-all ${
+      className={`sprite-resource-card group absolute flex flex-col items-center p-2 rounded cursor-pointer border transition-all ${
         isPinged
-          ? 'sprite-resource-card-ping border-emerald-400 ring-2 ring-emerald-400 bg-emerald-950/60 shadow-[0_0_15px_rgba(52,211,153,0.3)] animate-pulse'
+          ? 'sprite-resource-card-ping border-[#d2d5db] bg-[#3a3c40] text-[#eceeef] ring-1 ring-[#d2d5db]'
           : isActive
-          ? 'sprite-resource-card-active border-emerald-500 ring-2 ring-emerald-500/50 bg-emerald-950/60'
-          : 'border-gray-700/60 hover:bg-gray-700/80 hover:border-gray-500'
+          ? 'sprite-resource-card-active border-[#bec1c5] bg-[#4b4d52] text-[#eceeef] ring-1 ring-[#d2d5db]/50'
+          : 'border-[#46484d] bg-[#2b2c2f] hover:bg-[#37393d] hover:border-[#bec1c5]'
       }`}
     >
       {/* Thumbnail with checkerboard background for transparent pngs */}
-      <div className="w-14 h-14 flex-shrink-0 bg-checkerboard rounded border border-gray-700/60 overflow-hidden flex items-center justify-center p-1 mb-1 relative">
+      <div className="w-14 h-14 flex-shrink-0 bg-checkerboard rounded border border-[#46484d] overflow-hidden flex items-center justify-center p-1 mb-1 relative">
         <img
           src={sprite.url}
           alt={sprite.name}
@@ -57,7 +58,7 @@ const SpriteGridCard = React.memo(function SpriteGridCard({
         />
         {sprite.hasAtlas && (
           <span
-            className="absolute bottom-0.5 right-0.5 px-1 py-0.2 bg-indigo-900/90 text-indigo-300 border border-indigo-700/80 rounded text-[8px] font-mono leading-none"
+            className="absolute bottom-0.5 right-0.5 px-1 py-0.2 bg-[#292a2d] text-[#bec1c5] border border-[#46484d] rounded text-[8px] font-mono leading-none"
             title={`Texture Atlas (${sprite.atlasFrameCount ?? 0} frames)`}
           >
             ATLAS
@@ -65,16 +66,14 @@ const SpriteGridCard = React.memo(function SpriteGridCard({
         )}
       </div>
 
-      <span className="text-[11px] text-gray-200 text-center truncate w-full leading-tight font-medium" title={sprite.name}>
+      <span className="text-[11px] text-[#eceeef] text-center truncate w-full leading-tight font-medium" title={sprite.name}>
         {sprite.name}
       </span>
 
       <div className="flex items-center justify-center gap-1 w-full mt-0.5">
         <span
-          className={`text-[9px] px-1 py-0.2 rounded font-mono truncate ${
-            usageCount > 0
-              ? 'bg-emerald-950/70 text-emerald-300 border border-emerald-800/60'
-              : 'bg-gray-900/80 text-gray-400 border border-gray-700/50'
+          className={`text-[9px] px-1.5 py-0.2 rounded font-mono truncate border border-[#46484d] bg-[#292a2d] ${
+            usageCount > 0 ? 'text-[#bec1c5]' : 'text-[#a2a5aa]'
           }`}
           title={usageCount > 0 ? `Used by: ${sprite.usedByTemplates.join(', ')}` : 'Unused sprite'}
         >
@@ -102,13 +101,13 @@ const SpriteListItem = React.memo(function SpriteListItem({
       title={`${sprite.name}\nPath: ${sprite.relativePath}\nUsed by: ${usageCount > 0 ? sprite.usedByTemplates.join(', ') : 'No entities'}`}
       className={`sprite-resource-card group absolute inset-x-0 flex items-center gap-2 px-2.5 py-1.5 rounded cursor-pointer border transition-all ${
         isPinged
-          ? 'sprite-resource-card-ping border-emerald-400 ring-2 ring-emerald-400 bg-emerald-950/60 shadow-[0_0_15px_rgba(52,211,153,0.3)] animate-pulse'
+          ? 'sprite-resource-card-ping border-[#d2d5db] bg-[#3a3c40] text-[#eceeef] ring-1 ring-[#d2d5db]'
           : isActive
-          ? 'sprite-resource-card-active bg-emerald-950/80 border-emerald-500 text-white'
-          : 'bg-gray-800/40 border-gray-800 hover:bg-gray-700/60 hover:border-gray-600'
+          ? 'sprite-resource-card-active bg-[#4b4d52] border-[#bec1c5] ring-1 ring-[#d2d5db]/50 text-[#eceeef]'
+          : 'bg-[#2b2c2f] border-[#46484d] hover:bg-[#37393d] hover:border-[#bec1c5]'
       }`}
     >
-      <div className="w-8 h-8 flex-shrink-0 bg-checkerboard rounded border border-gray-700/60 overflow-hidden flex items-center justify-center p-0.5 relative">
+      <div className="w-8 h-8 flex-shrink-0 bg-checkerboard rounded border border-[#46484d] overflow-hidden flex items-center justify-center p-0.5 relative">
         <img
           src={sprite.url}
           alt={sprite.name}
@@ -120,8 +119,8 @@ const SpriteListItem = React.memo(function SpriteListItem({
 
       <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <span className="text-xs text-gray-200 truncate font-medium block">{sprite.name}</span>
-          <span className="text-[10px] text-gray-400 truncate block font-mono">
+          <span className="text-xs text-[#eceeef] truncate font-medium block">{sprite.name}</span>
+          <span className="text-[10px] text-[#a2a5aa] truncate block font-mono">
             {sprite.relativePath}
           </span>
         </div>
@@ -129,17 +128,15 @@ const SpriteListItem = React.memo(function SpriteListItem({
         <div className="flex items-center gap-1.5 shrink-0">
           {sprite.hasAtlas && (
             <span
-              className="text-[10px] text-indigo-300 font-mono px-1.5 py-0.5 bg-indigo-950/80 rounded border border-indigo-800/60"
+              className="text-[10px] text-[#bec1c5] font-mono px-1.5 py-0.5 bg-[#292a2d] rounded border border-[#46484d]"
               title={`Atlas with ${sprite.atlasFrameCount ?? 0} frames`}
             >
               Atlas ({sprite.atlasFrameCount ?? 0})
             </span>
           )}
           <span
-            className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
-              usageCount > 0
-                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800/60'
-                : 'bg-gray-800 text-gray-400 border-gray-700/60'
+            className={`text-[10px] font-mono px-1.5 py-0.5 rounded border border-[#46484d] bg-[#292a2d] ${
+              usageCount > 0 ? 'text-[#bec1c5]' : 'text-[#a2a5aa]'
             }`}
             title={usageCount > 0 ? `Used by: ${sprite.usedByTemplates.join(', ')}` : 'Unused sprite'}
           >
@@ -310,21 +307,21 @@ export function SpriteList({ onToggleCollapse, headerMode = 'standalone', onSele
   }, [filteredSprites, startIdx, endIdx]);
 
   return (
-    <div className="sprite-list-ui flex flex-col h-full bg-gray-900 select-none">
+    <div className="sprite-list-ui flex flex-col h-full bg-[#252629] select-none">
       {/* Header bar */}
-      <div className="asset-list-header px-3 py-2 border-b border-gray-700 bg-gray-900/90 flex flex-wrap items-center justify-between gap-2">
+      <div className="asset-list-header px-3 py-1.5 min-h-[34px] border-b border-[#46484d] bg-[#2c2d30] flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {headerMode === 'standalone' && onToggleCollapse && (
             <button
               onClick={onToggleCollapse}
               title="Collapse Sprites Panel"
-              className="text-xs text-gray-400 hover:text-gray-200 transition-colors p-0.5 rounded hover:bg-gray-800"
+              className="text-xs text-[#a2a5aa] hover:text-[#eceeef] transition-colors p-0.5 rounded hover:bg-[#3a3c40]"
             >
               ▼
             </button>
           )}
           {headerMode === 'standalone' && (
-            <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-[#bec1c5] uppercase tracking-wider">
               Sprites ({filteredSprites.length})
             </span>
           )}
@@ -335,7 +332,7 @@ export function SpriteList({ onToggleCollapse, headerMode = 'standalone', onSele
             placeholder="Filter sprites (.png)..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="asset-list-search editor-input placeholder-gray-500 w-44"
+            className="asset-list-search editor-input bg-[#303135] border-[#46484d] text-[#eceeef] placeholder-[#a2a5aa] focus:border-[#d2d5db] w-44"
           />
         </div>
 
@@ -343,38 +340,15 @@ export function SpriteList({ onToggleCollapse, headerMode = 'standalone', onSele
           <button
             onClick={() => filesRef.current?.click()}
             title="Load individual image files"
-            className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors"
+            className="text-xs bg-[#303135] hover:bg-[#3a3c40] hover:text-[#eceeef] border border-[#46484d] text-[#bec1c5] px-2 py-1 rounded transition-colors"
           >
             Load images
           </button>
 
-          <div className="w-px h-4 bg-gray-700 mx-0.5" />
+          <div className="w-px h-4 bg-[#46484d] mx-0.5" />
 
           {/* View mode toggle */}
-          <div className="flex items-center gap-0.5 border border-gray-700 bg-gray-800 rounded p-0.5">
-            <button
-              onClick={() => handleSetViewMode('grid')}
-              title="Grid View"
-              className={`p-1 rounded text-xs transition-colors ${
-                viewMode === 'grid' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => handleSetViewMode('list')}
-              title="List View"
-              className={`p-1 rounded text-xs transition-colors ${
-                viewMode === 'list' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          </div>
+          <ViewModeToggle mode={viewMode} onChange={handleSetViewMode} />
         </div>
 
         <input
@@ -394,7 +368,7 @@ export function SpriteList({ onToggleCollapse, headerMode = 'standalone', onSele
         className="flex-1 overflow-y-auto p-2 pr-1.5 hierarchy-scrollbar relative"
       >
         {filteredSprites.length === 0 && (
-          <div className="px-3 py-6 text-xs text-gray-500 text-center italic">
+          <div className="px-3 py-6 text-xs text-[#a2a5aa] text-center italic">
             {projectSprites.length === 0 ? 'No sprite images loaded in project' : 'No matching sprites found'}
           </div>
         )}

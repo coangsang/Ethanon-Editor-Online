@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { EntityTemplate } from '../types';
 import { useSceneStore } from '../store/sceneStore';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
+import { ViewModeToggle } from '../components/ViewModeToggle';
 
 const PING_HIGHLIGHT_MS = 1200;
 const GRID_CARD_HEIGHT = 96;
@@ -44,16 +45,16 @@ const EntityGridCard = React.memo(function EntityGridCard({
       style={style}
       onClick={() => onSelect(name, isActive)}
       title={`${name}.ent${isNonHorizontal ? ` (${template.type})` : ''}\nSprite: ${template.spriteFile || 'none'}\nClick to place`}
-      className={`entity-resource-card group absolute flex flex-col items-center p-2 rounded cursor-pointer border bg-gray-800/80 hover:bg-gray-700/80 hover:border-gray-500 transition-all ${
+      className={`entity-resource-card group absolute flex flex-col items-center p-2 rounded cursor-pointer border transition-all ${
         isPingHighlighted
-          ? 'entity-resource-card-ping border-cyan-300 ring-2 ring-cyan-300/70 bg-cyan-950/50'
+          ? 'entity-resource-card-ping border-[#d2d5db] bg-[#3a3c40] text-[#eceeef] ring-1 ring-[#d2d5db]'
           : isActive
-          ? 'entity-resource-card-active border-indigo-500 ring-2 ring-indigo-500/50 bg-indigo-950/60'
-          : 'border-gray-700/60'
+          ? 'entity-resource-card-active border-[#bec1c5] bg-[#4b4d52] text-[#eceeef] ring-1 ring-[#d2d5db]/50'
+          : 'border-[#46484d] bg-[#2b2c2f] hover:bg-[#37393d] hover:border-[#bec1c5]'
       }`}
     >
 
-      <div className="w-12 h-12 flex-shrink-0 bg-gray-900 rounded border border-gray-700/50 overflow-hidden flex items-center justify-center p-1 mb-1 relative">
+      <div className="w-12 h-12 flex-shrink-0 bg-[#202124] rounded border border-[#46484d] overflow-hidden flex items-center justify-center p-1 mb-1 relative">
         {imgUrl ? (
           <img
             src={imgUrl}
@@ -63,22 +64,22 @@ const EntityGridCard = React.memo(function EntityGridCard({
             className="max-w-full max-h-full object-contain pointer-events-none pixelated"
           />
         ) : (
-          <div className="w-6 h-6 bg-purple-700 rounded-sm" />
+          <div className="w-6 h-6 bg-[#3a3c40] border border-[#46484d] rounded-sm" />
         )}
         {hasParticles && (
           <span
-            className="absolute bottom-0.5 right-0.5 px-0.5 py-0.2 bg-amber-950/90 text-amber-300 border border-amber-700/80 rounded text-[7px] font-mono leading-none"
+            className="absolute bottom-0.5 right-0.5 px-1 py-0.2 bg-[#292a2d] text-[#fbbf24] border border-[#46484d] rounded text-[8px] font-mono leading-none"
             title={`Has ${template.particleSystems?.length} particle system(s)`}
           >
             ✨
           </span>
         )}
       </div>
-      <span className="text-[11px] text-gray-200 text-center truncate w-full leading-tight font-medium" title={`${name}.ent`}>
+      <span className="text-[11px] text-[#eceeef] text-center truncate w-full leading-tight font-medium" title={`${name}.ent`}>
         {name}
       </span>
       {isNonHorizontal && (
-        <span className="text-[9px] text-gray-400 truncate w-full text-center mt-0.5 font-mono">
+        <span className="text-[9px] text-[#bec1c5] truncate w-full text-center mt-0.5 font-mono">
           {template.type}
         </span>
       )}
@@ -106,13 +107,13 @@ const EntityListItem = React.memo(function EntityListItem({
       title={`${name}.ent${isNonHorizontal ? ` (${template.type})` : ''}\nSprite: ${template.spriteFile || 'none'}\nClick to place`}
       className={`entity-resource-card group absolute inset-x-0 flex items-center gap-2 px-2.5 py-1.5 rounded cursor-pointer border transition-all ${
         isPingHighlighted
-          ? 'entity-resource-card-ping bg-cyan-950/60 border-cyan-300 ring-2 ring-cyan-300/70 text-white'
+          ? 'entity-resource-card-ping bg-[#3a3c40] border-[#d2d5db] ring-1 ring-[#d2d5db] text-[#eceeef]'
           : isActive
-          ? 'entity-resource-card-active bg-indigo-950/80 border-indigo-500 text-white'
-          : 'bg-gray-800/40 border-gray-800 hover:bg-gray-700/60 hover:border-gray-600'
+          ? 'entity-resource-card-active bg-[#4b4d52] border-[#bec1c5] ring-1 ring-[#d2d5db]/50 text-[#eceeef]'
+          : 'bg-[#2b2c2f] border-[#46484d] hover:bg-[#37393d] hover:border-[#bec1c5]'
       }`}
     >
-      <div className="w-8 h-8 flex-shrink-0 bg-gray-900 rounded border border-gray-700/60 overflow-hidden flex items-center justify-center p-0.5 relative">
+      <div className="w-8 h-8 flex-shrink-0 bg-[#202124] rounded border border-[#46484d] overflow-hidden flex items-center justify-center p-0.5 relative">
         {imgUrl ? (
           <img
             src={imgUrl}
@@ -122,15 +123,15 @@ const EntityListItem = React.memo(function EntityListItem({
             className="max-w-full max-h-full object-contain pointer-events-none pixelated"
           />
         ) : (
-          <div className="w-5 h-5 bg-purple-700 rounded-sm" />
+          <div className="w-5 h-5 bg-[#3a3c40] border border-[#46484d] rounded-sm" />
         )}
       </div>
       <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
         <div className="min-w-0 flex items-center gap-1.5">
-          <span className="text-xs text-gray-200 truncate font-medium">{name}</span>
-          <span className="text-[9px] text-indigo-400 font-mono">.ent</span>
+          <span className="text-xs text-[#eceeef] truncate font-medium">{name}</span>
+          <span className="text-[10px] text-[#bec1c5] font-mono px-1 py-0.2 bg-[#292a2d] rounded border border-[#46484d]">.ent</span>
           {template.spriteFile && (
-            <span className="text-[10px] text-gray-500 truncate font-mono hidden sm:inline" title={template.spriteFile}>
+            <span className="text-[10px] text-[#a2a5aa] truncate font-mono hidden sm:inline" title={template.spriteFile}>
               ({template.spriteFile})
             </span>
           )}
@@ -138,14 +139,14 @@ const EntityListItem = React.memo(function EntityListItem({
         <div className="flex items-center gap-1.5 shrink-0">
           {hasParticles && (
             <span
-              className="text-[10px] text-amber-300 font-mono px-1 py-0.5 bg-amber-950/80 rounded border border-amber-800/60"
+              className="text-[10px] text-[#fbbf24] font-mono px-1.5 py-0.5 bg-[#292a2d] rounded border border-[#46484d]"
               title={`${template.particleSystems?.length} Particle System(s)`}
             >
               ✨ {template.particleSystems?.length}
             </span>
           )}
           {isNonHorizontal && (
-            <span className="text-[10px] text-gray-400 font-mono px-1.5 py-0.5 bg-gray-800 rounded border border-gray-700/60">
+            <span className="text-[10px] text-[#bec1c5] font-mono px-1.5 py-0.5 bg-[#292a2d] rounded border border-[#46484d]">
               {template.type}
             </span>
           )}
@@ -327,21 +328,21 @@ export function EntityList({ onToggleCollapse, headerMode = 'standalone' }: Enti
   }, [filteredNames, startIdx, endIdx]);
 
   return (
-    <div className="entity-list-ui flex flex-col h-full bg-gray-900 select-none">
+    <div className="entity-list-ui flex flex-col h-full bg-[#252629] select-none">
       {/* Header bar */}
-      <div className="asset-list-header px-3 py-2 border-b border-gray-700 bg-gray-900/90 flex flex-wrap items-center justify-between gap-2">
+      <div className="asset-list-header px-3 py-1.5 min-h-[34px] border-b border-[#46484d] bg-[#2c2d30] flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {headerMode === 'standalone' && onToggleCollapse && (
             <button
               onClick={onToggleCollapse}
               title="Thu nhỏ Entity Panel (Collapse)"
-              className="text-xs text-gray-400 hover:text-gray-200 transition-colors p-0.5 rounded hover:bg-gray-800"
+              className="text-xs text-[#a2a5aa] hover:text-[#eceeef] transition-colors p-0.5 rounded hover:bg-[#3a3c40]"
             >
               ▼
             </button>
           )}
           {headerMode === 'standalone' && (
-            <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+            <span className="text-xs font-semibold text-[#bec1c5] uppercase tracking-wider">
               Entities ({filteredNames.length})
             </span>
           )}
@@ -352,7 +353,7 @@ export function EntityList({ onToggleCollapse, headerMode = 'standalone' }: Enti
             placeholder="Filter entities (.ent)..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="asset-list-search editor-input placeholder-gray-500 w-44"
+            className="asset-list-search editor-input bg-[#303135] border-[#46484d] text-[#eceeef] placeholder-[#a2a5aa] focus:border-[#d2d5db] w-44"
           />
         </div>
 
@@ -361,38 +362,15 @@ export function EntityList({ onToggleCollapse, headerMode = 'standalone' }: Enti
           <button
             onClick={() => filesRef.current?.click()}
             title="Load individual .ent / image files"
-            className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors"
+            className="text-xs bg-[#303135] hover:bg-[#3a3c40] hover:text-[#eceeef] border border-[#46484d] text-[#bec1c5] px-2 py-1 rounded transition-colors"
           >
             Load files
           </button>
 
-          <div className="w-px h-4 bg-gray-700 mx-0.5" />
+          <div className="w-px h-4 bg-[#46484d] mx-0.5" />
 
           {/* View mode toggle */}
-          <div className="flex items-center gap-0.5 border border-gray-700 bg-gray-800 rounded p-0.5">
-            <button
-              onClick={() => handleSetViewMode('grid')}
-              title="Grid View"
-              className={`p-1 rounded text-xs transition-colors ${
-                viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => handleSetViewMode('list')}
-              title="List View"
-              className={`p-1 rounded text-xs transition-colors ${
-                viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          </div>
+          <ViewModeToggle mode={viewMode} onChange={handleSetViewMode} />
         </div>
 
         {/* Hidden inputs */}
@@ -413,7 +391,7 @@ export function EntityList({ onToggleCollapse, headerMode = 'standalone' }: Enti
         className="flex-1 overflow-y-auto p-2 pr-1.5 hierarchy-scrollbar relative"
       >
         {filteredNames.length === 0 && (
-          <div className="px-3 py-6 text-xs text-gray-500 text-center italic">
+          <div className="px-3 py-6 text-xs text-[#a2a5aa] text-center italic">
             {sortedNames.length === 0 ? 'No entity templates loaded' : 'No matching entity templates found'}
           </div>
         )}

@@ -150,7 +150,10 @@
 .hierarchy-ui,
 .project-ui,
 .entity-list-ui,
-.sprite-list-ui {
+.sprite-list-ui,
+.scene-list-ui,
+.prefab-list-ui,
+.character-list-ui {
   background: var(--workspace-panel);
   color: var(--workspace-text);
 }
@@ -160,7 +163,10 @@
 .hierarchy-ui .hierarchy-header,
 .project-ui .project-header,
 .entity-list-ui .asset-list-header,
-.sprite-list-ui .asset-list-header {
+.sprite-list-ui .asset-list-header,
+.scene-list-ui .asset-list-header,
+.prefab-list-ui .asset-list-header,
+.character-list-ui .asset-list-header {
   background: #2c2d30;
   border-color: var(--workspace-border);
 }
@@ -168,27 +174,42 @@
 .hierarchy-ui :is(.text-gray-300, .text-gray-200),
 .project-ui :is(.text-gray-300, .text-gray-200),
 .entity-list-ui :is(.text-gray-300, .text-gray-200),
-.sprite-list-ui :is(.text-gray-300, .text-gray-200) { color: var(--workspace-text); }
+.sprite-list-ui :is(.text-gray-300, .text-gray-200),
+.scene-list-ui :is(.text-gray-300, .text-gray-200),
+.prefab-list-ui :is(.text-gray-300, .text-gray-200),
+.character-list-ui :is(.text-gray-300, .text-gray-200) { color: var(--workspace-text); }
 
 .hierarchy-ui :is(.text-gray-400, .text-gray-500, .text-gray-600),
 .project-ui :is(.text-gray-400, .text-gray-500, .text-gray-600),
 .entity-list-ui :is(.text-gray-400, .text-gray-500, .text-gray-600),
-.sprite-list-ui :is(.text-gray-400, .text-gray-500, .text-gray-600) { color: var(--workspace-text-secondary); }
+.sprite-list-ui :is(.text-gray-400, .text-gray-500, .text-gray-600),
+.scene-list-ui :is(.text-gray-400, .text-gray-500, .text-gray-600),
+.prefab-list-ui :is(.text-gray-400, .text-gray-500, .text-gray-600),
+.character-list-ui :is(.text-gray-400, .text-gray-500, .text-gray-600) { color: var(--workspace-text-secondary); }
 
 .hierarchy-ui button:focus-visible,
 .project-ui button:focus-visible,
 .entity-list-ui button:focus-visible,
 .sprite-list-ui button:focus-visible,
+.scene-list-ui button:focus-visible,
+.prefab-list-ui button:focus-visible,
+.character-list-ui button:focus-visible,
 .hierarchy-ui input:focus-visible,
 .entity-list-ui input:focus-visible,
-.sprite-list-ui input:focus-visible {
+.sprite-list-ui input:focus-visible,
+.scene-list-ui input:focus-visible,
+.prefab-list-ui input:focus-visible,
+.character-list-ui input:focus-visible {
   outline: 2px solid var(--workspace-focus);
   outline-offset: 2px;
 }
 
 .hierarchy-ui .hierarchy-search,
 .entity-list-ui .asset-list-search,
-.sprite-list-ui .asset-list-search {
+.sprite-list-ui .asset-list-search,
+.scene-list-ui .asset-list-search,
+.prefab-list-ui .asset-list-search,
+.character-list-ui .asset-list-search {
   background: var(--workspace-raised);
   border-color: var(--workspace-border);
   color: var(--workspace-text);
@@ -196,7 +217,10 @@
 
 .hierarchy-ui .hierarchy-search:focus,
 .entity-list-ui .asset-list-search:focus,
-.sprite-list-ui .asset-list-search:focus { border-color: var(--workspace-text-secondary); }
+.sprite-list-ui .asset-list-search:focus,
+.scene-list-ui .asset-list-search:focus,
+.prefab-list-ui .asset-list-search:focus,
+.character-list-ui .asset-list-search:focus { border-color: var(--workspace-text-secondary); }
 
 .hierarchy-ui .hierarchy-row { border-color: var(--workspace-border); }
 .hierarchy-ui .hierarchy-row-idle:hover { background: var(--workspace-hover); }
@@ -240,7 +264,10 @@
 
 .project-ui .project-resource-card,
 .entity-list-ui .entity-resource-card,
-.sprite-list-ui .sprite-resource-card {
+.sprite-list-ui .sprite-resource-card,
+.scene-list-ui .project-resource-card,
+.prefab-list-ui .project-resource-card,
+.character-list-ui .project-resource-card {
   background: #2b2c2f;
   border-color: var(--workspace-border);
   box-shadow: none;
@@ -249,45 +276,64 @@
 
 .project-ui .project-resource-card:hover:not(:disabled):not(.project-resource-card-static),
 .entity-list-ui .entity-resource-card:hover,
-.sprite-list-ui .sprite-resource-card:hover {
+.sprite-list-ui .sprite-resource-card:hover,
+.scene-list-ui .project-resource-card:hover:not(:disabled):not(.project-resource-card-static),
+.prefab-list-ui .project-resource-card:hover:not(:disabled):not(.project-resource-card-static),
+.character-list-ui .project-resource-card:hover:not(:disabled):not(.project-resource-card-static) {
   background: var(--workspace-hover);
   border-color: var(--workspace-text-secondary);
 }
 
-
-.project-ui .project-resource-card-static:hover {
+.project-ui .project-resource-card-static:hover,
+.character-list-ui .project-resource-card-static:hover {
   background: #2b2c2f;
   border-color: var(--workspace-border);
 }
 
-.project-ui .project-resource-card:disabled {
+.project-ui .project-resource-card:disabled,
+.scene-list-ui .project-resource-card:disabled,
+.prefab-list-ui .project-resource-card:disabled {
   cursor: not-allowed;
 }
 
 .project-ui .project-resource-card-disabled,
-.project-ui .project-resource-card:disabled:not(.project-resource-card-active) {
+.scene-list-ui .project-resource-card-disabled,
+.prefab-list-ui .project-resource-card-disabled,
+.project-ui .project-resource-card:disabled:not(.project-resource-card-active),
+.scene-list-ui .project-resource-card:disabled:not(.project-resource-card-active),
+.prefab-list-ui .project-resource-card:disabled:not(.project-resource-card-active) {
   background: #292a2d;
   border-color: #393b3f;
   color: var(--workspace-text-muted);
 }
 
-.project-ui .project-resource-card-disabled :is(.bg-gray-900, .bg-gray-800) {
+.project-ui .project-resource-card-disabled :is(.bg-gray-900, .bg-gray-800),
+.scene-list-ui .project-resource-card-disabled :is(.bg-gray-900, .bg-gray-800),
+.prefab-list-ui .project-resource-card-disabled :is(.bg-gray-900, .bg-gray-800) {
   background: #292a2d;
   border-color: #393b3f;
 }
 
 .project-ui .project-resource-card-active,
 .entity-list-ui .entity-resource-card-active,
-.sprite-list-ui .sprite-resource-card-active {
+.sprite-list-ui .sprite-resource-card-active,
+.scene-list-ui .project-resource-card-active,
+.prefab-list-ui .project-resource-card-active {
   background: #4b4d52;
   border-color: var(--workspace-text-secondary);
   box-shadow: none;
   color: var(--workspace-text);
 }
 
-.project-ui .project-resource-list { background: var(--workspace-panel); }
+.project-ui .project-resource-list,
+.scene-list-ui .project-resource-list,
+.prefab-list-ui .project-resource-list,
+.character-list-ui .project-resource-list { background: var(--workspace-panel); }
 
-.project-ui .project-empty-state { color: var(--workspace-text-muted); }
+.project-ui .project-empty-state,
+.scene-list-ui .project-empty-state,
+.prefab-list-ui .project-empty-state,
+.character-list-ui .project-empty-state { color: var(--workspace-text-muted); }
 
 .project-ui .project-title { color: var(--workspace-text-secondary); }
 
@@ -365,40 +411,65 @@
 
 .project-ui .project-resource-card :is(.bg-gray-900, .bg-gray-800),
 .entity-list-ui .entity-resource-card :is(.bg-gray-900, .bg-gray-800),
-.sprite-list-ui .sprite-resource-card :is(.bg-gray-900, .bg-gray-800) {
+.sprite-list-ui .sprite-resource-card :is(.bg-gray-900, .bg-gray-800),
+.scene-list-ui .project-resource-card :is(.bg-gray-900, .bg-gray-800),
+.prefab-list-ui .project-resource-card :is(.bg-gray-900, .bg-gray-800),
+.character-list-ui .project-resource-card :is(.bg-gray-900, .bg-gray-800) {
   background: #292a2d;
   border-color: var(--workspace-border);
 }
 
+.project-ui .asset-list-header,
 .entity-list-ui .asset-list-header,
-.sprite-list-ui .asset-list-header { border-color: var(--workspace-border); }
+.sprite-list-ui .asset-list-header,
+.scene-list-ui .asset-list-header,
+.prefab-list-ui .asset-list-header,
+.character-list-ui .asset-list-header { border-color: var(--workspace-border); }
 
+.project-ui .asset-list-header button,
 .entity-list-ui .asset-list-header button,
-.sprite-list-ui .asset-list-header button {
+.sprite-list-ui .asset-list-header button,
+.scene-list-ui .asset-list-header button,
+.prefab-list-ui .asset-list-header button,
+.character-list-ui .asset-list-header button {
   background: var(--workspace-raised);
   border-color: var(--workspace-border);
   color: var(--workspace-text-secondary);
 }
 
+.project-ui .asset-list-header button:hover,
 .entity-list-ui .asset-list-header button:hover,
-.sprite-list-ui .asset-list-header button:hover {
+.sprite-list-ui .asset-list-header button:hover,
+.scene-list-ui .asset-list-header button:hover,
+.prefab-list-ui .asset-list-header button:hover,
+.character-list-ui .asset-list-header button:hover {
   background: var(--workspace-hover);
   color: var(--workspace-text);
 }
 
+.project-ui .asset-list-header > div:last-of-type > div:last-child,
 .entity-list-ui .asset-list-header > div:last-of-type > div:last-child,
-.sprite-list-ui .asset-list-header > div:last-of-type > div:last-child {
+.sprite-list-ui .asset-list-header > div:last-of-type > div:last-child,
+.scene-list-ui .asset-list-header > div:last-of-type > div:last-child,
+.prefab-list-ui .asset-list-header > div:last-of-type > div:last-child,
+.character-list-ui .asset-list-header > div:last-of-type > div:last-child {
   border-color: var(--workspace-border);
   background: #292a2d;
 }
 
+.project-ui .asset-list-header > div:last-of-type > div:last-child button[class*='bg-indigo'],
 .entity-list-ui .asset-list-header > div:last-of-type > div:last-child button[class*='bg-indigo'],
-.sprite-list-ui .asset-list-header > div:last-of-type > div:last-child button[class*='bg-emerald'] {
+.sprite-list-ui .asset-list-header > div:last-of-type > div:last-child button[class*='bg-emerald'],
+.scene-list-ui .asset-list-header > div:last-of-type > div:last-child button[class*='bg-indigo'],
+.prefab-list-ui .asset-list-header > div:last-of-type > div:last-child button[class*='bg-cyan'] {
   background: #4b4d52;
   color: var(--workspace-text);
 }
 
 .project-ui .hierarchy-scrollbar,
 .entity-list-ui .hierarchy-scrollbar,
-.sprite-list-ui .hierarchy-scrollbar { background: var(--workspace-panel); }
+.sprite-list-ui .hierarchy-scrollbar,
+.scene-list-ui .hierarchy-scrollbar,
+.prefab-list-ui .hierarchy-scrollbar,
+.character-list-ui .hierarchy-scrollbar { background: var(--workspace-panel); }
 
