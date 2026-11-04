@@ -295,6 +295,58 @@ describe('useCollisionRenderer', () => {
     expect(data.graphics.poly).toHaveBeenCalled();
   });
 
+  it('stops drawing a live polygon preview that becomes invalid', () => {
+    const data = fixture();
+    const polyTemplate: EntityTemplate = {
+      ...data.templates.box,
+      physics: {
+        ...createDefaultPhysics(3),
+        shape: 3,
+        collision: {
+          valid: true,
+          position: { x: 0, y: 0, z: 0 },
+          size: { x: 64, y: 64, z: 32 },
+          polygon: [
+            { name: 'v0', x: 0, y: -1 },
+            { name: 'v1', x: 1, y: 1 },
+            { name: 'v2', x: -1, y: 1 },
+          ],
+          compound: [],
+          joints: [],
+        },
+      },
+    };
+    renderHook(() => useCollisionRenderer({
+      refs: data.refs,
+      scene: data.scene,
+      templates: { box: polyTemplate },
+      selectedUIDs: [],
+      showCollisions: true,
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    }));
+    flushAnimationFrames();
+    expect(data.graphics.poly).toHaveBeenCalled();
+    data.graphics.poly.mockClear();
+
+    act(() => transformEventBus.emit([{
+      uid: 'uid',
+      collisionPolygon: [
+        { name: 'v0', x: -0.5, y: -0.5 },
+        { name: 'v1', x: 0, y: 0 },
+        { name: 'v2', x: 0.5, y: -0.5 },
+        { name: 'v3', x: 0.5, y: 0.5 },
+        { name: 'v4', x: -0.5, y: 0.5 },
+      ],
+    }]));
+    flushAnimationFrames();
+
+    expect(data.graphics.poly).not.toHaveBeenCalled();
+  });
+
   it('redraws parallax geometry when the camera changes', () => {
     const data = fixture();
     data.scene.entities[0].position.z = 10;

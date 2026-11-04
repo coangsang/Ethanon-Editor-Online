@@ -2,6 +2,7 @@ import type { CollisionShape, EntityInstance, EntityPhysicsConfig, EntityTemplat
 import {
   createDefaultCompoundSubShape,
   createDefaultPolygonVertices,
+  isCollisionGeometryValid,
   parsePolygonVertices,
   polygonsEqual,
   serializeCompoundEnml,
@@ -283,7 +284,7 @@ export function applyPhysicsToEntity(
     ...physics,
     collision: {
       ...physics.collision,
-      valid: true,
+      valid: isCollisionGeometryValid(physics),
     },
   };
 
@@ -338,4 +339,14 @@ export function applyPhysicsToEntity(
     inlineTemplate,
     inlineEntityData,
   };
+}
+
+export function findEntitiesWithInvalidCollision(entities: EntityInstance[]): EntityInstance[] {
+  return entities.filter(entity => {
+    const physics = entity.inlineTemplate?.physics;
+    return !!physics
+      && physics.shape !== 0
+      && !physics.collision.valid
+      && !entityHasFileNameTag(entity);
+  });
 }

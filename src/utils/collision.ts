@@ -236,6 +236,14 @@ export function validatePolygon(
   };
 }
 
+export function isCollisionGeometryValid(
+  physics: Pick<EntityPhysicsConfig, "shape" | "collision">,
+): boolean {
+  if (physics.shape === 3) return validatePolygon(physics.collision.polygon).valid;
+  if (physics.shape === 4) return physics.collision.compound.length > 0;
+  return true;
+}
+
 function validatePolygonGeometry(
   vertices: CollisionPolygonVertex[],
   warnings: string[],

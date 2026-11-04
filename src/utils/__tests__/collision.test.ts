@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseEntityTemplate, parseScene } from '../../io/parseScene';
-import { applyPhysicsToEntity, createDefaultPhysics, resolveEntityTemplate } from '../entityTemplate';
+import { applyPhysicsToEntity, createDefaultPhysics, findEntitiesWithInvalidCollision, resolveEntityTemplate } from '../entityTemplate';
 import {
   createDefaultCompoundSubShape,
   createDefaultPolygonVertices,
@@ -569,5 +569,74 @@ describe('collision parsing and resolution', () => {
       expect(col.Polygon).toContain('v1 {');
       expect(col.Polygon).toContain('v2 {');
     });
+  });
+});
+
+describe('collision validity after inspector edits', () => {
+  const polygonScene = (polygon: string) => `<?xml version="1.0" encoding="utf-8"?>
+<Ethanon>
+  <SceneProperties lightIntensity="2" parallaxIntensity="0"><Ambient r="1" g="1" b="1" /><ZAxisDirection x="0" y="-1" /></SceneProperties>
+  <EntitiesInScene>
+    <Entity id="1" spriteFrame="0">
+      <EntityName>rock</EntityName>
+      <Position x="0" y="0" z="0" angle="0" />
+      <Entity shape="3" static="1">
+        <Collision><Position x="0" y="0" z="0" /><Size x="64" y="64" z="64" /><Polygon>${polygon}</Polygon></Collision>
+      </Entity>
+    </Entity>
+  </EntitiesInScene>
+</Ethanon>`;
+  const CONVEX = 'v0 { x = -0.5; y = -0.5; } v1 { x = 0.5; y = -0.5; } v2 { x = 0.5; y = 0.5; } v3 { x = -0.5; y = 0.5; }';
+  const CONCAVE = 'v0 { x = -0.5; y = -0.5; } v1 { x = 0; y = 0; } v2 { x = 0.5; y = -0.5; } v3 { x = 0.5; y = 0.5; } v4 { x = -0.5; y = 0.5; }';
+  const concaveVertices = [
+    { name: 'v0', x: -0.5, y: -0.5 },
+    { name: 'v1', x: 0, y: 0 },
+    { name: 'v2', x: 0.5, y: -0.5 },
+    { name: 'v3', x: 0.5, y: 0.5 },
+    { name: 'v4', x: -0.5, y: 0.5 },
+  ];
+  const physicsOf = (entity: Parameters<typeof resolveEntityTemplate>[0]) =>
+    resolveEntityTemplate(entity, {})!.physics!;
+
+  it('keeps a convex polygon valid', () => {
+    const entity = parseScene(polygonScene(CONVEX)).entities[0];
+    const updated = applyPhysicsToEntity(entity, { ...physicsOf(entity), friction: 0.5 });
+    expect(physicsOf(updated).collision.valid).toBe(true);
+    expect(findEntitiesWithInvalidCollision([updated])).toEqual([]);
+  });
+
+  it('marks an entity invalid when an edit makes its polygon invalid', () => {
+    const entity = parseScene(polygonScene(CONVEX)).entities[0];
+    const physics = physicsOf(entity);
+    const updated = applyPhysicsToEntity(entity, {
+      ...physics,
+      collision: { ...physics.collision, polygon: concaveVertices, valid: true },
+    });
+    expect(physicsOf(updated).collision.valid).toBe(false);
+    expect(findEntitiesWithInvalidCollision([updated])).toEqual([updated]);
+  });
+
+  it('stays invalid and keeps the raw polygon when a reloaded invalid entity gets another edit', () => {
+    const entity = parseScene(polygonScene(CONCAVE)).entities[0];
+    expect(physicsOf(entity).collision.valid).toBe(false);
+    const updated = applyPhysicsToEntity(entity, { ...physicsOf(entity), friction: 0.5 });
+    expect(physicsOf(updated).collision.valid).toBe(false);
+    expect((updated.inlineEntityData?.Collision as Record<string, unknown>).Polygon).toBe(CONCAVE);
+  });
+
+  it('accepts the default polygon and rejects an empty compound', () => {
+    const entity = parseScene(polygonScene(CONVEX)).entities[0];
+    const polygon = applyPhysicsToEntity(entity, createDefaultPhysics(3));
+    expect(physicsOf(polygon).collision.valid).toBe(true);
+    const compound = createDefaultPhysics(4);
+    const empty = applyPhysicsToEntity(entity, { ...compound, collision: { ...compound.collision, compound: [] } });
+    expect(physicsOf(empty).collision.valid).toBe(false);
+  });
+
+  it('does not report entities without inline collision', () => {
+    const entity = parseScene(polygonScene(CONCAVE)).entities[0];
+    expect(findEntitiesWithInvalidCollision([entity])).toEqual([entity]);
+    expect(findEntitiesWithInvalidCollision([applyPhysicsToEntity(entity, createDefaultPhysics(0))])).toEqual([]);
+    expect(findEntitiesWithInvalidCollision([{ ...entity, inlineTemplate: undefined }])).toEqual([]);
   });
 });

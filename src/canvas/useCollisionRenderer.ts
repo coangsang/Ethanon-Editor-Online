@@ -6,6 +6,7 @@ import {
   type TransformUpdate,
 } from "../store/TransformEventBus";
 import { BucketManager } from "../utils/BucketManager";
+import { isCollisionGeometryValid } from "../utils/collision";
 import { resolveEntityTemplate } from "../utils/entityTemplate";
 import {
   isPerformanceProfilerEnabled,
@@ -140,17 +141,20 @@ function applyPreview(
     preview.collisionCompound !== undefined
   ) {
     if (nextTemplate.physics) {
+      const collision = {
+        ...nextTemplate.physics.collision,
+        ...(preview.collisionPos ? { position: preview.collisionPos } : {}),
+        ...(preview.collisionSize ? { size: preview.collisionSize } : {}),
+        ...(preview.collisionPolygon ? { polygon: preview.collisionPolygon } : {}),
+        ...(preview.collisionCompound ? { compound: preview.collisionCompound } : {}),
+      };
       nextTemplate = {
         ...nextTemplate,
         physics: {
           ...nextTemplate.physics,
           collision: {
-            ...nextTemplate.physics.collision,
-            ...(preview.collisionPos ? { position: preview.collisionPos } : {}),
-            ...(preview.collisionSize ? { size: preview.collisionSize } : {}),
-            ...(preview.collisionPolygon ? { polygon: preview.collisionPolygon } : {}),
-            ...(preview.collisionCompound ? { compound: preview.collisionCompound } : {}),
-            valid: true,
+            ...collision,
+            valid: isCollisionGeometryValid({ shape: nextTemplate.physics.shape, collision }),
           },
         },
       };
