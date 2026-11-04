@@ -148,15 +148,20 @@ async function scanPrefabs(prefabsHandle: ProjectDirectoryHandle | null): Promis
 
 export async function scanCharacters(npcsHandle: ProjectDirectoryHandle | null): Promise<ProjectCharacterEntry[]> {
   if (!npcsHandle) return [];
-  const fileEntries = await collectAllFiles(npcsHandle);
-  const characters: ProjectCharacterEntry[] = [];
-  for (const [relativePath, handle] of fileEntries) {
-    if (relativePath.toLowerCase().endsWith('.character')) {
-      const name = relativePath.split('/').pop() ?? relativePath;
-      characters.push({ name, relativePath, handle });
+  try {
+    const fileEntries = await collectAllFiles(npcsHandle);
+    const characters: ProjectCharacterEntry[] = [];
+    for (const [relativePath, handle] of fileEntries) {
+      if (relativePath.toLowerCase().endsWith('.character')) {
+        const name = relativePath.split('/').pop() ?? relativePath;
+        characters.push({ name, relativePath, handle });
+      }
     }
+    return characters.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  } catch (error) {
+    console.warn('[ProjectFolder] Failed to scan characters directory:', error);
+    return [];
   }
-  return characters.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
 
@@ -511,9 +516,7 @@ export async function openProjectFolder(): Promise<ProjectFolderData> {
   try {
     const scenesHandle = await getRequiredDirectory(rootHandle, 'scenes');
     const entitiesHandle = await getRequiredDirectory(rootHandle, 'entities');
-    const prefabsHandle = await tryGetDirectory(rootHandle, 'prefabs');
-    const npcsHandle = await tryGetDirectory(rootHandle, 'npcs');
-    const rescanned = await rescanProject(rootHandle, scenesHandle, entitiesHandle, prefabsHandle, npcsHandle);
+    const rescanned = await rescanProject(rootHandle, scenesHandle, entitiesHandle);
     return { rootHandle, scenesHandle, entitiesHandle, ...rescanned };
   } catch (error) {
     await releaseTauriProjectFolder(rootHandle).catch(console.warn);
@@ -525,8 +528,6 @@ export async function rescanProject(
   rootHandle: ProjectDirectoryHandle,
   scenesHandle: ProjectDirectoryHandle,
   entitiesHandle: ProjectDirectoryHandle,
-  prefabsHandle: ProjectDirectoryHandle | null,
-  npcsHandle?: ProjectDirectoryHandle | null,
 ): Promise<{
   prefabsHandle: ProjectDirectoryHandle | null;
   npcsHandle: ProjectDirectoryHandle | null;
@@ -540,8 +541,8 @@ export async function rescanProject(
   prefabThumbnailUrls: Record<string, string>;
   scanIssues: ProjectScanIssue[];
 }> {
-  const resolvedPrefabsHandle = prefabsHandle ?? await tryGetDirectory(rootHandle, 'prefabs');
-  const resolvedNpcsHandle = npcsHandle ?? await tryGetDirectory(rootHandle, 'npcs');
+  const resolvedPrefabsHandle = await tryGetDirectory(rootHandle, 'prefabs');
+  const resolvedNpcsHandle = await tryGetDirectory(rootHandle, 'npcs');
   const scenes = await scanScenes(scenesHandle);
   const prefabs = await scanPrefabs(resolvedPrefabsHandle);
   const characters = await scanCharacters(resolvedNpcsHandle);

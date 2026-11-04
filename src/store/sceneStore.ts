@@ -474,7 +474,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
 
   refreshProject: async () => {
     if (get().projectStatus === 'loading' || get().projectStatus === 'saving') return;
-    const { rootHandle, scenesHandle, entitiesHandle, prefabsHandle, npcsHandle } = get();
+    const { rootHandle, scenesHandle, entitiesHandle } = get();
     if (!rootHandle || !scenesHandle || !entitiesHandle) return;
 
     set({ projectStatus: 'loading', projectError: null });
@@ -484,7 +484,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
       const currentUrls = get().templateImageUrls;
       const currentSprites = get().projectSprites;
       const currentThumbnailUrls = get().prefabThumbnailUrls;
-      rescanned = await rescanProject(rootHandle, scenesHandle, entitiesHandle, prefabsHandle, npcsHandle);
+      rescanned = await rescanProject(rootHandle, scenesHandle, entitiesHandle);
 
       set({
         prefabsHandle: rescanned.prefabsHandle,

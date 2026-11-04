@@ -26,15 +26,13 @@ export function CharacterList() {
         {projectCharacters.map(character => {
           const lastSlash = character.relativePath.lastIndexOf('/');
           const dirPrefix = lastSlash !== -1 ? character.relativePath.slice(0, lastSlash + 1) : '/';
-          const cleanName = character.name.endsWith('.character')
-            ? character.name.slice(0, -10)
-            : character.name;
+          const cleanName = character.name.replace(/\.character$/i, '') || character.name;
 
           return (
             <div
               key={character.relativePath}
               title={`npcs/${character.relativePath}`}
-              className="project-resource-card flex min-w-0 items-center gap-2 rounded border border-gray-800 bg-gray-800/40 px-2.5 py-2 text-left text-gray-200 select-none cursor-default"
+              className="project-resource-card project-resource-card-static flex min-w-0 items-center gap-2 rounded border border-gray-800 bg-gray-800/40 px-2.5 py-2 text-left text-gray-200 select-none cursor-default"
             >
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-amber-600/40 bg-amber-950/30">
                 <span className="font-mono text-xs font-bold text-amber-400 select-none">C</span>

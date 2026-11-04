@@ -277,6 +277,58 @@ describe('project loading', () => {
     expect(useSceneStore.getState().projectStatus).toBe('ready');
   });
 
+  it('refreshes gracefully when npcs directory is deleted after opening project', async () => {
+    const sceneFile = textFile('first.esc', async () => '<Ethanon><EntitiesInScene /></Ethanon>');
+    const charFile = textFile('knight.character', async () => '');
+    const scenesHandle = {
+      entries: async function* () { yield ['first.esc', sceneFile] as const; },
+    } as ProjectFolderData['scenesHandle'];
+    const entitiesHandle = {
+      entries: async function* () {},
+    } as ProjectFolderData['entitiesHandle'];
+    const npcsHandle = {
+      getDirectoryHandle: async () => { throw new Error('Not found'); },
+      entries: async function* () { yield ['knight.character', charFile] as const; },
+    } as ProjectFolderData['npcsHandle'];
+    let npcsExist = true;
+    const rootHandle = {
+      name: 'delete-test-project',
+      getDirectoryHandle: async (name: string) => {
+        if (name === 'scenes') return scenesHandle;
+        if (name === 'entities') return entitiesHandle;
+        if (name === 'npcs' && npcsExist) return npcsHandle;
+        throw new Error('Not found');
+      },
+      entries: async function* () {
+        yield ['scenes', scenesHandle] as const;
+        yield ['entities', entitiesHandle] as const;
+      },
+    } as unknown as ProjectFolderData['rootHandle'];
+
+    mockedOpenProjectFolder.mockResolvedValue({
+      ...project(async () => '<Ethanon><EntitiesInScene /></Ethanon>'),
+      rootHandle,
+      scenesHandle,
+      entitiesHandle,
+      npcsHandle,
+      characters: [{ name: 'knight.character', relativePath: 'knight.character', handle: charFile }],
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    await useSceneStore.getState().openProject();
+    expect(useSceneStore.getState().npcsHandle).toBe(npcsHandle);
+    expect(useSceneStore.getState().projectCharacters.length).toBe(1);
+
+    // Now delete npcs directory outside
+    npcsExist = false;
+    await useSceneStore.getState().refreshProject();
+
+    expect(useSceneStore.getState().npcsHandle).toBeNull();
+    expect(useSceneStore.getState().projectCharacters).toEqual([]);
+    expect(useSceneStore.getState().projectStatus).toBe('ready');
+  });
+
+
   it('keeps a successfully saved scene active when refreshing the scene list fails', async () => {
     const newHandle = {
       kind: 'file',

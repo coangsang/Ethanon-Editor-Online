@@ -132,4 +132,20 @@ describe('ProjectPanel with Characters tab', () => {
     expect(openProjectSceneSpy).not.toHaveBeenCalled();
     expect(setPlacingPrefabSpy).not.toHaveBeenCalled();
   });
+  it('trims .Character extension case-insensitively and falls back if filename is only .character', () => {
+    const chars: ProjectCharacterEntry[] = [
+      { name: 'Paladin.Character', relativePath: 'Paladin.Character', handle: dummyFileHandle('Paladin.Character') },
+      { name: '.character', relativePath: '.character', handle: dummyFileHandle('.character') },
+    ];
+    useSceneStore.setState({ projectCharacters: chars });
+
+    render(<ProjectPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /Characters/i }));
+
+    expect(screen.getByText('Paladin')).toBeTruthy();
+    expect(screen.getByText('.character')).toBeTruthy();
+
+    const paladinCard = screen.getByTitle('npcs/Paladin.Character');
+    expect(paladinCard.className).toContain('project-resource-card-static');
+  });
 });

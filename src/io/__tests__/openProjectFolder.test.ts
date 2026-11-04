@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { openProjectFolder, rescanProject, type ProjectDirectoryHandle, type ProjectFileHandle } from '../projectFolder';
+import { openProjectFolder, refreshProjectCharacters, rescanProject, type ProjectDirectoryHandle, type ProjectFileHandle } from '../projectFolder';
 
 function textFile(name: string, text: string): ProjectFileHandle {
   const bytes = new TextEncoder().encode(text);
@@ -87,7 +87,7 @@ describe('openProjectFolder', () => {
     expect(opened.prefabsHandle).toBeNull();
 
     prefabsExist = true;
-    const refreshed = await rescanProject(root, scenes, entities, opened.prefabsHandle);
+    const refreshed = await rescanProject(root, scenes, entities);
 
     expect(refreshed.prefabsHandle).toBe(prefabs);
     expect(refreshed.prefabs.map(prefab => prefab.name)).toEqual(['added.prf']);
@@ -130,7 +130,7 @@ describe('openProjectFolder', () => {
     };
     vi.spyOn(URL, 'createObjectURL').mockImplementation(file => `blob:${(file as File).name}`);
 
-    const scanned = await rescanProject(root, scenes, entities, null);
+    const scanned = await rescanProject(root, scenes, entities);
 
     expect(scanned.templateImageUrls['a/shared.png']).toBe('blob:a/shared.png');
     expect(scanned.templateImageUrls['b/shared.png']).toBe('blob:b/shared.png');
@@ -242,9 +242,66 @@ describe('openProjectFolder', () => {
     expect(opened.characters).toEqual([]);
 
     npcsExist = true;
-    const refreshed = await rescanProject(root, scenes, entities, opened.prefabsHandle, opened.npcsHandle);
+    const refreshed = await rescanProject(root, scenes, entities);
 
     expect(refreshed.npcsHandle).toBe(npcs);
     expect(refreshed.characters.map(c => c.name)).toEqual(['warrior.character']);
+  });
+  it('refreshes characters via refreshProjectCharacters with valid handle and null handle', async () => {
+    const emptyDir = (name: string): ProjectDirectoryHandle => ({
+      kind: 'directory',
+      name,
+      getDirectoryHandle: async () => { throw new Error('Not found'); },
+      getFileHandle: async () => { throw new Error('Not found'); },
+      entries: async function* () {},
+    });
+    const charFile = textFile('archer.character', '');
+    const npcs: ProjectDirectoryHandle = {
+      ...emptyDir('npcs'),
+      entries: async function* () { yield ['archer.character', charFile] as [string, ProjectFileHandle]; },
+    };
+
+    const fromNull = await refreshProjectCharacters(null);
+    expect(fromNull).toEqual([]);
+
+    const fromHandle = await refreshProjectCharacters(npcs);
+    expect(fromHandle.map(c => c.name)).toEqual(['archer.character']);
+  });
+
+  it('handles scan error gracefully when npcs directory throws during iteration', async () => {
+    const emptyDir = (name: string): ProjectDirectoryHandle => ({
+      kind: 'directory',
+      name,
+      getDirectoryHandle: async () => { throw new Error('Not found'); },
+      getFileHandle: async () => { throw new Error('Not found'); },
+      entries: async function* () {},
+    });
+    const brokenNpcs: ProjectDirectoryHandle = {
+      ...emptyDir('npcs'),
+      entries: async function* () {
+        yield ['dummy', textFile('dummy', '')] as [string, ProjectFileHandle];
+        throw new Error('OS permission denied or directory removed');
+      },
+    };
+    const scenes = emptyDir('scenes');
+    const entities = emptyDir('entities');
+    const root: ProjectDirectoryHandle = {
+      ...emptyDir('project'),
+      getDirectoryHandle: async (name: string) => {
+        if (name === 'scenes') return scenes;
+        if (name === 'entities') return entities;
+        if (name === 'npcs') return brokenNpcs;
+        throw new Error('Not found');
+      },
+      entries: async function* () {
+        yield ['scenes', scenes] as [string, ProjectDirectoryHandle];
+        yield ['entities', entities] as [string, ProjectDirectoryHandle];
+        yield ['npcs', brokenNpcs] as [string, ProjectDirectoryHandle];
+      },
+    };
+
+    const scanned = await rescanProject(root, scenes, entities);
+    expect(scanned.npcsHandle).toBe(brokenNpcs);
+    expect(scanned.characters).toEqual([]);
   });
 });

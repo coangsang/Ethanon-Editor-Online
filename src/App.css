@@ -247,11 +247,17 @@
   color: var(--workspace-text-secondary);
 }
 
-.project-ui .project-resource-card:hover:not(:disabled),
+.project-ui .project-resource-card:hover:not(:disabled):not(.project-resource-card-static),
 .entity-list-ui .entity-resource-card:hover,
 .sprite-list-ui .sprite-resource-card:hover {
   background: var(--workspace-hover);
   border-color: var(--workspace-text-secondary);
+}
+
+
+.project-ui .project-resource-card-static:hover {
+  background: #2b2c2f;
+  border-color: var(--workspace-border);
 }
 
 .project-ui .project-resource-card:disabled {

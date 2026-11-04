@@ -63,7 +63,7 @@ describe('project text decoding', () => {
     const root = directory('project');
     const scenes = directory('scenes');
 
-    const scanned = await rescanProject(root, scenes, entities, null);
+    const scanned = await rescanProject(root, scenes, entities);
 
     expect(scanned.templates.utf8).toMatchObject({
       spriteFile: 'legacy.png',
