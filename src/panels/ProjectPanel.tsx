@@ -3,10 +3,11 @@ import { Icon } from '../components/Icon';
 import { useSceneStore } from '../store/sceneStore';
 import { EntityList } from './EntityList';
 import { SpriteList } from './SpriteList';
+import { CharacterList } from './CharacterList';
 
 const ACTIVE_PROJECT_ITEM_KEY = 'ethanon_project_active_item';
 
-type ProjectItem = 'scenes' | 'entities' | 'sprites' | 'prefabs';
+type ProjectItem = 'scenes' | 'entities' | 'sprites' | 'prefabs' | 'characters';
 
 interface ProjectPanelProps {
   onToggleCollapse?: () => void;
@@ -14,7 +15,7 @@ interface ProjectPanelProps {
 
 function getSavedProjectItem(): ProjectItem {
   const saved = localStorage.getItem(ACTIVE_PROJECT_ITEM_KEY);
-  return saved === 'scenes' || saved === 'entities' || saved === 'sprites' || saved === 'prefabs' ? saved : 'entities';
+  return saved === 'scenes' || saved === 'entities' || saved === 'sprites' || saved === 'prefabs' || saved === 'characters' ? saved : 'entities';
 }
 
 function ProjectTab({
@@ -213,6 +214,7 @@ export function ProjectPanel({ onToggleCollapse }: ProjectPanelProps) {
   const refreshProject = useSceneStore(s => s.refreshProject);
   const projectScenes = useSceneStore(s => s.projectScenes);
   const projectPrefabs = useSceneStore(s => s.projectPrefabs);
+  const projectCharacters = useSceneStore(s => s.projectCharacters);
   const templates = useSceneStore(s => s.templates);
   const projectSprites = useSceneStore(s => s.projectSprites);
   const activeSceneName = useSceneStore(s => s.activeSceneName);
@@ -267,6 +269,13 @@ export function ProjectPanel({ onToggleCollapse }: ProjectPanelProps) {
               activeItem={activeItem}
               label="Entities"
               count={Object.keys(templates).length}
+              onSelect={handleSelectItem}
+            />
+            <ProjectTab
+              item="characters"
+              activeItem={activeItem}
+              label="Characters"
+              count={projectCharacters.length}
               onSelect={handleSelectItem}
             />
             <ProjectTab
@@ -327,6 +336,8 @@ export function ProjectPanel({ onToggleCollapse }: ProjectPanelProps) {
           <SpriteList headerMode="embedded" />
         ) : activeItem === 'prefabs' ? (
           <PrefabsView />
+        ) : activeItem === 'characters' ? (
+          <CharacterList />
         ) : (
           <ScenesView />
         )}

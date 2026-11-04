@@ -28,8 +28,10 @@ function project(firstSceneText: () => Promise<string>): ProjectFolderData {
     scenesHandle: {} as ProjectFolderData['scenesHandle'],
     entitiesHandle: {} as ProjectFolderData['entitiesHandle'],
     prefabsHandle: null,
+    npcsHandle: null,
     scenes: [{ name: 'first.esc', handle: textFile('first.esc', firstSceneText) }],
     prefabs: [],
+    characters: [],
     templates: {},
     templateImageUrls: { 'new.png': 'blob:new-image' },
     templateAtlases: {},
@@ -52,6 +54,8 @@ describe('project loading', () => {
       templateImageUrls: { 'old.png': 'blob:old-image' },
       projectSprites: [{ name: 'old.png', relativePath: 'old.png', url: 'blob:old-image', hasAtlas: false, usedByTemplates: [] }],
       prefabThumbnailUrls: { 'old.prf': 'blob:old-thumbnail' },
+      npcsHandle: null,
+      projectCharacters: [],
     });
   });
 
@@ -200,6 +204,76 @@ describe('project loading', () => {
 
     expect(useSceneStore.getState().prefabsHandle).toBe(prefabsHandle);
     expect(useSceneStore.getState().projectPrefabs.map(prefab => prefab.name)).toEqual(['added.prf']);
+    expect(useSceneStore.getState().projectStatus).toBe('ready');
+  });
+
+  it('stores characters and npcsHandle when project is opened', async () => {
+    const dummyCharHandle = textFile('boss.character', async () => '');
+    const npcsHandle = { kind: 'directory', name: 'npcs' } as unknown as ProjectFolderData['npcsHandle'];
+    mockedOpenProjectFolder.mockResolvedValue({
+      ...project(async () => '<Ethanon><EntitiesInScene /></Ethanon>'),
+      npcsHandle,
+      characters: [
+        { name: 'boss.character', relativePath: 'bosses/boss.character', handle: dummyCharHandle },
+      ],
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    await useSceneStore.getState().openProject();
+
+    expect(useSceneStore.getState().npcsHandle).toBe(npcsHandle);
+    expect(useSceneStore.getState().projectCharacters).toEqual([
+      { name: 'boss.character', relativePath: 'bosses/boss.character', handle: dummyCharHandle },
+    ]);
+  });
+
+  it('refreshes characters created after opening a project without an npcs directory', async () => {
+    const sceneFile = textFile('first.esc', async () => '<Ethanon><EntitiesInScene /></Ethanon>');
+    const charFile = textFile('knight.character', async () => '');
+    const scenesHandle = {
+      entries: async function* () { yield ['first.esc', sceneFile] as const; },
+    } as ProjectFolderData['scenesHandle'];
+    const entitiesHandle = {
+      entries: async function* () {},
+    } as ProjectFolderData['entitiesHandle'];
+    const npcsHandle = {
+      getDirectoryHandle: async () => { throw new Error('Not found'); },
+      entries: async function* () { yield ['knight.character', charFile] as const; },
+    } as ProjectFolderData['npcsHandle'];
+    let npcsExist = false;
+    const rootHandle = {
+      name: 'new-project',
+      getDirectoryHandle: async (name: string) => {
+        if (name === 'scenes') return scenesHandle;
+        if (name === 'entities') return entitiesHandle;
+        if (name === 'npcs' && npcsExist) return npcsHandle;
+        throw new Error('Not found');
+      },
+      entries: async function* () {
+        yield ['scenes', scenesHandle] as const;
+        yield ['entities', entitiesHandle] as const;
+      },
+    } as unknown as ProjectFolderData['rootHandle'];
+
+    mockedOpenProjectFolder.mockResolvedValue({
+      ...project(async () => '<Ethanon><EntitiesInScene /></Ethanon>'),
+      rootHandle,
+      scenesHandle,
+      entitiesHandle,
+      npcsHandle: null,
+      characters: [],
+    });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    await useSceneStore.getState().openProject();
+    expect(useSceneStore.getState().npcsHandle).toBeNull();
+    expect(useSceneStore.getState().projectCharacters).toEqual([]);
+
+    npcsExist = true;
+    await useSceneStore.getState().refreshProject();
+
+    expect(useSceneStore.getState().npcsHandle).toBe(npcsHandle);
+    expect(useSceneStore.getState().projectCharacters.map(c => c.name)).toEqual(['knight.character']);
     expect(useSceneStore.getState().projectStatus).toBe('ready');
   });
 

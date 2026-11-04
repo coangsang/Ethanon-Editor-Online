@@ -136,4 +136,115 @@ describe('openProjectFolder', () => {
     expect(scanned.templateImageUrls['b/shared.png']).toBe('blob:b/shared.png');
     expect(scanned.templateImageUrls['shared.png']).toBe('blob:b/shared.png');
   });
+
+  it('recursively scans npcs, filters out non-character files, preserves duplicate basenames in different folders, and sorts stably', async () => {
+    const emptyDirectory = (name: string): ProjectDirectoryHandle => ({
+      kind: 'directory',
+      name,
+      getDirectoryHandle: async () => { throw new Error('Not found'); },
+      getFileHandle: async () => { throw new Error('Not found'); },
+      entries: async function* () {},
+    });
+    const scenes = emptyDirectory('scenes');
+    const entities = emptyDirectory('entities');
+
+    const alliesDir: ProjectDirectoryHandle = {
+      ...emptyDirectory('allies'),
+      entries: async function* () {
+        yield ['king.character', textFile('king.character', '')] as [string, ProjectFileHandle];
+        yield ['companion.character', textFile('companion.character', '')] as [string, ProjectFileHandle];
+        yield ['allies.list', textFile('allies.list', '')] as [string, ProjectFileHandle];
+      },
+    };
+
+    const bossesDir: ProjectDirectoryHandle = {
+      ...emptyDirectory('bosses'),
+      entries: async function* () {
+        yield ['king.character', textFile('king.character', '')] as [string, ProjectFileHandle];
+        yield ['evil-warlock.character', textFile('evil-warlock.character', '')] as [string, ProjectFileHandle];
+        yield ['checksum.hash', textFile('checksum.hash', '')] as [string, ProjectFileHandle];
+      },
+    };
+
+    const npcsDir: ProjectDirectoryHandle = {
+      ...emptyDirectory('npcs'),
+      entries: async function* () {
+        yield ['allies', alliesDir] as [string, ProjectDirectoryHandle];
+        yield ['bosses', bossesDir] as [string, ProjectDirectoryHandle];
+        yield ['hero.character', textFile('hero.character', '')] as [string, ProjectFileHandle];
+        yield ['npcs.list0', textFile('npcs.list0', '')] as [string, ProjectFileHandle];
+        yield ['npcs.list1', textFile('npcs.list1', '')] as [string, ProjectFileHandle];
+      },
+    };
+
+    const root: ProjectDirectoryHandle = {
+      ...emptyDirectory('project'),
+      getDirectoryHandle: async (name: string) => {
+        if (name === 'scenes') return scenes;
+        if (name === 'entities') return entities;
+        if (name === 'npcs') return npcsDir;
+        throw new Error('Not found');
+      },
+      entries: async function* () {
+        yield ['scenes', scenes] as [string, ProjectDirectoryHandle];
+        yield ['entities', entities] as [string, ProjectDirectoryHandle];
+        yield ['npcs', npcsDir] as [string, ProjectDirectoryHandle];
+      },
+    };
+    vi.stubGlobal('window', { showDirectoryPicker: async () => root });
+
+    const loaded = await openProjectFolder();
+
+    expect(loaded.npcsHandle).toBe(npcsDir);
+    expect(loaded.characters.map(c => ({ name: c.name, relativePath: c.relativePath }))).toEqual([
+      { name: 'companion.character', relativePath: 'allies/companion.character' },
+      { name: 'king.character', relativePath: 'allies/king.character' },
+      { name: 'evil-warlock.character', relativePath: 'bosses/evil-warlock.character' },
+      { name: 'king.character', relativePath: 'bosses/king.character' },
+      { name: 'hero.character', relativePath: 'hero.character' },
+    ]);
+  });
+
+  it('detects npcs directory added after opening a project without it', async () => {
+    const emptyDirectory = (name: string): ProjectDirectoryHandle => ({
+      kind: 'directory',
+      name,
+      getDirectoryHandle: async () => { throw new Error('Not found'); },
+      getFileHandle: async () => { throw new Error('Not found'); },
+      entries: async function* () {},
+    });
+    const scenes = emptyDirectory('scenes');
+    const entities = emptyDirectory('entities');
+    const charFile = textFile('warrior.character', '');
+    const npcs: ProjectDirectoryHandle = {
+      ...emptyDirectory('npcs'),
+      entries: async function* () { yield ['warrior.character', charFile] as [string, ProjectFileHandle]; },
+    };
+    let npcsExist = false;
+    const getDirectoryHandle = vi.fn(async (name: string) => {
+      if (name === 'scenes') return scenes;
+      if (name === 'entities') return entities;
+      if (name === 'npcs' && npcsExist) return npcs;
+      throw new Error('Not found');
+    });
+    const root: ProjectDirectoryHandle = {
+      ...emptyDirectory('project'),
+      getDirectoryHandle,
+      entries: async function* () {
+        yield ['scenes', scenes] as [string, ProjectDirectoryHandle];
+        yield ['entities', entities] as [string, ProjectDirectoryHandle];
+      },
+    };
+    vi.stubGlobal('window', { showDirectoryPicker: async () => root });
+
+    const opened = await openProjectFolder();
+    expect(opened.npcsHandle).toBeNull();
+    expect(opened.characters).toEqual([]);
+
+    npcsExist = true;
+    const refreshed = await rescanProject(root, scenes, entities, opened.prefabsHandle, opened.npcsHandle);
+
+    expect(refreshed.npcsHandle).toBe(npcs);
+    expect(refreshed.characters.map(c => c.name)).toEqual(['warrior.character']);
+  });
 });

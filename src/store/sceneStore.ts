@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { SceneData, SceneProperties, EntityInstance, EntityTemplate, ProjectPrefabEntry, ProjectSpriteItem, SpriteAtlas, PrefabExportOptions } from '../types';
+import type { SceneData, SceneProperties, EntityInstance, EntityTemplate, ProjectCharacterEntry, ProjectPrefabEntry, ProjectSpriteItem, SpriteAtlas, PrefabExportOptions } from '../types';
 import { parseScene, parseEntityTemplate } from '../io/parseScene';
 import { parseTextureAtlas } from '../io/parseTextureAtlas';
 import { serializeScene } from '../io/serializeScene';
@@ -120,8 +120,10 @@ interface SceneStore {
   scenesHandle: ProjectDirectoryHandle | null;
   entitiesHandle: ProjectDirectoryHandle | null;
   prefabsHandle: ProjectDirectoryHandle | null;
+  npcsHandle: ProjectDirectoryHandle | null;
   projectScenes: ProjectSceneEntry[];
   projectPrefabs: ProjectPrefabEntry[];
+  projectCharacters: ProjectCharacterEntry[];
   prefabThumbnailUrls: Record<string, string>;
   activeSceneName: string | null;
   activeSceneHandle: ProjectFileHandle | null;
@@ -257,8 +259,10 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   scenesHandle: null,
   entitiesHandle: null,
   prefabsHandle: null,
+  npcsHandle: null,
   projectScenes: [],
   projectPrefabs: [],
+  projectCharacters: [],
   prefabThumbnailUrls: {},
   projectSprites: [],
   activeSceneName: null,
@@ -421,8 +425,10 @@ export const useSceneStore = create<SceneStore>((set, get) => {
         scenesHandle: project.scenesHandle,
         entitiesHandle: project.entitiesHandle,
         prefabsHandle: project.prefabsHandle,
+        npcsHandle: project.npcsHandle,
         projectScenes: project.scenes,
         projectPrefabs: project.prefabs,
+        projectCharacters: project.characters,
         prefabThumbnailUrls: project.prefabThumbnailUrls,
         activeSceneName: firstScene?.name ?? null,
         activeSceneHandle: firstScene?.handle ?? null,
@@ -468,7 +474,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
 
   refreshProject: async () => {
     if (get().projectStatus === 'loading' || get().projectStatus === 'saving') return;
-    const { rootHandle, scenesHandle, entitiesHandle, prefabsHandle } = get();
+    const { rootHandle, scenesHandle, entitiesHandle, prefabsHandle, npcsHandle } = get();
     if (!rootHandle || !scenesHandle || !entitiesHandle) return;
 
     set({ projectStatus: 'loading', projectError: null });
@@ -478,16 +484,18 @@ export const useSceneStore = create<SceneStore>((set, get) => {
       const currentUrls = get().templateImageUrls;
       const currentSprites = get().projectSprites;
       const currentThumbnailUrls = get().prefabThumbnailUrls;
-      rescanned = await rescanProject(rootHandle, scenesHandle, entitiesHandle, prefabsHandle);
+      rescanned = await rescanProject(rootHandle, scenesHandle, entitiesHandle, prefabsHandle, npcsHandle);
 
       set({
         prefabsHandle: rescanned.prefabsHandle,
+        npcsHandle: rescanned.npcsHandle,
         templates: rescanned.templates,
         templateImageUrls: rescanned.templateImageUrls,
         templateAtlases: rescanned.templateAtlases,
         projectSprites: rescanned.sprites,
         projectScenes: rescanned.scenes,
         projectPrefabs: rescanned.prefabs,
+        projectCharacters: rescanned.characters,
         prefabThumbnailUrls: rescanned.prefabThumbnailUrls,
         projectStatus: 'ready',
         projectError: null,

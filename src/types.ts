@@ -196,6 +196,12 @@ export interface ProjectSceneEntry {
   handle: ProjectFileHandle;
 }
 
+export interface ProjectCharacterEntry {
+  name: string;
+  relativePath: string;
+  handle: ProjectFileHandle;
+}
+
 export interface ProjectPrefabEntry {
   name: string;
   handle: ProjectFileHandle;

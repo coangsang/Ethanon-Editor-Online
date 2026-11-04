@@ -1,4 +1,4 @@
-import type { EntityTemplate, ProjectPrefabEntry, ProjectSpriteItem, SpriteAtlas } from '../types';
+import type { EntityTemplate, ProjectCharacterEntry, ProjectPrefabEntry, ProjectSpriteItem, SpriteAtlas } from '../types';
 import { parseEntityTemplate } from './parseScene';
 import { parsePrefab } from './parsePrefab';
 import { parseTextureAtlas } from './parseTextureAtlas';
@@ -40,8 +40,10 @@ export interface ProjectFolderData {
   scenesHandle: ProjectDirectoryHandle;
   entitiesHandle: ProjectDirectoryHandle;
   prefabsHandle: ProjectDirectoryHandle | null;
+  npcsHandle: ProjectDirectoryHandle | null;
   scenes: ProjectSceneEntry[];
   prefabs: ProjectPrefabEntry[];
+  characters: ProjectCharacterEntry[];
   templates: Record<string, EntityTemplate>;
   templateImageUrls: Record<string, string>;
   templateAtlases: Record<string, SpriteAtlas>;
@@ -142,6 +144,19 @@ async function scanPrefabs(prefabsHandle: ProjectDirectoryHandle | null): Promis
   }
 
   return prefabs.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function scanCharacters(npcsHandle: ProjectDirectoryHandle | null): Promise<ProjectCharacterEntry[]> {
+  if (!npcsHandle) return [];
+  const fileEntries = await collectAllFiles(npcsHandle);
+  const characters: ProjectCharacterEntry[] = [];
+  for (const [relativePath, handle] of fileEntries) {
+    if (relativePath.toLowerCase().endsWith('.character')) {
+      const name = relativePath.split('/').pop() ?? relativePath;
+      characters.push({ name, relativePath, handle });
+    }
+  }
+  return characters.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 }
 
 
@@ -497,7 +512,8 @@ export async function openProjectFolder(): Promise<ProjectFolderData> {
     const scenesHandle = await getRequiredDirectory(rootHandle, 'scenes');
     const entitiesHandle = await getRequiredDirectory(rootHandle, 'entities');
     const prefabsHandle = await tryGetDirectory(rootHandle, 'prefabs');
-    const rescanned = await rescanProject(rootHandle, scenesHandle, entitiesHandle, prefabsHandle);
+    const npcsHandle = await tryGetDirectory(rootHandle, 'npcs');
+    const rescanned = await rescanProject(rootHandle, scenesHandle, entitiesHandle, prefabsHandle, npcsHandle);
     return { rootHandle, scenesHandle, entitiesHandle, ...rescanned };
   } catch (error) {
     await releaseTauriProjectFolder(rootHandle).catch(console.warn);
@@ -510,10 +526,13 @@ export async function rescanProject(
   scenesHandle: ProjectDirectoryHandle,
   entitiesHandle: ProjectDirectoryHandle,
   prefabsHandle: ProjectDirectoryHandle | null,
+  npcsHandle?: ProjectDirectoryHandle | null,
 ): Promise<{
   prefabsHandle: ProjectDirectoryHandle | null;
+  npcsHandle: ProjectDirectoryHandle | null;
   scenes: ProjectSceneEntry[];
   prefabs: ProjectPrefabEntry[];
+  characters: ProjectCharacterEntry[];
   templates: Record<string, EntityTemplate>;
   templateImageUrls: Record<string, string>;
   templateAtlases: Record<string, SpriteAtlas>;
@@ -522,8 +541,10 @@ export async function rescanProject(
   scanIssues: ProjectScanIssue[];
 }> {
   const resolvedPrefabsHandle = prefabsHandle ?? await tryGetDirectory(rootHandle, 'prefabs');
+  const resolvedNpcsHandle = npcsHandle ?? await tryGetDirectory(rootHandle, 'npcs');
   const scenes = await scanScenes(scenesHandle);
   const prefabs = await scanPrefabs(resolvedPrefabsHandle);
+  const characters = await scanCharacters(resolvedNpcsHandle);
   const { templates, templateImageUrls, templateAtlases, sprites, scanIssues } = await scanEntities(entitiesHandle);
   let prefabThumbnailUrls: Record<string, string> = {};
   try {
@@ -541,6 +562,8 @@ export async function rescanProject(
       prefabsHandle: resolvedPrefabsHandle,
       scenes,
       prefabs,
+      characters,
+      npcsHandle: resolvedNpcsHandle,
       templates,
       templateImageUrls,
       templateAtlases,
@@ -558,6 +581,10 @@ export async function rescanProject(
 
 export async function refreshProjectScenes(scenesHandle: ProjectDirectoryHandle): Promise<ProjectSceneEntry[]> {
   return scanScenes(scenesHandle);
+}
+
+export async function refreshProjectCharacters(npcsHandle: ProjectDirectoryHandle | null): Promise<ProjectCharacterEntry[]> {
+  return scanCharacters(npcsHandle);
 }
 
 export async function refreshProjectPrefabs(prefabsHandle: ProjectDirectoryHandle | null): Promise<ProjectPrefabEntry[]> {
