@@ -1,10 +1,13 @@
 import type {
   CollisionCompoundShape,
+  CollisionDiagnostic,
   CollisionJoint,
   CollisionPolygonVertex,
   CollisionShape,
   EntityPhysicsConfig,
 } from "../types";
+
+export type { CollisionDiagnostic };
 
 type RawMap = Record<string, unknown>;
 
@@ -68,38 +71,56 @@ export function parseCollisionEnml(value: unknown): EnmlBlock[] {
   return blocks;
 }
 
-function parsePolygon(
+export function parsePolygon(
   value: unknown,
-  warnings: string[],
-): CollisionPolygonVertex[] {
+  warnings: string[] = [],
+  diagnostics: CollisionDiagnostic[] = [],
+): { vertices: CollisionPolygonVertex[]; diagnostics: CollisionDiagnostic[] } {
   const blocks = parseCollisionEnml(value);
   const vertices: CollisionPolygonVertex[] = [];
-  let valid = true;
-  const vertexBlocks = blocks.filter((block) => /^v\d+$/.test(block.name));
-  for (let index = 0; index < vertexBlocks.length; index++) {
-    const block = vertexBlocks[index];
-    if (block.name !== `v${index}`) {
-      warnings.push(
-        `Polygon vertices must be sequential; expected v${index} but found ${block.name}.`,
-      );
-      valid = false;
+
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index];
+    if (!/^v\d+$/.test(block.name)) {
+      warnings.push(`Polygon vertex name "${block.name}" is invalid; expected v${index}.`);
+      diagnostics.push({
+        scope: "polygon",
+        target: `Polygon ${block.name}`,
+        code: "UNEXPECTED_BLOCK",
+        message: `unexpected block "${block.name}" in Polygon`,
+      });
+      continue;
     }
-    const x = Number(block.values.x);
-    const y = Number(block.values.y);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    const rawX = block.values.x;
+    const rawY = block.values.y;
+    const x = Number(rawX);
+    const y = Number(rawY);
+    if (rawX === undefined || rawY === undefined || !Number.isFinite(x) || !Number.isFinite(y)) {
       warnings.push(`Polygon vertex ${block.name} has invalid coordinates.`);
-      valid = false;
+      diagnostics.push({
+        scope: "polygon",
+        target: `Polygon ${block.name}`,
+        code: "INVALID_COORDINATES",
+        message: "coordinates are invalid",
+      });
       continue;
     }
     vertices.push({ name: block.name, x, y });
   }
-  if (vertices.length < 3 || vertices.length > 8) {
-    warnings.push("Polygon must contain 3 to 8 sequential vertices.");
-    valid = false;
+
+  const validation = validatePolygon(vertices);
+  for (const diag of validation.diagnostics) {
+    if (!diagnostics.some(d => d.target === diag.target && d.code === diag.code)) {
+      diagnostics.push(diag);
+    }
   }
-  if (vertices.length >= 3 && !validatePolygonGeometry(vertices, warnings))
-    valid = false;
-  return valid ? vertices : [];
+  for (const err of validation.errors) {
+    if (!warnings.includes(err)) {
+      warnings.push(err);
+    }
+  }
+
+  return { vertices, diagnostics };
 }
 
 function optionalNumber(
@@ -109,21 +130,6 @@ function optionalNumber(
   if (values[key] === undefined) return undefined;
   const parsed = Number(values[key]);
   return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function requiredNumber(
-  values: Record<string, string>,
-  key: string,
-  label: string,
-  warnings: string[],
-): number | null {
-  const raw = values[key];
-  const parsed = Number(raw);
-  if (raw === undefined || raw.trim() === "" || !Number.isFinite(parsed)) {
-    warnings.push(`${label} has invalid ${key}.`);
-    return null;
-  }
-  return parsed;
 }
 
 function inNormalizedRange(value: number) {
@@ -136,34 +142,60 @@ export const MAX_POLYGON_VERTICES = 8;
 export interface PolygonValidationResult {
   valid: boolean;
   errors: string[];
+  diagnostics: CollisionDiagnostic[];
   isConvex: boolean;
   isClockwise: boolean;
 }
 
 export function validatePolygon(
   vertices: CollisionPolygonVertex[],
+  unparsedDiagnostics: CollisionDiagnostic[] = [],
 ): PolygonValidationResult {
   const errors: string[] = [];
-  const addError = (msg: string) => {
+  const diagnostics: CollisionDiagnostic[] = [...unparsedDiagnostics];
+  const addError = (msg: string, diag?: CollisionDiagnostic) => {
     if (!errors.includes(msg)) errors.push(msg);
+    if (diag && !diagnostics.some(d => d.target === diag.target && d.code === diag.code)) {
+      diagnostics.push(diag);
+    }
   };
   const epsilon = 1e-8;
   let isConvex = true;
   let isClockwise = true;
 
   if (vertices.length < MIN_POLYGON_VERTICES || vertices.length > MAX_POLYGON_VERTICES) {
-    addError(`Polygon must contain ${MIN_POLYGON_VERTICES} to ${MAX_POLYGON_VERTICES} sequential vertices.`);
+    addError(`Polygon must contain ${MIN_POLYGON_VERTICES} to ${MAX_POLYGON_VERTICES} sequential vertices.`, {
+      scope: 'polygon',
+      target: 'Polygon',
+      code: 'POLYGON_VERTEX_COUNT',
+      message: `must contain ${MIN_POLYGON_VERTICES} to ${MAX_POLYGON_VERTICES} sequential vertices`,
+    });
   }
 
   for (let index = 0; index < vertices.length; index++) {
     const vertex = vertices[index];
     if (vertex.name !== `v${index}`) {
-      addError(`Polygon vertices must be sequential; expected v${index} but found ${vertex.name}.`);
+      addError(`Polygon vertices must be sequential; expected v${index} but found ${vertex.name}.`, {
+        scope: 'polygon',
+        target: `Polygon ${vertex.name}`,
+        code: 'POLYGON_VERTEX_ORDER',
+        message: `expected v${index} but found ${vertex.name}`,
+      });
     }
     if (!Number.isFinite(vertex.x) || !Number.isFinite(vertex.y)) {
-      addError(`Polygon vertex ${vertex.name} has invalid coordinates.`);
+      addError(`Polygon vertex ${vertex.name} has invalid coordinates.`, {
+        scope: 'polygon',
+        target: `Polygon ${vertex.name}`,
+        code: 'POLYGON_VERTEX_COORDINATES',
+        message: 'coordinates are invalid',
+      });
     } else if (!inNormalizedRange(vertex.x) || !inNormalizedRange(vertex.y)) {
-      addError(`Polygon vertex ${vertex.name} must be within [-1, 1].`);
+      addError(`Polygon vertex ${vertex.name} must be within [-1, 1].`, {
+        scope: 'polygon',
+        target: `Polygon ${vertex.name}`,
+        code: 'POLYGON_VERTEX_RANGE',
+        message: 'coordinates are outside [-1, 1]',
+      });
     }
   }
 
@@ -171,16 +203,18 @@ export function validatePolygon(
   for (const vertex of vertices) {
     const key = `${vertex.x.toFixed(6)}:${vertex.y.toFixed(6)}`;
     if (seen.has(key)) {
-      addError(`Polygon vertex ${vertex.name} duplicates another vertex.`);
+      addError(`Polygon vertex ${vertex.name} duplicates another vertex.`, {
+        scope: 'polygon',
+        target: `Polygon ${vertex.name}`,
+        code: 'POLYGON_VERTEX_DUPLICATE',
+        message: 'duplicates another vertex',
+      });
     }
     seen.add(key);
   }
 
   if (vertices.length >= 3) {
     // 1. Overall winding order using Shoelace formula (signed area)
-    // In screen coordinates (Y grows down):
-    // Shoelace area = 0.5 * sum(x_i * y_{i+1} - x_{i+1} * y_i)
-    // Positive area indicates clockwise winding.
     let signedArea = 0;
     for (let index = 0; index < vertices.length; index++) {
       const cur = vertices[index];
@@ -188,7 +222,12 @@ export function validatePolygon(
       signedArea += cur.x * next.y - next.x * cur.y;
     }
     if (signedArea < 0) {
-      addError("Polygon vertices must use clockwise screen-space winding.");
+      addError("Polygon vertices must use clockwise screen-space winding.", {
+        scope: 'polygon',
+        target: 'Polygon',
+        code: 'POLYGON_WINDING',
+        message: 'vertices must use clockwise screen-space winding.',
+      });
       isClockwise = false;
     }
 
@@ -211,7 +250,12 @@ export function validatePolygon(
       }
       const cross = abX * bcY - abY * bcX;
       if (Math.abs(cross) <= epsilon) {
-        addError("Polygon must not contain three consecutive collinear vertices.");
+        addError("Polygon must not contain three consecutive collinear vertices.", {
+          scope: 'polygon',
+          target: 'Polygon',
+          code: 'POLYGON_COLLINEAR',
+          message: 'must not contain three consecutive collinear vertices',
+        });
         isConvex = false;
         continue;
       }
@@ -219,7 +263,12 @@ export function validatePolygon(
       if (windingSign === 0) {
         windingSign = sign;
       } else if (windingSign !== sign) {
-        addError("Polygon must be convex.");
+        addError("Polygon must be convex.", {
+          scope: 'polygon',
+          target: 'Polygon',
+          code: 'POLYGON_NOT_CONVEX',
+          message: 'must be convex',
+        });
         isConvex = false;
       }
     }
@@ -229,57 +278,266 @@ export function validatePolygon(
   }
 
   return {
-    valid: errors.length === 0,
+    valid: diagnostics.length === 0,
     errors,
+    diagnostics,
     isConvex,
     isClockwise,
   };
 }
 
+export interface CompoundValidationResult {
+  valid: boolean;
+  errors: string[];
+  diagnostics: CollisionDiagnostic[];
+}
+
+export function validateCompound(
+  compound: CollisionCompoundShape[],
+  unparsedDiagnostics: CollisionDiagnostic[] = [],
+): CompoundValidationResult {
+  const errors: string[] = [];
+  const diagnostics: CollisionDiagnostic[] = [...unparsedDiagnostics];
+  const addError = (msg: string, diag?: CollisionDiagnostic) => {
+    if (!errors.includes(msg)) errors.push(msg);
+    if (diag && !diagnostics.some(d => d.target === diag.target && d.code === diag.code)) {
+      diagnostics.push(diag);
+    }
+  };
+
+  if (compound.length === 0) {
+    addError("Compound collision has no child shapes.", {
+      scope: 'compound',
+      target: 'Compound',
+      code: 'COMPOUND_EMPTY',
+      message: 'must contain at least 1 child shape',
+    });
+  } else if (compound.length > MAX_COMPOUND_SUB_SHAPES) {
+    addError(`Compound must contain at most ${MAX_COMPOUND_SUB_SHAPES} child shapes.`, {
+      scope: 'compound',
+      target: 'Compound',
+      code: 'COMPOUND_MAX_COUNT',
+      message: `maximum ${MAX_COMPOUND_SUB_SHAPES} child shapes allowed`,
+    });
+  }
+
+  for (const item of compound) {
+    const target = `Compound ${item.name}`;
+    if (!Number.isFinite(item.posX) || !Number.isFinite(item.posY)) {
+      addError(`Compound shape "${item.name}" has invalid position.`, {
+        scope: 'compound',
+        target,
+        code: 'INVALID_POSITION',
+        message: 'position coordinates must be finite',
+      });
+    } else if (!inNormalizedRange(item.posX) || !inNormalizedRange(item.posY)) {
+      addError(`Compound shape "${item.name}" position must be within [-1, 1].`, {
+        scope: 'compound',
+        target,
+        code: 'OUT_OF_BOUNDS',
+        message: 'position must be within [-1, 1]',
+      });
+    }
+
+    if (item.shape === 'box') {
+      if (
+        item.sizeX === undefined || item.sizeY === undefined ||
+        !Number.isFinite(item.sizeX) || !Number.isFinite(item.sizeY) ||
+        item.sizeX <= 0 || item.sizeY <= 0
+      ) {
+        addError(`Compound box "${item.name}" has invalid size.`, {
+          scope: 'compound',
+          target,
+          code: 'INVALID_SIZE',
+          message: 'size must be positive and finite',
+        });
+      }
+    } else if (item.shape === 'circle') {
+      if (item.radius === undefined || !Number.isFinite(item.radius) || item.radius <= 0) {
+        addError(`Compound circle "${item.name}" has invalid radius.`, {
+          scope: 'compound',
+          target,
+          code: 'INVALID_RADIUS',
+          message: 'radius must be positive and finite',
+        });
+      }
+    }
+
+    if (item.angle !== undefined && !Number.isFinite(item.angle)) {
+      addError(`Compound shape "${item.name}" has invalid angle.`, {
+        scope: 'compound',
+        target,
+        code: 'INVALID_ANGLE',
+        message: 'angle must be finite',
+      });
+    }
+  }
+
+  return {
+    valid: diagnostics.length === 0,
+    errors,
+    diagnostics,
+  };
+}
+
+export function sortCollisionDiagnostics(diagnostics: CollisionDiagnostic[]): CollisionDiagnostic[] {
+  const seen = new Set<string>();
+  const unique: CollisionDiagnostic[] = [];
+  for (const d of diagnostics) {
+    const key = `${d.target}:::${d.message}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(d);
+    }
+  }
+
+  const getPriority = (d: CollisionDiagnostic) => {
+    if (d.target === 'Collision.Position') return 1;
+    if (d.target === 'Collision.Size') return 2;
+    if (d.target === 'Polygon' || d.target === 'Collision.Polygon') return 3;
+    if (d.target.startsWith('Polygon v')) {
+      const num = parseInt(d.target.replace('Polygon v', ''), 10);
+      return 100 + (isNaN(num) ? 0 : num);
+    }
+    if (d.target === 'Compound' || d.target === 'Collision.Compound') return 200;
+    if (d.target.startsWith('Compound ')) return 300;
+    return 400;
+  };
+
+  return unique.sort((a, b) => {
+    const prioA = getPriority(a);
+    const prioB = getPriority(b);
+    if (prioA !== prioB) return prioA - prioB;
+    return a.target.localeCompare(b.target) || a.message.localeCompare(b.message);
+  });
+}
+
+export function getCollisionDiagnostics(
+  physics: Pick<EntityPhysicsConfig, "shape" | "collision"> & { diagnostics?: CollisionDiagnostic[] },
+): CollisionDiagnostic[] {
+  if (physics.shape === 0) return [];
+  const diagnostics: CollisionDiagnostic[] = [];
+  const { collision } = physics;
+
+  // 1. Position check
+  if (!Number.isFinite(collision.position.x) || !Number.isFinite(collision.position.y) || !Number.isFinite(collision.position.z)) {
+    diagnostics.push({
+      scope: 'collision',
+      target: 'Collision.Position',
+      code: 'INVALID_POSITION',
+      message: 'coordinates must be finite (fallback box cannot be rendered)',
+    });
+  }
+
+  // 2. Size check
+  if (
+    !Number.isFinite(collision.size.x) || !Number.isFinite(collision.size.y) || !Number.isFinite(collision.size.z) ||
+    collision.size.x <= 0 || collision.size.y <= 0 || collision.size.z <= 0
+  ) {
+    diagnostics.push({
+      scope: 'collision',
+      target: 'Collision.Size',
+      code: 'INVALID_SIZE',
+      message: 'dimensions must be positive and finite (fallback box cannot be rendered)',
+    });
+  }
+
+  // 3. Shape-specific check
+  if (physics.shape === 3) {
+    const polyValidation = validatePolygon(collision.polygon);
+    diagnostics.push(...polyValidation.diagnostics);
+  } else if (physics.shape === 4) {
+    const compValidation = validateCompound(collision.compound);
+    diagnostics.push(...compValidation.diagnostics);
+  }
+
+  // 4. Carry over any unparsed or tag missing diagnostics that were stored on physics
+  if (physics.diagnostics) {
+    for (const d of physics.diagnostics) {
+      if (
+        (d.code === 'UNSUPPORTED_SHAPE_TYPE' || d.code === 'UNEXPECTED_BLOCK' || d.code === 'INVALID_COORDINATES' || d.code === 'TAG_MISSING' || d.code === 'INVALID_POSITION' || d.code === 'INVALID_SIZE' || d.code === 'INVALID_RADIUS') &&
+        !diagnostics.some(existing => existing.target === d.target && existing.code === d.code)
+      ) {
+        diagnostics.push(d);
+      }
+    }
+  }
+
+  return sortCollisionDiagnostics(diagnostics);
+}
+
 export function isCollisionGeometryValid(
-  physics: Pick<EntityPhysicsConfig, "shape" | "collision">,
+  physics: Pick<EntityPhysicsConfig, "shape" | "collision"> & { diagnostics?: CollisionDiagnostic[] },
 ): boolean {
-  if (physics.shape === 3) return validatePolygon(physics.collision.polygon).valid;
-  if (physics.shape === 4) return physics.collision.compound.length > 0;
+  if (physics.shape === 0) return true;
+  const { collision } = physics;
+  if (!Number.isFinite(collision.position.x) || !Number.isFinite(collision.position.y) || !Number.isFinite(collision.position.z)) {
+    return false;
+  }
+  if (
+    !Number.isFinite(collision.size.x) || !Number.isFinite(collision.size.y) || !Number.isFinite(collision.size.z) ||
+    collision.size.x <= 0 || collision.size.y <= 0 || collision.size.z <= 0
+  ) {
+    return false;
+  }
+  if (physics.diagnostics && physics.diagnostics.length > 0) {
+    return false;
+  }
+  if (physics.shape === 1 || physics.shape === 2) {
+    return true;
+  }
+  if (physics.shape === 3) {
+    return validatePolygon(collision.polygon).valid;
+  }
+  if (physics.shape === 4) {
+    return validateCompound(collision.compound).valid;
+  }
   return true;
 }
 
-function validatePolygonGeometry(
-  vertices: CollisionPolygonVertex[],
-  warnings: string[],
-): boolean {
-  const result = validatePolygon(vertices);
-  for (const err of result.errors) {
-    if (!warnings.includes(err)) {
-      warnings.push(err);
-    }
-  }
-  return result.valid;
-}
-
-function parseCompound(
+export function parseCompound(
   value: unknown,
-  warnings: string[],
-): CollisionCompoundShape[] {
-  return parseCollisionEnml(value).flatMap((block) => {
-    const shape = block.values.shape?.toLowerCase();
-    if (shape !== "box" && shape !== "circle") {
+  warnings: string[] = [],
+  diagnostics: CollisionDiagnostic[] = [],
+): { compound: CollisionCompoundShape[]; diagnostics: CollisionDiagnostic[] } {
+  const compound: CollisionCompoundShape[] = [];
+  const blocks = parseCollisionEnml(value);
+
+  for (const block of blocks) {
+    const rawShape = block.values.shape?.toLowerCase();
+    if (rawShape !== "box" && rawShape !== "circle") {
       warnings.push(
         `Compound shape "${block.name}" has unsupported type "${block.values.shape ?? ""}".`,
       );
-      return [];
+      diagnostics.push({
+        scope: "compound",
+        target: `Compound ${block.name}`,
+        code: "UNSUPPORTED_SHAPE_TYPE",
+        message: `has unsupported type "${block.values.shape ?? ""}"`,
+      });
+      continue;
     }
+
     const label = `Compound shape "${block.name}"`;
-    const posX = requiredNumber(block.values, "posX", label, warnings);
-    const posY = requiredNumber(block.values, "posY", label, warnings);
-    if (posX === null || posY === null) return [];
-    if (!inNormalizedRange(posX) || !inNormalizedRange(posY)) {
-      warnings.push(`${label} position must be within [-1, 1].`);
-      return [];
+    const rawPosX = block.values.posX;
+    const rawPosY = block.values.posY;
+    const posX = Number(rawPosX);
+    const posY = Number(rawPosY);
+
+    if (rawPosX === undefined || rawPosY === undefined || !Number.isFinite(posX) || !Number.isFinite(posY)) {
+      warnings.push(`${label} has invalid position.`);
+      diagnostics.push({
+        scope: "compound",
+        target: `Compound ${block.name}`,
+        code: "INVALID_POSITION",
+        message: "position coordinates must be finite",
+      });
+      continue;
     }
+
     const item: CollisionCompoundShape = {
       name: block.name,
-      shape,
+      shape: rawShape,
       posX,
       posY,
       angle: numberValue(block.values.angle, 0),
@@ -287,27 +545,119 @@ function parseCompound(
       density: optionalNumber(block.values, "density"),
       restitution: optionalNumber(block.values, "restitution"),
     };
-    if (shape === "box") {
-      const sizeX = requiredNumber(block.values, "sizeX", label, warnings);
-      const sizeY = requiredNumber(block.values, "sizeY", label, warnings);
-      if (sizeX === null || sizeY === null || sizeX <= 0 || sizeY <= 0) {
-        if (sizeX !== null && sizeY !== null)
-          warnings.push(`Compound box "${block.name}" has invalid size.`);
-        return [];
+
+    if (rawShape === "box") {
+      const rawSizeX = block.values.sizeX;
+      const rawSizeY = block.values.sizeY;
+      const sizeX = Number(rawSizeX);
+      const sizeY = Number(rawSizeY);
+      if (rawSizeX === undefined || rawSizeY === undefined || !Number.isFinite(sizeX) || !Number.isFinite(sizeY)) {
+        warnings.push(`Compound box "${block.name}" has invalid size.`);
+        diagnostics.push({
+          scope: "compound",
+          target: `Compound ${block.name}`,
+          code: "INVALID_SIZE",
+          message: "has invalid size",
+        });
+        continue;
       }
       item.sizeX = sizeX;
       item.sizeY = sizeY;
     } else {
-      const radius = requiredNumber(block.values, "radius", label, warnings);
-      if (radius === null || radius <= 0) {
-        if (radius !== null)
-          warnings.push(`Compound circle "${block.name}" has invalid radius.`);
-        return [];
+      const rawRadius = block.values.radius;
+      const radius = Number(rawRadius);
+      if (rawRadius === undefined || !Number.isFinite(radius)) {
+        warnings.push(`Compound circle "${block.name}" has invalid radius.`);
+        diagnostics.push({
+          scope: "compound",
+          target: `Compound ${block.name}`,
+          code: "INVALID_RADIUS",
+          message: "has invalid radius",
+        });
+        continue;
       }
       item.radius = radius;
     }
-    return [item];
-  });
+
+    compound.push(item);
+  }
+
+  const validation = validateCompound(compound);
+  for (const diag of validation.diagnostics) {
+    if (!diagnostics.some(d => d.target === diag.target && d.code === diag.code)) {
+      diagnostics.push(diag);
+    }
+  }
+  for (const err of validation.errors) {
+    if (!warnings.includes(err)) {
+      warnings.push(err);
+    }
+  }
+
+  return { compound, diagnostics };
+}
+
+export function parseCompoundShapes(value: unknown): CollisionCompoundShape[] {
+  const blocks = parseCollisionEnml(value);
+  const items: CollisionCompoundShape[] = [];
+  for (const block of blocks) {
+    const rawShape = block.values.shape?.toLowerCase();
+    if (rawShape !== "box" && rawShape !== "circle") continue;
+    const posX = Number(block.values.posX);
+    const posY = Number(block.values.posY);
+    if (!Number.isFinite(posX) || !Number.isFinite(posY)) continue;
+    const item: CollisionCompoundShape = {
+      name: block.name,
+      shape: rawShape,
+      posX,
+      posY,
+      angle: numberValue(block.values.angle, 0),
+      friction: optionalNumber(block.values, "friction"),
+      density: optionalNumber(block.values, "density"),
+      restitution: optionalNumber(block.values, "restitution"),
+    };
+    if (rawShape === "box") {
+      const sizeX = Number(block.values.sizeX);
+      const sizeY = Number(block.values.sizeY);
+      if (!Number.isFinite(sizeX) || !Number.isFinite(sizeY)) continue;
+      item.sizeX = sizeX;
+      item.sizeY = sizeY;
+    } else {
+      const radius = Number(block.values.radius);
+      if (!Number.isFinite(radius)) continue;
+      item.radius = radius;
+    }
+    items.push(item);
+  }
+  return items;
+}
+
+export function compoundsEqual(
+  a: CollisionCompoundShape[],
+  b: CollisionCompoundShape[],
+): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ai = a[i];
+    const bi = b[i];
+    if (
+      ai.name !== bi.name ||
+      ai.shape !== bi.shape ||
+      Math.abs(ai.posX - bi.posX) > 1e-6 ||
+      Math.abs(ai.posY - bi.posY) > 1e-6 ||
+      Math.abs((ai.sizeX ?? 0) - (bi.sizeX ?? 0)) > 1e-6 ||
+      Math.abs((ai.sizeY ?? 0) - (bi.sizeY ?? 0)) > 1e-6 ||
+      Math.abs((ai.radius ?? 0) - (bi.radius ?? 0)) > 1e-6 ||
+      Math.abs((ai.angle ?? 0) - (bi.angle ?? 0)) > 1e-6 ||
+      ai.friction !== bi.friction ||
+      ai.density !== bi.density ||
+      ai.restitution !== bi.restitution
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function polygonsEqual(
@@ -527,15 +877,22 @@ export function hasPhysicsData(raw: RawMap): boolean {
 
 export function parseEntityPhysics(raw: RawMap): EntityPhysicsConfig {
   const warnings: string[] = [];
+  const diagnostics: CollisionDiagnostic[] = [];
   const rawShape = raw.shape === undefined ? 0 : Number(raw.shape);
   const validShape =
     Number.isInteger(rawShape) && rawShape >= 0 && rawShape <= 4;
   const shape = (validShape ? rawShape : 0) as CollisionShape;
-  if (!validShape)
+  if (!validShape) {
     warnings.push(`Unsupported collision shape value "${String(raw.shape)}".`);
+    diagnostics.push({
+      scope: 'collision',
+      target: 'Collision',
+      code: 'UNSUPPORTED_SHAPE_VALUE',
+      message: `Unsupported collision shape value "${String(raw.shape)}".`,
+    });
+  }
 
   const collision = asMap(raw.Collision);
-  let geometryValid = shape === 0 || collision !== null;
   let posX = 0;
   let posY = 0;
   let posZ = 0;
@@ -548,11 +905,21 @@ export function parseEntityPhysics(raw: RawMap): EntityPhysicsConfig {
   if (shape !== 0) {
     if (!collision) {
       warnings.push("Collision tag missing");
-      geometryValid = false;
+      diagnostics.push({
+        scope: 'collision',
+        target: 'Collision',
+        code: 'TAG_MISSING',
+        message: 'Collision tag missing',
+      });
     } else {
       if (collision.Position === undefined) {
         warnings.push("Collision.Position tag missing");
-        geometryValid = false;
+        diagnostics.push({
+          scope: 'collision',
+          target: 'Collision.Position',
+          code: 'TAG_MISSING',
+          message: 'Collision.Position tag missing',
+        });
       } else {
         const position = asMap(collision.Position);
         const hasValidCoord = (val: unknown): boolean =>
@@ -567,7 +934,12 @@ export function parseEntityPhysics(raw: RawMap): EntityPhysicsConfig {
           !hasValidCoord(position.z)
         ) {
           warnings.push("Collision.Position invalid");
-          geometryValid = false;
+          diagnostics.push({
+            scope: 'collision',
+            target: 'Collision.Position',
+            code: 'INVALID_POSITION',
+            message: 'coordinates must be finite (fallback box cannot be rendered)',
+          });
         }
         if (position) {
           posX = numberValue(position.x, 0);
@@ -578,7 +950,12 @@ export function parseEntityPhysics(raw: RawMap): EntityPhysicsConfig {
 
       if (collision.Size === undefined) {
         warnings.push("Collision.Size tag missing");
-        geometryValid = false;
+        diagnostics.push({
+          scope: 'collision',
+          target: 'Collision.Size',
+          code: 'TAG_MISSING',
+          message: 'Collision.Size tag missing',
+        });
       } else {
         const size = asMap(collision.Size);
         const hasValidDimension = (val: unknown): boolean =>
@@ -594,7 +971,12 @@ export function parseEntityPhysics(raw: RawMap): EntityPhysicsConfig {
           !hasValidDimension(size.z)
         ) {
           warnings.push("Collision.Size invalid");
-          geometryValid = false;
+          diagnostics.push({
+            scope: 'collision',
+            target: 'Collision.Size',
+            code: 'INVALID_SIZE',
+            message: 'dimensions must be positive and finite (fallback box cannot be rendered)',
+          });
         }
         if (size) {
           sizeX = numberValue(size.x, 0);
@@ -606,23 +988,30 @@ export function parseEntityPhysics(raw: RawMap): EntityPhysicsConfig {
       if (shape === 3) {
         if (collision.Polygon === undefined) {
           warnings.push("Collision.Polygon tag missing");
-          geometryValid = false;
+          diagnostics.push({
+            scope: 'polygon',
+            target: 'Polygon',
+            code: 'TAG_MISSING',
+            message: 'Polygon tag missing',
+          });
         } else {
-          polygon = parsePolygon(collision.Polygon, warnings);
-          if (polygon.length === 0) geometryValid = false;
+          const res = parsePolygon(collision.Polygon, warnings, diagnostics);
+          polygon = res.vertices;
         }
       }
 
       if (shape === 4) {
         if (collision.Compound === undefined) {
           warnings.push("Collision.Compound tag missing");
-          geometryValid = false;
+          diagnostics.push({
+            scope: 'compound',
+            target: 'Compound',
+            code: 'TAG_MISSING',
+            message: 'Compound tag missing',
+          });
         } else {
-          compound = parseCompound(collision.Compound, warnings);
-          if (compound.length === 0) {
-            warnings.push("Compound collision has no valid child shapes.");
-            geometryValid = false;
-          }
+          const res = parseCompound(collision.Compound, warnings, diagnostics);
+          compound = res.compound;
         }
       }
 
@@ -643,6 +1032,8 @@ export function parseEntityPhysics(raw: RawMap): EntityPhysicsConfig {
     }
     joints = parseJoints(collision.Joints, warnings);
   }
+
+  const geometryValid = shape === 0 ? true : (diagnostics.length === 0);
 
   return {
     shape,
@@ -667,6 +1058,7 @@ export function parseEntityPhysics(raw: RawMap): EntityPhysicsConfig {
       joints,
     },
     warnings,
+    diagnostics,
   };
 }
 

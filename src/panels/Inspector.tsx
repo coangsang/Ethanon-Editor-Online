@@ -4,7 +4,13 @@ import './Inspector.css';
 import type { CollisionCompoundShape, CollisionPolygonVertex, CollisionShape, CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityPhysicsConfig, EntityTemplate, SpriteAtlas } from '../types';
 import { useSceneStore } from '../store/sceneStore';
 import { applyPhysicsToEntity, createDefaultPhysics, entityHasFileNameTag, getTemplateKey, resolveEntityTemplate, resolveExternalTemplate, unpackEntityInstance } from '../utils/entityTemplate';
-import { createDefaultCompoundSubShape, createDefaultPolygonVertices } from '../utils/collision';
+import {
+  createDefaultCompoundSubShape,
+  createDefaultPolygonVertices,
+  isCollisionGeometryValid,
+  validateCompound,
+  validatePolygon,
+} from '../utils/collision';
 import {
   buildCustomDataRefIndex,
   isBaseDataFieldCompatibleWithType,
@@ -1640,6 +1646,18 @@ export function Inspector() {
         if (newShape === 3 && polygon.length === 0) {
           polygon = createDefaultPolygonVertices();
         }
+        const remainingDiagnostics = (basePhysics.diagnostics ?? []).filter(d => {
+          if (newShape === 3 && d.scope === 'compound') return false;
+          if (newShape === 4 && d.scope === 'polygon') return false;
+          return true;
+        });
+        const remainingWarnings = (basePhysics.warnings ?? []).filter(w => {
+          if (newShape === 3 && w.startsWith('Compound')) return false;
+          if (newShape === 4 && w.startsWith('Polygon')) return false;
+          if (newShape !== 3 && w.startsWith('Polygon')) return false;
+          if (newShape !== 4 && w.startsWith('Compound')) return false;
+          return true;
+        });
         const nextPhysics: EntityPhysicsConfig = {
           ...basePhysics,
           shape: newShape,
@@ -1647,8 +1665,18 @@ export function Inspector() {
             ...basePhysics.collision,
             polygon,
             compound,
-            valid: newShape === 4 ? compound.length > 0 : newShape === 3 ? polygon.length >= 3 : true,
+            valid: isCollisionGeometryValid({
+              shape: newShape,
+              collision: {
+                ...basePhysics.collision,
+                polygon,
+                compound,
+              },
+              diagnostics: remainingDiagnostics,
+            }),
           },
+          diagnostics: remainingDiagnostics,
+          warnings: remainingWarnings,
         };
         return applyPhysicsToEntity(currentEntity, nextPhysics);
       }
@@ -1662,14 +1690,23 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(3);
+      const remainingDiagnostics = (basePhysics.diagnostics ?? []).filter(d => d.scope !== 'polygon');
+      const polyValidation = validatePolygon(polygon);
+      const remainingWarnings = (basePhysics.warnings ?? []).filter(w => !w.startsWith('Polygon'));
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         shape: 3,
         collision: {
           ...basePhysics.collision,
           polygon,
-          valid: polygon.length >= 3,
+          valid: isCollisionGeometryValid({
+            shape: 3,
+            collision: { ...basePhysics.collision, polygon },
+            diagnostics: remainingDiagnostics,
+          }),
         },
+        diagnostics: remainingDiagnostics,
+        warnings: polyValidation.valid ? remainingWarnings : [...remainingWarnings, ...polyValidation.errors],
       };
       return applyPhysicsToEntity(currentEntity, nextPhysics);
     });
@@ -1680,14 +1717,23 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(4);
+      const remainingDiagnostics = (basePhysics.diagnostics ?? []).filter(d => d.scope !== 'compound');
+      const compValidation = validateCompound(compound);
+      const remainingWarnings = (basePhysics.warnings ?? []).filter(w => !w.startsWith('Compound'));
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         shape: 4,
         collision: {
           ...basePhysics.collision,
           compound,
-          valid: compound.length > 0,
+          valid: isCollisionGeometryValid({
+            shape: 4,
+            collision: { ...basePhysics.collision, compound },
+            diagnostics: remainingDiagnostics,
+          }),
         },
+        diagnostics: remainingDiagnostics,
+        warnings: compValidation.valid ? remainingWarnings : [...remainingWarnings, ...compValidation.errors],
       };
       return applyPhysicsToEntity(currentEntity, nextPhysics);
     });
@@ -1698,13 +1744,21 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
+      const remainingDiagnostics = (basePhysics.diagnostics ?? []).filter(d => d.target !== 'Collision.Position');
+      const remainingWarnings = (basePhysics.warnings ?? []).filter(w => !w.startsWith('Collision.Position'));
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         collision: {
           ...basePhysics.collision,
           position: pos,
-          valid: true,
+          valid: isCollisionGeometryValid({
+            shape: basePhysics.shape,
+            collision: { ...basePhysics.collision, position: pos },
+            diagnostics: remainingDiagnostics,
+          }),
         },
+        diagnostics: remainingDiagnostics,
+        warnings: remainingWarnings,
       };
       return applyPhysicsToEntity(currentEntity, nextPhysics);
     });
@@ -1715,13 +1769,21 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
+      const remainingDiagnostics = (basePhysics.diagnostics ?? []).filter(d => d.target !== 'Collision.Size');
+      const remainingWarnings = (basePhysics.warnings ?? []).filter(w => !w.startsWith('Collision.Size'));
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         collision: {
           ...basePhysics.collision,
           size,
-          valid: true,
+          valid: isCollisionGeometryValid({
+            shape: basePhysics.shape,
+            collision: { ...basePhysics.collision, size },
+            diagnostics: remainingDiagnostics,
+          }),
         },
+        diagnostics: remainingDiagnostics,
+        warnings: remainingWarnings,
       };
       return applyPhysicsToEntity(currentEntity, nextPhysics);
     });

@@ -237,15 +237,46 @@ describe('Inspector Physics & Collision Sub-sections', () => {
       expect(screen.getByDisplayValue('12')).toBeDefined();
     });
 
-    it('displays geometry warning banner when warnings exist', () => {
+    it('displays non-geometry warning banner when warnings exist and excludes geometry errors from amber banner', () => {
       const template = createBaseTemplate();
       if (!template.physics) throw new Error('Physics required');
-      template.physics.warnings = ['Polygon must be convex.'];
+      template.physics.warnings = [
+        'Joint "arm" anchors must be within [-1, 1].',
+        'Polygon must contain 3 to 8 sequential vertices.',
+      ];
       template.physics.collision.valid = false;
 
       render(<CollisionGeometrySection template={template} />);
 
-      expect(screen.getByText(/• Polygon must be convex./)).toBeDefined();
+      expect(screen.getByText(/• Joint "arm" anchors must be within \[-1, 1\]\./)).toBeDefined();
+      expect(screen.queryByText(/• Polygon must contain 3 to 8 sequential vertices\./)).toBeNull();
+    });
+
+    it('displays invalid collision banner with issues count, can collapse, and renders inputs for invalid parsed data', () => {
+      const template = createBaseTemplate();
+      if (!template.physics) throw new Error('Physics required');
+      template.physics.shape = 3;
+      template.physics.collision.valid = false;
+      template.physics.collision.polygon = [
+        { name: 'v0', x: 0, y: -1 },
+        { name: 'v1', x: 2.5, y: 1 },
+        { name: 'v2', x: -1, y: 1 },
+      ];
+
+      render(<CollisionGeometrySection template={template} source="Inline" />);
+
+      expect(screen.getByText(/Invalid collision · 1 issue/)).toBeDefined();
+      expect(screen.getByText(/Polygon v1:/)).toBeDefined();
+      expect(screen.getByText(/coordinates are outside \[-1, 1\]/)).toBeDefined();
+
+      expect(screen.getByDisplayValue('2.5')).toBeDefined();
+
+      const toggleBtn = screen.getByRole('button', { name: /Invalid collision · 1 issue/ });
+      fireEvent.click(toggleBtn);
+      expect(screen.queryByText(/coordinates are outside \[-1, 1\]/)).toBeNull();
+
+      fireEvent.click(toggleBtn);
+      expect(screen.getByText(/coordinates are outside \[-1, 1\]/)).toBeDefined();
     });
 
     it('allows editing position and size with delta 0.5 and uniform circle lock', () => {

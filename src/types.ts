@@ -81,6 +81,13 @@ export interface ParticleSystemConfig {
 
 export type CollisionShape = 0 | 1 | 2 | 3 | 4;
 
+export interface CollisionDiagnostic {
+  scope: 'collision' | 'polygon' | 'compound';
+  target: string;
+  code: string;
+  message: string;
+}
+
 export interface CollisionMaterial {
   friction?: number;
   density?: number;
@@ -138,6 +145,7 @@ export interface EntityPhysicsConfig {
     joints: CollisionJoint[];
   };
   warnings: string[];
+  diagnostics?: CollisionDiagnostic[];
 }
 
 export interface EntityTemplate {

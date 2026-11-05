@@ -7,15 +7,19 @@ import type {
 } from '../../types';
 import {
   collisionShapeName,
+  compoundsEqual,
   createDefaultCompoundSubShape,
   createDefaultPolygonVertices,
   generateSubShapeName,
+  getCollisionDiagnostics,
   MAX_COMPOUND_SUB_SHAPES,
   MAX_POLYGON_VERTICES,
   MIN_POLYGON_VERTICES,
   POLYGON_PRESETS,
   polygonsEqual,
   type PolygonPreset,
+  sortCollisionDiagnostics,
+  validateCompound,
   validatePolygon,
 } from '../../utils/collision';
 import { Icon } from '../../components/Icon';
@@ -156,31 +160,6 @@ type LocalPolygonVertex = CollisionPolygonVertex & { _key: string };
 const EMPTY_COMPOUND: CollisionCompoundShape[] = [];
 const EMPTY_POLYGON: CollisionPolygonVertex[] = [];
 
-function compoundsEqual(a: CollisionCompoundShape[], b: CollisionCompoundShape[]): boolean {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const ai = a[i];
-    const bi = b[i];
-    if (
-      ai.name !== bi.name ||
-      ai.shape !== bi.shape ||
-      ai.posX !== bi.posX ||
-      ai.posY !== bi.posY ||
-      ai.sizeX !== bi.sizeX ||
-      ai.sizeY !== bi.sizeY ||
-      ai.radius !== bi.radius ||
-      ai.angle !== bi.angle ||
-      ai.friction !== bi.friction ||
-      ai.density !== bi.density ||
-      ai.restitution !== bi.restitution
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
 function toLocalCompound(
   compound: CollisionCompoundShape[],
   existing?: LocalCompoundShape[]
@@ -288,6 +267,12 @@ export function CollisionGeometrySection({
   onRemoveCollision?: () => void;
 }) {
   const [uniformCircleLock, setUniformCircleLock] = useState(true);
+  const [issuesExpanded, setIssuesExpanded] = useState(true);
+  const [prevEntityUid, setPrevEntityUid] = useState(entityUid);
+  if (entityUid !== prevEntityUid) {
+    setPrevEntityUid(entityUid);
+    setIssuesExpanded(true);
+  }
 
   const physics = template.physics;
   const shape = physics?.shape ?? 0;
@@ -649,7 +634,37 @@ export function CollisionGeometrySection({
     onChangeCompound?.(cleanUpdated);
   };
 
-  const polygonValidation = shape === 3 ? validatePolygon(localPolygon) : null;
+  const currentPolygon = stripLocalPolygonKey(localPolygon);
+  const currentCompound = stripLocalKey(localCompound);
+
+  const polygonValidation = shape === 3 ? validatePolygon(currentPolygon) : null;
+  const compoundValidation = shape === 4 ? validateCompound(currentCompound) : null;
+
+  const activeDiagnostics = getCollisionDiagnostics({
+    shape,
+    collision: {
+      valid: collision.valid,
+      position: localPos,
+      size: localSize,
+      polygon: currentPolygon,
+      compound: currentCompound,
+      joints: collision.joints,
+    },
+    diagnostics: physics?.diagnostics,
+  });
+  const sortedDiagnostics = sortCollisionDiagnostics(activeDiagnostics);
+  const isInvalid = shape !== 0 && sortedDiagnostics.length > 0;
+
+  const isGeometryWarning = (w: string) =>
+    w.startsWith('Polygon') ||
+    w.startsWith('Compound') ||
+    w.startsWith('Collision') ||
+    w.startsWith('Unsupported collision shape');
+
+  const diagMessages = new Set(sortedDiagnostics.map(d => `${d.target}: ${d.message}`));
+  const nonDiagnosticWarnings = (physics?.warnings ?? []).filter(
+    w => !isGeometryWarning(w) && !diagMessages.has(w) && !sortedDiagnostics.some(d => w.includes(d.target))
+  );
 
   return (
     <div className="inspector-section px-3 py-2 flex flex-col gap-2 border-b border-gray-700">
@@ -703,6 +718,42 @@ export function CollisionGeometrySection({
           </select>
         )}
       </div>
+
+      {/* Invalid collision banner */}
+      {isInvalid && (
+        <div className="rounded border border-red-800/70 bg-red-950/40 text-[11px] text-red-300 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setIssuesExpanded(!issuesExpanded)}
+            className="w-full px-2.5 py-1.5 flex items-center justify-between font-medium hover:bg-red-900/20 transition-colors text-left"
+            aria-expanded={issuesExpanded}
+          >
+            <div className="flex items-center gap-1.5">
+              <Icon name={issuesExpanded ? 'chevron-down' : 'chevron-right'} size={12} className="text-red-400 shrink-0" />
+              <span className="font-semibold text-red-200">
+                Invalid collision · {sortedDiagnostics.length} {sortedDiagnostics.length === 1 ? 'issue' : 'issues'}
+              </span>
+            </div>
+            <span className="text-[10px] text-red-400 font-mono">
+              {issuesExpanded ? 'Hide' : 'Show'}
+            </span>
+          </button>
+          {issuesExpanded && (
+            <div className="px-2.5 pb-2 pt-1 border-t border-red-800/40 flex flex-col gap-1 text-[10px] text-red-200/90 font-mono">
+              {sortedDiagnostics.map((diag, idx) => {
+                const isGeneralPolygon = diag.target === 'Polygon' && (diag.message.startsWith('vertices') || diag.message.startsWith('must'));
+                return (
+                  <div key={`${diag.target}-${diag.code}-${idx}`} className="flex items-start gap-1">
+                    <span>
+                      • {isGeneralPolygon ? `Polygon ${diag.message}` : <><strong className="text-red-300 font-semibold">{diag.target}:</strong> {diag.message}</>}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {shape === 0 && (
         <div className="text-xs text-gray-500 italic py-1">
@@ -815,10 +866,10 @@ export function CollisionGeometrySection({
         </div>
       )}
 
-      {/* Warnings */}
-      {physics && physics.warnings.length > 0 && (
+      {/* Non-geometry warnings (amber) */}
+      {nonDiagnosticWarnings.length > 0 && (
         <div className="rounded border border-amber-800/70 bg-amber-950/30 p-2 text-[10px] text-amber-300">
-          {physics.warnings.map((warning, index) => (
+          {nonDiagnosticWarnings.map((warning, index) => (
             <div key={index}>• {warning}</div>
           ))}
         </div>
@@ -846,7 +897,7 @@ export function CollisionGeometrySection({
                   className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
                     polygonValidation.valid
                       ? 'inspector-data-type-badge'
-                      : 'bg-amber-950/70 text-amber-300 border-amber-800/50'
+                      : 'bg-red-950/70 text-red-400 border-red-800/60'
                   }`}
                   title={polygonValidation.valid ? 'Convex polygon with clockwise winding' : polygonValidation.errors.join(', ')}
                 >
@@ -893,15 +944,6 @@ export function CollisionGeometrySection({
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Validation Errors */}
-          {polygonValidation && !polygonValidation.valid && (
-            <div className="rounded border border-amber-800/70 bg-amber-950/30 p-2 text-[10px] text-amber-300 flex flex-col gap-0.5">
-              {polygonValidation.errors.map((err, idx) => (
-                <div key={idx}>• {err}</div>
-              ))}
             </div>
           )}
 
@@ -1012,6 +1054,18 @@ export function CollisionGeometrySection({
               >
                 {localCompound.length} / {MAX_COMPOUND_SUB_SHAPES}
               </span>
+              {compoundValidation && (
+                <span
+                  className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
+                    compoundValidation.valid
+                      ? 'inspector-data-type-badge'
+                      : 'bg-red-950/70 text-red-400 border-red-800/60'
+                  }`}
+                  title={compoundValidation.valid ? 'Compound shapes valid' : compoundValidation.errors.join(', ')}
+                >
+                  {compoundValidation.valid ? 'Valid' : 'Invalid Geometry'}
+                </span>
+              )}
             </div>
 
             {!isReadOnly && onChangeCompound && (

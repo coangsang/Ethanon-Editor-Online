@@ -202,7 +202,7 @@ describe('collision parsing and resolution', () => {
     expect(parsed.collision.polygon).toHaveLength(8);
   });
 
-  it('rejects malformed polygon geometry instead of rendering a truncated shape', () => {
+  it('preserves parseable polygon vertices even when malformed, concave, or out of range', () => {
     const cases = [
       'v0 { x=-1; y=-1; } v1 { x=1; y=-1; } v2 { x=0; y=1; } v4 { x=0; y=0; }',
       'v0 { x=-2; y=-1; } v1 { x=1; y=-1; } v2 { x=0; y=1; }',
@@ -214,12 +214,14 @@ describe('collision parsing and resolution', () => {
         shape: 3,
         Collision: { Position: { x: 0, y: 0, z: 0 }, Size: { x: 10, y: 10, z: 10 }, Polygon },
       });
-      expect(parsed.collision.polygon).toEqual([]);
+      expect(parsed.collision.polygon.length).toBeGreaterThanOrEqual(3);
+      expect(parsed.collision.valid).toBe(false);
       expect(parsed.warnings.length).toBeGreaterThan(0);
+      expect(parsed.diagnostics && parsed.diagnostics.length > 0).toBe(true);
     }
   });
 
-  it('filters invalid compound children and reports invalid joints', () => {
+  it('keeps compound children with parseable numeric values and reports invalid joints', () => {
     const parsed = parseEntityPhysics({
       shape: 4,
       Collision: {
@@ -232,7 +234,8 @@ describe('collision parsing and resolution', () => {
         Joints: 'revoluteJoint_bad { attachPointAX=2; enableLimit=true; lowerAngle=2; upperAngle=1; }',
       },
     });
-    expect(parsed.collision.compound.map(item => item.name)).toEqual(['good']);
+    expect(parsed.collision.compound.map(item => item.name)).toEqual(['good', 'outside', 'negative']);
+    expect(parsed.collision.valid).toBe(false);
     expect(parsed.warnings).toEqual(expect.arrayContaining([
       expect.stringContaining('position'),
       expect.stringContaining('radius'),

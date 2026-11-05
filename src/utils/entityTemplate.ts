@@ -1,8 +1,10 @@
 import type { CollisionShape, EntityInstance, EntityPhysicsConfig, EntityTemplate, InlineEntityTemplate } from '../types';
 import {
+  compoundsEqual,
   createDefaultCompoundSubShape,
   createDefaultPolygonVertices,
   isCollisionGeometryValid,
+  parseCompoundShapes,
   parsePolygonVertices,
   polygonsEqual,
   serializeCompoundEnml,
@@ -302,11 +304,19 @@ export function applyPhysicsToEntity(
   } else {
     polygonValue = rawExistingPolygon;
   }
-  const compoundValue = physics.shape === 4
-    ? (physics.collision.compound.length > 0
-        ? serializeCompoundEnml(physics.collision.compound)
-        : (typeof existingCollision.Compound === 'string' ? existingCollision.Compound : ''))
-    : (typeof existingCollision.Compound === 'string' ? existingCollision.Compound : undefined);
+  const rawExistingCompound = typeof existingCollision.Compound === 'string' ? existingCollision.Compound : undefined;
+  let compoundValue: string | undefined;
+  if (physics.shape === 4) {
+    if (rawExistingCompound !== undefined && compoundsEqual(parseCompoundShapes(rawExistingCompound), physics.collision.compound)) {
+      compoundValue = rawExistingCompound;
+    } else if (physics.collision.compound.length > 0) {
+      compoundValue = serializeCompoundEnml(physics.collision.compound);
+    } else {
+      compoundValue = rawExistingCompound ?? '';
+    }
+  } else {
+    compoundValue = rawExistingCompound;
+  }
 
   inlineEntityData.shape = String(physics.shape);
   inlineEntityData.static = physics.static ? '1' : '0';

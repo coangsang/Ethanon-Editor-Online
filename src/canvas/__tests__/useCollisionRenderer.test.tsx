@@ -58,8 +58,8 @@ function fixture() {
       inlineEntityData: { FileName: 'box.ent' },
     }],
   };
-  const unselectedGraphics = { clear: vi.fn(), poly: vi.fn(), circle: vi.fn(), stroke: vi.fn(), position: { set: vi.fn() }, scale: { set: vi.fn() } };
-  const selectedGraphics = { clear: vi.fn(), poly: vi.fn(), circle: vi.fn(), stroke: vi.fn(), position: { set: vi.fn() }, scale: { set: vi.fn() } };
+  const unselectedGraphics = { clear: vi.fn(), poly: vi.fn(), circle: vi.fn(), stroke: vi.fn(), fill: vi.fn(), position: { set: vi.fn() }, scale: { set: vi.fn() } };
+  const selectedGraphics = { clear: vi.fn(), poly: vi.fn(), circle: vi.fn(), stroke: vi.fn(), fill: vi.fn(), position: { set: vi.fn() }, scale: { set: vi.fn() } };
   const refs = {
     collisionGraphicsRef: { current: unselectedGraphics },
     selectedCollisionGraphicsRef: { current: selectedGraphics },
@@ -331,6 +331,8 @@ describe('useCollisionRenderer', () => {
     flushAnimationFrames();
     expect(data.graphics.poly).toHaveBeenCalled();
     data.graphics.poly.mockClear();
+    data.graphics.stroke.mockClear();
+    data.graphics.fill.mockClear();
 
     act(() => transformEventBus.emit([{
       uid: 'uid',
@@ -344,7 +346,61 @@ describe('useCollisionRenderer', () => {
     }]));
     flushAnimationFrames();
 
-    expect(data.graphics.poly).not.toHaveBeenCalled();
+    expect(data.graphics.poly).toHaveBeenCalled();
+    expect(data.graphics.fill).toHaveBeenCalledWith(expect.objectContaining({
+      color: 0xef4444,
+      alpha: 0.3,
+    }));
+    expect(data.graphics.stroke).toHaveBeenCalledWith(expect.objectContaining({
+      color: 0xef4444,
+      alpha: 0.9,
+    }));
+  });
+
+  it('renders invalid selection in red with fill even when showCollisions is false', () => {
+    const data = fixture();
+    const invalidTemplate: EntityTemplate = {
+      ...data.templates.box,
+      physics: {
+        ...data.templates.box.physics!,
+        shape: 3,
+        collision: {
+          ...data.templates.box.physics!.collision,
+          valid: false,
+          polygon: [
+            { name: 'v0', x: -0.5, y: -0.5 },
+            { name: 'v1', x: 0, y: 0 },
+            { name: 'v2', x: 0.5, y: -0.5 },
+            { name: 'v3', x: 0.5, y: 0.5 },
+            { name: 'v4', x: -0.5, y: 0.5 },
+          ],
+        },
+      },
+    };
+    renderHook(() => useCollisionRenderer({
+      refs: data.refs,
+      scene: data.scene,
+      templates: { box: invalidTemplate },
+      selectedUIDs: ['uid'],
+      showCollisions: false,
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    }));
+    flushAnimationFrames();
+
+    expect(data.selectedGraphics.poly).toHaveBeenCalled();
+    expect(data.selectedGraphics.fill).toHaveBeenCalledWith(expect.objectContaining({
+      color: 0xef4444,
+      alpha: 0.3,
+    }));
+    expect(data.selectedGraphics.stroke).toHaveBeenCalledWith(expect.objectContaining({
+      color: 0xef4444,
+      alpha: 0.9,
+      width: 2,
+    }));
   });
 
   it('redraws parallax geometry when the camera changes', () => {
