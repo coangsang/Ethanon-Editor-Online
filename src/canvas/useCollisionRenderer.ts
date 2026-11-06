@@ -6,7 +6,12 @@ import {
   type TransformUpdate,
 } from "../store/TransformEventBus";
 import { BucketManager } from "../utils/BucketManager";
-import { isCollisionGeometryValid } from "../utils/collision";
+import {
+  compoundsEqual,
+  filterDiagnosticsForEdit,
+  isCollisionGeometryValid,
+  polygonsEqual,
+} from "../utils/collision";
 import { resolveEntityTemplate } from "../utils/entityTemplate";
 import {
   isPerformanceProfilerEnabled,
@@ -142,21 +147,66 @@ function applyPreview(
     preview.collisionCompound !== undefined
   ) {
     if (nextTemplate.physics) {
+      let remainingDiagnostics = nextTemplate.physics.diagnostics ?? [];
+      const curCollision = nextTemplate.physics.collision;
+
+      if (preview.collisionPos !== undefined) {
+        const hasChanged =
+          preview.collisionPos.x !== curCollision.position.x ||
+          preview.collisionPos.y !== curCollision.position.y ||
+          preview.collisionPos.z !== curCollision.position.z;
+        if (hasChanged) {
+          remainingDiagnostics = filterDiagnosticsForEdit(remainingDiagnostics, { type: 'position' });
+        }
+      }
+
+      if (preview.collisionSize !== undefined) {
+        const hasChanged =
+          preview.collisionSize.x !== curCollision.size.x ||
+          preview.collisionSize.y !== curCollision.size.y ||
+          preview.collisionSize.z !== curCollision.size.z;
+        if (hasChanged) {
+          remainingDiagnostics = filterDiagnosticsForEdit(remainingDiagnostics, { type: 'size' });
+        }
+      }
+
+      if (preview.collisionPolygon !== undefined) {
+        const hasChanged = !polygonsEqual(curCollision.polygon, preview.collisionPolygon);
+        if (hasChanged) {
+          remainingDiagnostics = filterDiagnosticsForEdit(remainingDiagnostics, { type: 'polygon' });
+        }
+      }
+
+      if (preview.collisionCompound !== undefined) {
+        const hasChanged = !compoundsEqual(curCollision.compound, preview.collisionCompound);
+        if (hasChanged) {
+          remainingDiagnostics = filterDiagnosticsForEdit(remainingDiagnostics, { type: 'compound' });
+        }
+      }
+
       const collision = {
-        ...nextTemplate.physics.collision,
+        ...curCollision,
         ...(preview.collisionPos ? { position: preview.collisionPos } : {}),
         ...(preview.collisionSize ? { size: preview.collisionSize } : {}),
         ...(preview.collisionPolygon ? { polygon: preview.collisionPolygon } : {}),
         ...(preview.collisionCompound ? { compound: preview.collisionCompound } : {}),
       };
+
+      const isValid = isCollisionGeometryValid({
+        shape: nextTemplate.physics.shape,
+        collision,
+        diagnostics: remainingDiagnostics,
+      });
+
       nextTemplate = {
         ...nextTemplate,
         physics: {
           ...nextTemplate.physics,
           collision: {
             ...collision,
-            valid: isCollisionGeometryValid({ shape: nextTemplate.physics.shape, collision }),
+            valid: isValid,
           },
+          diagnostics: remainingDiagnostics,
         },
       };
     }

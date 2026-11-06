@@ -577,4 +577,112 @@ describe('useCollisionRenderer', () => {
     expect(data.graphics.clear).toHaveBeenCalledTimes(clearCalls);
     expect(data.graphics.poly).toHaveBeenCalledTimes(polyCalls);
   });
+
+  it('maintains invalid red color during live preview when entity has parser diagnostics, and turns valid when geometry is fixed', () => {
+    const data = fixture();
+    const invalidPhysics: EntityPhysicsConfig = {
+      shape: 4,
+      static: false,
+      sensor: false,
+      bullet: false,
+      fixedRotation: false,
+      friction: 1,
+      density: 1,
+      restitution: 0,
+      gravityScale: 1,
+      collision: {
+        valid: false,
+        position: { x: 0, y: 0, z: 0 },
+        size: { x: 40, y: 40, z: 10 },
+        polygon: [],
+        compound: [
+          { name: 'outside', shape: 'box', posX: 0, posY: 0, sizeX: 1, sizeY: 1 },
+        ],
+        joints: [],
+      },
+      diagnostics: [
+        {
+          scope: 'compound',
+          target: 'Compound bad',
+          code: 'UNSUPPORTED_SHAPE_TYPE',
+          message: 'has unsupported type "capsule"',
+        },
+      ],
+      warnings: ['Compound shape "bad" has unsupported type "capsule".'],
+    };
+
+    const template: EntityTemplate = {
+      name: 'compoundBad',
+      spriteFile: '',
+      spriteCut: { x: 1, y: 1 },
+      type: 'horizontal',
+      pivotAdjust: { x: 0, y: 0 },
+      scale: { x: 1, y: 1 },
+      parallaxIntensity: 1,
+      physics: invalidPhysics,
+    };
+
+    const scene: SceneData = {
+      properties: { ambient: { r: 1, g: 1, b: 1 }, lightIntensity: 1, zAxisDirection: { x: 0, y: 0 }, parallaxIntensity: 0 },
+      entities: [{
+        id: 1,
+        entityName: 'compoundBad',
+        editorEntityUID: 'comp-1',
+        position: { x: 0, y: 0, z: 0 },
+        angle: 0,
+        spriteFrame: 0,
+        hide: false,
+        flipX: false,
+        flipY: false,
+        customData: [],
+        inlineEntityData: { FileName: 'compoundBad.ent' },
+      }],
+    };
+
+    renderHook(() => useCollisionRenderer({
+      refs: data.refs,
+      scene,
+      templates: { compoundBad: template },
+      selectedUIDs: ['comp-1'],
+      showCollisions: true,
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    }));
+    flushAnimationFrames();
+
+    // 1. Initial render has red stroke (0xef4444)
+    expect(data.selectedGraphics.stroke).toHaveBeenLastCalledWith(
+      expect.objectContaining({ color: 0xef4444 }),
+    );
+
+    // 2. Dragging Position (preview) keeps red stroke because compound diagnostic still persists
+    act(() => {
+      transformEventBus.emit([{ uid: 'comp-1', collisionPos: { x: 10, y: 10, z: 0 } }]);
+    });
+    flushAnimationFrames();
+
+    expect(data.selectedGraphics.stroke).toHaveBeenLastCalledWith(
+      expect.objectContaining({ color: 0xef4444 }),
+    );
+
+    // 3. Fixing compound geometry during preview turns stroke green (0x00bb00)
+    act(() => {
+      transformEventBus.emit([
+        {
+          uid: 'comp-1',
+          collisionCompound: [
+            { name: 'fixedBox', shape: 'box', posX: 0, posY: 0, sizeX: 1, sizeY: 1 },
+          ],
+        },
+      ]);
+    });
+    flushAnimationFrames();
+
+    expect(data.selectedGraphics.stroke).toHaveBeenLastCalledWith(
+      expect.objectContaining({ color: 0x00bb00 }),
+    );
+  });
 });

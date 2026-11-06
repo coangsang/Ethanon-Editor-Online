@@ -161,4 +161,195 @@ describe("saving scenes with invalid collision geometry", () => {
     expect(savedXml).toContain("v0");
     expect(useSceneStore.getState().projectError).toBeNull();
   });
+
+  it("restores validity and saves without warning when changing invalid Polygon/Compound to Box or Circle", async () => {
+    const { applyPhysicsToEntity } = await import("../../utils/entityTemplate");
+    const { filterDiagnosticsForEdit, filterWarningsForEdit, isCollisionGeometryValid } = await import("../../utils/collision");
+
+    // 1. Invalid Polygon -> Box (1)
+    useSceneStore.setState({ scene: parseScene(sceneXml(CONCAVE)) });
+    const polyEntity = useSceneStore.getState().scene.entities[0];
+    useSceneStore.getState().queueInspectorEdit(polyEntity.editorEntityUID, "collision", (currentEntity) => {
+      const basePhysics = currentEntity.inlineTemplate!.physics!;
+      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: "shape", newShape: 1 });
+      const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: "shape", newShape: 1 });
+      const nextPhysics = {
+        ...basePhysics,
+        shape: 1 as const,
+        collision: {
+          ...basePhysics.collision,
+          valid: isCollisionGeometryValid({
+            shape: 1,
+            collision: basePhysics.collision,
+            diagnostics: remainingDiagnostics,
+          }),
+        },
+        diagnostics: remainingDiagnostics,
+        warnings: remainingWarnings,
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
+    });
+
+    write.mockClear();
+    await useSceneStore.getState().saveActiveScene();
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(useSceneStore.getState().projectError).toBeNull();
+
+    // 2. Invalid Polygon -> Circle (2)
+    useSceneStore.setState({ scene: parseScene(sceneXml(CONCAVE)) });
+    const polyEntity2 = useSceneStore.getState().scene.entities[0];
+    useSceneStore.getState().queueInspectorEdit(polyEntity2.editorEntityUID, "collision", (currentEntity) => {
+      const basePhysics = currentEntity.inlineTemplate!.physics!;
+      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: "shape", newShape: 2 });
+      const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: "shape", newShape: 2 });
+      const nextPhysics = {
+        ...basePhysics,
+        shape: 2 as const,
+        collision: {
+          ...basePhysics.collision,
+          valid: isCollisionGeometryValid({
+            shape: 2,
+            collision: basePhysics.collision,
+            diagnostics: remainingDiagnostics,
+          }),
+        },
+        diagnostics: remainingDiagnostics,
+        warnings: remainingWarnings,
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics);
+    });
+
+    write.mockClear();
+    await useSceneStore.getState().saveActiveScene();
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(useSceneStore.getState().projectError).toBeNull();
+  });
+
+  it("keeps raw block and invalid state on no-op commit, and replaces raw when geometry is actually edited", async () => {
+    const { applyPhysicsToEntity } = await import("../../utils/entityTemplate");
+    const { compoundsEqual, filterDiagnosticsForEdit, filterWarningsForEdit, isCollisionGeometryValid, validateCompound } = await import("../../utils/collision");
+
+    const rawCompoundXml = `<?xml version="1.0" encoding="utf-8"?>
+<Ethanon>
+  <SceneProperties lightIntensity="2" parallaxIntensity="0"><Ambient r="1" g="1" b="1" /><ZAxisDirection x="0" y="-1" /></SceneProperties>
+  <EntitiesInScene>
+    <Entity id="1" spriteFrame="0">
+      <EntityName>compEntity</EntityName>
+      <Position x="0" y="0" z="0" angle="0" />
+      <Entity shape="4" static="1">
+        <Collision><Position x="0" y="0" z="0" /><Size x="64" y="64" z="64" /><Compound>/* custom comment */ bad { shape=capsule; } outside { shape=box; posX=2.5; posY=0; sizeX=1; sizeY=1; }</Compound></Collision>
+      </Entity>
+    </Entity>
+  </EntitiesInScene>
+</Ethanon>`;
+
+    useSceneStore.setState({ scene: parseScene(rawCompoundXml) });
+    const entity = useSceneStore.getState().scene.entities[0];
+    const initialCompound = entity.inlineTemplate!.physics!.collision.compound;
+
+    // Simulate no-op commit: same compound passed back
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, "collision", (currentEntity) => {
+      const basePhysics = currentEntity.inlineTemplate!.physics!;
+      if (compoundsEqual(basePhysics.collision.compound, initialCompound)) {
+        return currentEntity; // No-op: keep current
+      }
+      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: "compound" });
+      const nextPhysics = {
+        ...basePhysics,
+        shape: 4 as const,
+        collision: {
+          ...basePhysics.collision,
+          compound: initialCompound,
+          valid: isCollisionGeometryValid({
+            shape: 4,
+            collision: { ...basePhysics.collision, compound: initialCompound },
+            diagnostics: remainingDiagnostics,
+          }),
+        },
+        diagnostics: remainingDiagnostics,
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics, { forceSerializeCompound: true });
+    });
+
+    write.mockClear();
+    await useSceneStore.getState().saveActiveScene();
+    expect(write).toHaveBeenCalledTimes(1);
+    const noOpSavedXml = write.mock.calls[0][0] as string;
+    expect(noOpSavedXml).toContain("shape=capsule");
+    expect(noOpSavedXml).toContain("/* custom comment */");
+    expect(useSceneStore.getState().projectError).toBe(
+      "Scene saved, but 1 entity has invalid collision geometry: compEntity.",
+    );
+
+    // Now actual edit: change posX to 0.5 (within [-1, 1] range)
+    const editedCompound = [{ ...initialCompound[0], posX: 0.5 }];
+    useSceneStore.getState().queueInspectorEdit(entity.editorEntityUID, "collision", (currentEntity) => {
+      const basePhysics = currentEntity.inlineTemplate!.physics!;
+      if (compoundsEqual(basePhysics.collision.compound, editedCompound)) {
+        return currentEntity;
+      }
+      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: "compound" });
+      const compValidation = validateCompound(editedCompound);
+      const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: "compound" });
+      const nextPhysics = {
+        ...basePhysics,
+        shape: 4 as const,
+        collision: {
+          ...basePhysics.collision,
+          compound: editedCompound,
+          valid: isCollisionGeometryValid({
+            shape: 4,
+            collision: { ...basePhysics.collision, compound: editedCompound },
+            diagnostics: remainingDiagnostics,
+          }),
+        },
+        diagnostics: remainingDiagnostics,
+        warnings: compValidation.valid ? remainingWarnings : [...remainingWarnings, ...compValidation.errors],
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics, { forceSerializeCompound: true });
+    });
+
+    write.mockClear();
+    await useSceneStore.getState().saveActiveScene();
+    expect(write).toHaveBeenCalledTimes(1);
+    const actualEditXml = write.mock.calls[0][0] as string;
+    expect(actualEditXml).not.toContain("shape=capsule");
+    expect(actualEditXml).not.toContain("/* custom comment */");
+    expect(actualEditXml).toContain("outside");
+    expect(useSceneStore.getState().projectError).toBeNull();
+  });
+
+  it("warns on save for unsupported collision shape and preserves raw data", async () => {
+    const unsupportedShapeXml = `<?xml version="1.0" encoding="utf-8"?>
+<Ethanon>
+  <SceneProperties lightIntensity="2" parallaxIntensity="0"><Ambient r="1" g="1" b="1" /><ZAxisDirection x="0" y="-1" /></SceneProperties>
+  <EntitiesInScene>
+    <Entity id="1" spriteFrame="0">
+      <EntityName>unsuppEntity</EntityName>
+      <Position x="0" y="0" z="0" angle="0" />
+      <Entity shape="5" static="1">
+        <Collision><Position x="10" y="20" z="0" /><Size x="64" y="64" z="64" /></Collision>
+      </Entity>
+    </Entity>
+    <Entity id="2" spriteFrame="0">
+      <EntityName>normalNoCollision</EntityName>
+      <Position x="0" y="0" z="0" angle="0" />
+      <Entity shape="0" static="0" />
+    </Entity>
+  </EntitiesInScene>
+</Ethanon>`;
+
+    useSceneStore.setState({ scene: parseScene(unsupportedShapeXml) });
+    write.mockClear();
+    await useSceneStore.getState().saveActiveScene();
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(useSceneStore.getState().projectError).toBe(
+      "Scene saved, but 1 entity has invalid collision geometry: unsuppEntity.",
+    );
+
+    const savedXml = write.mock.calls[0][0] as string;
+    expect(savedXml).toContain('shape="5"');
+    expect(savedXml).toContain('<Position x="10" y="20" z="0"');
+  });
 });

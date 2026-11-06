@@ -249,7 +249,7 @@ export function createDefaultPhysics(
     restitution: 0,
     gravityScale: 1,
     collision: {
-      valid: shape !== 0,
+      valid: true,
       position: { x: 0, y: 0, z: 0 },
       size: { x: sizeX, y: sizeY, z: sizeZ },
       polygon,
@@ -260,9 +260,15 @@ export function createDefaultPhysics(
   };
 }
 
+export interface ApplyPhysicsOptions {
+  forceSerializePolygon?: boolean;
+  forceSerializeCompound?: boolean;
+}
+
 export function applyPhysicsToEntity(
   entity: EntityInstance,
   physics: EntityPhysicsConfig | null,
+  options?: ApplyPhysicsOptions,
 ): EntityInstance {
   const inlineTemplate = {
     ...(entity.inlineTemplate ?? { name: entity.entityName }),
@@ -294,12 +300,12 @@ export function applyPhysicsToEntity(
   const rawExistingPolygon = typeof existingCollision.Polygon === 'string' ? existingCollision.Polygon : undefined;
   let polygonValue: string | undefined;
   if (physics.shape === 3) {
-    if (rawExistingPolygon !== undefined && polygonsEqual(parsePolygonVertices(rawExistingPolygon), physics.collision.polygon)) {
+    if (!options?.forceSerializePolygon && rawExistingPolygon !== undefined && polygonsEqual(parsePolygonVertices(rawExistingPolygon), physics.collision.polygon)) {
       polygonValue = rawExistingPolygon;
     } else if (physics.collision.polygon.length > 0) {
       polygonValue = serializePolygonEnml(physics.collision.polygon);
     } else {
-      polygonValue = rawExistingPolygon ?? '';
+      polygonValue = options?.forceSerializePolygon ? '' : (rawExistingPolygon ?? '');
     }
   } else {
     polygonValue = rawExistingPolygon;
@@ -307,12 +313,12 @@ export function applyPhysicsToEntity(
   const rawExistingCompound = typeof existingCollision.Compound === 'string' ? existingCollision.Compound : undefined;
   let compoundValue: string | undefined;
   if (physics.shape === 4) {
-    if (rawExistingCompound !== undefined && compoundsEqual(parseCompoundShapes(rawExistingCompound), physics.collision.compound)) {
+    if (!options?.forceSerializeCompound && rawExistingCompound !== undefined && compoundsEqual(parseCompoundShapes(rawExistingCompound), physics.collision.compound)) {
       compoundValue = rawExistingCompound;
     } else if (physics.collision.compound.length > 0) {
       compoundValue = serializeCompoundEnml(physics.collision.compound);
     } else {
-      compoundValue = rawExistingCompound ?? '';
+      compoundValue = options?.forceSerializeCompound ? '' : (rawExistingCompound ?? '');
     }
   } else {
     compoundValue = rawExistingCompound;
@@ -354,9 +360,11 @@ export function applyPhysicsToEntity(
 export function findEntitiesWithInvalidCollision(entities: EntityInstance[]): EntityInstance[] {
   return entities.filter(entity => {
     const physics = entity.inlineTemplate?.physics;
-    return !!physics
-      && physics.shape !== 0
-      && !physics.collision.valid
-      && !entityHasFileNameTag(entity);
+    if (!physics || entityHasFileNameTag(entity)) return false;
+    const hasUnsupportedShape = (physics.diagnostics ?? []).some(d => d.code === 'UNSUPPORTED_SHAPE_VALUE');
+    if (physics.shape === 0) {
+      return hasUnsupportedShape || (!physics.collision.valid && (physics.diagnostics ?? []).length > 0);
+    }
+    return !physics.collision.valid;
   });
 }

@@ -653,7 +653,7 @@ export function CollisionGeometrySection({
     diagnostics: physics?.diagnostics,
   });
   const sortedDiagnostics = sortCollisionDiagnostics(activeDiagnostics);
-  const isInvalid = shape !== 0 && sortedDiagnostics.length > 0;
+  const isInvalid = sortedDiagnostics.length > 0 || !collision.valid;
 
   const isGeometryWarning = (w: string) =>
     w.startsWith('Polygon') ||
