@@ -961,8 +961,8 @@ describe("collision validity after inspector edits", () => {
       }),
     ]);
 
-    // 2. When size is updated to valid positive dimensions, diagnostics are cleared and not carried over
-    const fixedPhysics = {
+    // 2. Simply changing numeric size values while keeping the diagnostic leaves collision invalid
+    const sizeUpdatedPhysics = {
       ...invalidSizePhysics,
       collision: {
         ...invalidSizePhysics.collision,
@@ -970,7 +970,168 @@ describe("collision validity after inspector edits", () => {
       },
     };
 
+    expect(isCollisionGeometryValid(sizeUpdatedPhysics)).toBe(false);
+    expect(getCollisionDiagnostics(sizeUpdatedPhysics)).toEqual([
+      expect.objectContaining({
+        code: "INVALID_SIZE",
+        target: "Collision.Size",
+      }),
+    ]);
+
+    // 3. After filterDiagnosticsForEdit({ type: "size" }), geometry becomes valid
+    const filteredDiagnostics = filterDiagnosticsForEdit(
+      sizeUpdatedPhysics.diagnostics,
+      { type: "size" },
+    );
+    const fixedPhysics = {
+      ...sizeUpdatedPhysics,
+      diagnostics: filteredDiagnostics,
+    };
+
     expect(isCollisionGeometryValid(fixedPhysics)).toBe(true);
     expect(getCollisionDiagnostics(fixedPhysics)).toEqual([]);
+  });
+
+  it("retains TAG_MISSING for missing Collision.Position despite fallback {0,0,0}", () => {
+    const parsed = parseEntityPhysics({
+      shape: "1",
+      Collision: {
+        Size: { x: 64, y: 64, z: 64 },
+      },
+    });
+
+    expect(parsed.collision.position).toEqual({ x: 0, y: 0, z: 0 });
+    expect(parsed.collision.valid).toBe(false);
+
+    const diags = getCollisionDiagnostics(parsed);
+    expect(diags).toEqual([
+      expect.objectContaining({
+        scope: "collision",
+        target: "Collision.Position",
+        code: "TAG_MISSING",
+      }),
+    ]);
+    expect(isCollisionGeometryValid(parsed)).toBe(false);
+  });
+
+  it("retains INVALID_POSITION for malformed Collision.Position and restores validity after explicit edit", () => {
+    const parsed = parseEntityPhysics({
+      shape: "1",
+      Collision: {
+        Position: { x: "invalid", y: 0, z: 0 },
+        Size: { x: 64, y: 64, z: 64 },
+      },
+    });
+
+    expect(parsed.collision.position).toEqual({ x: 0, y: 0, z: 0 });
+    expect(parsed.collision.valid).toBe(false);
+
+    // Diagnostics retained and geometry invalid
+    const diags = getCollisionDiagnostics(parsed);
+    expect(diags).toEqual([
+      expect.objectContaining({
+        scope: "collision",
+        target: "Collision.Position",
+        code: "INVALID_POSITION",
+      }),
+    ]);
+    expect(isCollisionGeometryValid(parsed)).toBe(false);
+
+    // Explicit edit filters diagnostic and restores validity
+    const remainingDiags = filterDiagnosticsForEdit(parsed.diagnostics, {
+      type: "position",
+    });
+    const editedPhysics: EntityPhysicsConfig = {
+      ...parsed,
+      collision: {
+        ...parsed.collision,
+        position: { x: 10, y: 20, z: 0 },
+      },
+      diagnostics: remainingDiags,
+    };
+
+    expect(isCollisionGeometryValid(editedPhysics)).toBe(true);
+    expect(getCollisionDiagnostics(editedPhysics)).toEqual([]);
+  });
+
+  it("drops irrelevant polygon/compound diagnostics during shape transitions", () => {
+    const polygonDiagsPhysics: EntityPhysicsConfig = {
+      shape: 1, // Box shape
+      static: false,
+      sensor: false,
+      bullet: false,
+      fixedRotation: false,
+      friction: 1,
+      density: 1,
+      restitution: 0,
+      gravityScale: 1,
+      collision: {
+        valid: false,
+        position: { x: 0, y: 0, z: 0 },
+        size: { x: 64, y: 64, z: 64 },
+        polygon: [],
+        compound: [],
+        joints: [],
+      },
+      diagnostics: [
+        {
+          scope: "polygon",
+          target: "Polygon",
+          code: "POLYGON_VERTEX_COUNT",
+          message: "must contain 3 to 8 sequential vertices",
+        },
+        {
+          scope: "compound",
+          target: "Compound",
+          code: "COMPOUND_EMPTY",
+          message: "must contain at least 1 child shape",
+        },
+      ],
+      warnings: [],
+    };
+
+    // For shape 1 (Box), polygon and compound diagnostics are dropped
+    expect(getCollisionDiagnostics(polygonDiagsPhysics)).toEqual([]);
+    expect(isCollisionGeometryValid(polygonDiagsPhysics)).toBe(true);
+
+    // For shape 3 (Polygon), compound diagnostics are dropped, but polygon diagnostics remain
+    const shape3Physics: EntityPhysicsConfig = {
+      ...polygonDiagsPhysics,
+      shape: 3,
+      collision: {
+        ...polygonDiagsPhysics.collision,
+        polygon: createDefaultPolygonVertices(),
+      },
+    };
+    const shape3Diags = getCollisionDiagnostics(shape3Physics);
+    expect(shape3Diags).toEqual([
+      expect.objectContaining({
+        scope: "polygon",
+        code: "POLYGON_VERTEX_COUNT",
+      }),
+    ]);
+    expect(
+      shape3Diags.some((d) => d.scope === "compound"),
+    ).toBe(false);
+
+    // For shape 4 (Compound), polygon diagnostics are dropped, but compound diagnostics remain
+    const shape4Physics: EntityPhysicsConfig = {
+      ...polygonDiagsPhysics,
+      shape: 4,
+      collision: {
+        ...polygonDiagsPhysics.collision,
+        compound: [createDefaultCompoundSubShape([])],
+      },
+    };
+    const shape4Diags = getCollisionDiagnostics(shape4Physics);
+    expect(shape4Diags).toEqual([
+      expect.objectContaining({
+        scope: "compound",
+        code: "COMPOUND_EMPTY",
+      }),
+    ]);
+    expect(
+      shape4Diags.some((d) => d.scope === "polygon"),
+    ).toBe(false);
   });
 });

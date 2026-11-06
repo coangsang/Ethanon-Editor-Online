@@ -596,22 +596,8 @@ export function getCollisionDiagnostics(
   }
 
   // 4. Carry over any unparsed or tag missing diagnostics that were stored on physics
-  const isPositionValid =
-    Number.isFinite(collision.position.x) &&
-    Number.isFinite(collision.position.y) &&
-    Number.isFinite(collision.position.z);
-  const isSizeValid =
-    Number.isFinite(collision.size.x) &&
-    Number.isFinite(collision.size.y) &&
-    Number.isFinite(collision.size.z) &&
-    collision.size.x > 0 &&
-    collision.size.y > 0 &&
-    collision.size.z > 0;
-
   if (physics.diagnostics) {
     for (const d of physics.diagnostics) {
-      if (isPositionValid && d.target === "Collision.Position") continue;
-      if (isSizeValid && d.target === "Collision.Size") continue;
       if (
         (physics.shape === 1 || physics.shape === 2) &&
         (d.scope === "polygon" || d.scope === "compound")
@@ -660,8 +646,6 @@ export function isCollisionGeometryValid(
 
   if (physics.diagnostics && physics.diagnostics.length > 0) {
     const relevantDiagnostics = physics.diagnostics.filter((d) => {
-      if (isPositionValid && d.target === "Collision.Position") return false;
-      if (isSizeValid && d.target === "Collision.Size") return false;
       if (
         (physics.shape === 1 || physics.shape === 2) &&
         (d.scope === "polygon" || d.scope === "compound")

@@ -722,5 +722,57 @@ describe("Inspector Physics & Collision Sub-sections", () => {
         screen.queryByText(/Collision.Size: dimensions must be positive/),
       ).toBeNull();
     });
+
+    it("displays 'Invalid collision · 1 issue' and error message for missing or invalid Collision.Position, never '0 issues'", () => {
+      const templateWithMissingPosition: EntityTemplate = {
+        name: "missing_pos_entity",
+        spriteFile: "test.png",
+        spriteCut: { x: 1, y: 1 },
+        type: "horizontal",
+        pivotAdjust: { x: 0, y: 0 },
+        scale: { x: 1, y: 1 },
+        parallaxIntensity: 1,
+        physics: {
+          shape: 1,
+          static: false,
+          sensor: false,
+          bullet: false,
+          fixedRotation: false,
+          friction: 1,
+          density: 1,
+          restitution: 0,
+          gravityScale: 1,
+          collision: {
+            valid: false,
+            position: { x: 0, y: 0, z: 0 },
+            size: { x: 64, y: 64, z: 64 },
+            polygon: [],
+            compound: [],
+            joints: [],
+          },
+          diagnostics: [
+            {
+              scope: "collision",
+              target: "Collision.Position",
+              code: "TAG_MISSING",
+              message: "Collision.Position tag missing",
+            },
+          ],
+          warnings: ["Collision.Position tag missing"],
+        },
+      };
+
+      render(
+        <CollisionGeometrySection
+          template={templateWithMissingPosition}
+          source="Inline"
+        />,
+      );
+
+      expect(screen.getByText("Invalid collision · 1 issue")).toBeDefined();
+      expect(screen.queryByText(/Invalid collision · 0 issues/)).toBeNull();
+      expect(screen.getByText(/Collision\.Position:/)).toBeDefined();
+      expect(screen.getByText(/Collision\.Position tag missing/)).toBeDefined();
+    });
   });
 });
