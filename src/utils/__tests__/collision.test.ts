@@ -867,6 +867,117 @@ describe("collision validity after inspector edits", () => {
       diagPos,
       diagUnsupported,
     ]);
+
+    // Generic Collision / TAG_MISSING is cleared by any geometry edit (position, size, polygon, compound, or non-zero shape)
+    const diagCollisionMissing: CollisionDiagnostic = {
+      scope: "collision",
+      target: "Collision",
+      code: "TAG_MISSING",
+      message: "Collision tag missing",
+    };
+    const diagsWithMissingTag = [
+      diagCollisionMissing,
+      diagPos,
+      diagSize,
+      diagPoly,
+      diagComp,
+      diagUnsupported,
+    ];
+    const warningsWithMissingTag = [
+      "Collision tag missing",
+      "Collision.Position invalid",
+      "Collision.Size invalid",
+      "Polygon not convex",
+      'Compound shape "bad" has unsupported type',
+      'Unsupported collision shape value "5".',
+      'Joint "arm" anchors must be within [-1, 1].',
+    ];
+
+    expect(
+      filterDiagnosticsForEdit(diagsWithMissingTag, { type: "position" }),
+    ).toEqual([diagSize, diagPoly, diagComp, diagUnsupported]);
+    expect(
+      filterWarningsForEdit(warningsWithMissingTag, { type: "position" }),
+    ).toEqual([
+      "Collision.Size invalid",
+      "Polygon not convex",
+      'Compound shape "bad" has unsupported type',
+      'Unsupported collision shape value "5".',
+      'Joint "arm" anchors must be within [-1, 1].',
+    ]);
+
+    expect(
+      filterDiagnosticsForEdit(diagsWithMissingTag, { type: "size" }),
+    ).toEqual([diagPos, diagPoly, diagComp, diagUnsupported]);
+    expect(
+      filterWarningsForEdit(warningsWithMissingTag, { type: "size" }),
+    ).toEqual([
+      "Collision.Position invalid",
+      "Polygon not convex",
+      'Compound shape "bad" has unsupported type',
+      'Unsupported collision shape value "5".',
+      'Joint "arm" anchors must be within [-1, 1].',
+    ]);
+
+    expect(
+      filterDiagnosticsForEdit(diagsWithMissingTag, { type: "polygon" }),
+    ).toEqual([diagPos, diagSize, diagComp, diagUnsupported]);
+    expect(
+      filterWarningsForEdit(warningsWithMissingTag, { type: "polygon" }),
+    ).toEqual([
+      "Collision.Position invalid",
+      "Collision.Size invalid",
+      'Compound shape "bad" has unsupported type',
+      'Unsupported collision shape value "5".',
+      'Joint "arm" anchors must be within [-1, 1].',
+    ]);
+
+    expect(
+      filterDiagnosticsForEdit(diagsWithMissingTag, { type: "compound" }),
+    ).toEqual([diagPos, diagSize, diagPoly, diagUnsupported]);
+    expect(
+      filterWarningsForEdit(warningsWithMissingTag, { type: "compound" }),
+    ).toEqual([
+      "Collision.Position invalid",
+      "Collision.Size invalid",
+      "Polygon not convex",
+      'Unsupported collision shape value "5".',
+      'Joint "arm" anchors must be within [-1, 1].',
+    ]);
+
+    for (const newShape of [1, 2, 3, 4] as const) {
+      expect(
+        filterDiagnosticsForEdit(diagsWithMissingTag, {
+          type: "shape",
+          newShape,
+        }).some(
+          (d) =>
+            d.scope === "collision" &&
+            d.target === "Collision" &&
+            d.code === "TAG_MISSING",
+        ),
+      ).toBe(false);
+      expect(
+        filterWarningsForEdit(warningsWithMissingTag, {
+          type: "shape",
+          newShape,
+        }),
+      ).not.toContain("Collision tag missing");
+    }
+
+    // Shape 0 clears all collision diagnostics and collision/polygon/compound/unsupported warnings while keeping joint warning
+    expect(
+      filterDiagnosticsForEdit(diagsWithMissingTag, {
+        type: "shape",
+        newShape: 0,
+      }),
+    ).toEqual([]);
+    expect(
+      filterWarningsForEdit(warningsWithMissingTag, {
+        type: "shape",
+        newShape: 0,
+      }),
+    ).toEqual(['Joint "arm" anchors must be within [-1, 1].']);
   });
 
   it("correctly reports unsupported shape value as invalid and retains diagnostics", () => {

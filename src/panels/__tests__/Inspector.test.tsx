@@ -442,4 +442,200 @@ describe('Inspector pending edit interactions', () => {
     expect(referenceRow.querySelector('.custom-data-reference-edit')).toBeTruthy();
     expect(referenceRow.querySelector('.custom-data-reference-unlink')).toBeTruthy();
   });
+
+  it('repairs missing or malformed Collision.Position when re-committing fallback value 0', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="1" spriteFrame="0" editorEntityUID="missing-pos">
+          <EntityName>missing-pos</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="1">
+            <Collision><Size x="64" y="64" z="64"/></Collision>
+          </Entity>
+        </Entity>
+        <Entity id="2" spriteFrame="0" editorEntityUID="malformed-pos">
+          <EntityName>malformed-pos</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="1">
+            <Collision><Position x="invalid" y="0" z="0"/><Size x="64" y="64" z="64"/></Collision>
+          </Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+
+    // 1. Missing Position
+    useSceneStore.getState().selectEntity('missing-pos');
+    const { unmount } = render(<Inspector />);
+
+    expect(screen.getByText(/Invalid collision · 1 issue/)).toBeTruthy();
+    expect(screen.getByText(/Collision\.Position tag missing/)).toBeTruthy();
+
+    const collisionSection = screen.getByText('Collision').closest('.inspector-section') as HTMLElement;
+    const posXBadge = within(collisionSection).getAllByText('X')[0];
+    fireEvent.pointerDown(posXBadge, { button: 0, clientX: 100, pointerId: 1 });
+    fireEvent.pointerUp(posXBadge, { pointerId: 1 });
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const repairedMissing = useSceneStore.getState().scene.entities[0];
+    expect(repairedMissing.inlineTemplate?.physics?.collision.valid).toBe(true);
+    expect(repairedMissing.inlineTemplate?.physics?.diagnostics).toEqual([]);
+    expect((repairedMissing.inlineEntityData?.Collision as Record<string, unknown>)?.Position).toEqual({
+      x: '0',
+      y: '0',
+      z: '0',
+    });
+    expect(screen.queryByText(/Invalid collision/)).toBeNull();
+    unmount();
+
+    // 2. Malformed Position
+    useSceneStore.getState().selectEntity('malformed-pos');
+    render(<Inspector />);
+
+    expect(screen.getByText(/Invalid collision · 1 issue/)).toBeTruthy();
+    const collisionSection2 = screen.getByText('Collision').closest('.inspector-section') as HTMLElement;
+    const posXInput = within(collisionSection2).getAllByLabelText('X')[0];
+    fireEvent.change(posXInput, { target: { value: '00' } });
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const repairedMalformed = useSceneStore.getState().scene.entities[1];
+    expect(repairedMalformed.inlineTemplate?.physics?.collision.valid).toBe(true);
+    expect(repairedMalformed.inlineTemplate?.physics?.diagnostics).toEqual([]);
+    expect((repairedMalformed.inlineEntityData?.Collision as Record<string, unknown>)?.Position).toEqual({
+      x: '0',
+      y: '0',
+      z: '0',
+    });
+    expect(screen.queryByText(/Invalid collision/)).toBeNull();
+  });
+
+  it('recovers missing <Collision> tag through standard position/size edits and clears generic diagnostic', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="1" spriteFrame="0" editorEntityUID="missing-collision">
+          <EntityName>missing-collision</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="1" static="1" />
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+
+    useSceneStore.getState().selectEntity('missing-collision');
+    render(<Inspector />);
+
+    expect(screen.getByText(/Collision tag missing/)).toBeTruthy();
+
+    const collisionSection = screen.getByText('Collision').closest('.inspector-section') as HTMLElement;
+    const withinCol = within(collisionSection);
+    const xInputs = withinCol.getAllByLabelText('X');
+    const yInputs = withinCol.getAllByLabelText('Y');
+    const zInputs = withinCol.getAllByLabelText('Z');
+
+    // Edit Position X to 0 (materializes <Collision> and clears Collision tag missing)
+    const posXBadge = withinCol.getAllByText('X')[0];
+    fireEvent.pointerDown(posXBadge, { button: 0, clientX: 100, pointerId: 1 });
+    fireEvent.pointerUp(posXBadge, { pointerId: 1 });
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const afterPosEdit = useSceneStore.getState().scene.entities[0];
+    expect(afterPosEdit.inlineTemplate?.physics?.diagnostics).toEqual([]);
+    expect(afterPosEdit.inlineTemplate?.physics?.warnings).toEqual([]);
+    expect(screen.queryByText(/Collision tag missing/)).toBeNull();
+
+    // Edit Size X, Y, Z to 64 -> collision becomes fully valid
+    fireEvent.change(xInputs[1], { target: { value: '64' } });
+    fireEvent.change(yInputs[1], { target: { value: '64' } });
+    fireEvent.change(zInputs[1], { target: { value: '64' } });
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const afterSizeEdit = useSceneStore.getState().scene.entities[0];
+    expect(afterSizeEdit.inlineTemplate?.physics?.collision.valid).toBe(true);
+    expect(afterSizeEdit.inlineEntityData?.Collision).toEqual({
+      Position: { x: '0', y: '0', z: '0' },
+      Size: { x: '64', y: '64', z: '64' },
+    });
+    expect(screen.queryByText(/Invalid collision/)).toBeNull();
+  });
+
+  it('repairs Polygon with invalid raw block when re-applying matching Triangle preset and preserves raw on unrelated physics edit', () => {
+    const rawPolygonWithBadBlock = 'v0 { x = 0; y = -1; } v1 { x = 1; y = 1; } v2 { x = -1; y = 1; } bad { x = 0; y = 0; }';
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="1" spriteFrame="0" editorEntityUID="poly-entity">
+          <EntityName>poly-entity</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="3" friction="0.5">
+            <Collision>
+              <Position x="0" y="0" z="0"/><Size x="64" y="64" z="64"/>
+              <Polygon>${rawPolygonWithBadBlock}</Polygon>
+            </Collision>
+          </Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+
+    useSceneStore.getState().selectEntity('poly-entity');
+    render(<Inspector />);
+
+    expect(screen.getByText(/Invalid collision · 1 issue/)).toBeTruthy();
+    expect(screen.getByText(/unexpected block "bad" in Polygon/)).toBeTruthy();
+
+    // Unrelated physics edit (Friction) must preserve raw Polygon and keep invalid state
+    const physicsSection = screen.getByText('Physics').closest('.inspector-section') as HTMLElement;
+    const frictionInput = within(physicsSection).getByDisplayValue('0.5');
+    fireEvent.change(frictionInput, { target: { value: '0.8' } });
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const afterFriction = useSceneStore.getState().scene.entities[0];
+    expect((afterFriction.inlineEntityData?.Collision as Record<string, unknown>)?.Polygon).toBe(rawPolygonWithBadBlock);
+    expect(afterFriction.inlineTemplate?.physics?.collision.valid).toBe(false);
+
+    // Clicking Triangle preset (whose vertices match the sanitized model) explicitly repairs the raw Polygon
+    fireEvent.click(screen.getByRole('button', { name: 'Apply Triangle' }));
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const afterPreset = useSceneStore.getState().scene.entities[0];
+    const serializedPolygon = (afterPreset.inlineEntityData?.Collision as Record<string, unknown>)?.Polygon as string;
+    expect(serializedPolygon).not.toContain('bad');
+    expect(serializedPolygon).toContain('v0 {');
+    expect(afterPreset.inlineTemplate?.physics?.collision.valid).toBe(true);
+    expect(afterPreset.inlineTemplate?.physics?.diagnostics).toEqual([]);
+    expect(screen.queryByText(/Invalid collision/)).toBeNull();
+  });
+
+  it('repairs Compound with unparseable raw block on explicit commit of equivalent sub-shapes and treats clean same-value commit as no-op', () => {
+    const rawCompoundWithBadBlock = 'sub_0 { shape = box; posX = 0; posY = 0; sizeX = 1; sizeY = 1; angle = 0; } bad { shape = capsule; }';
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="1" spriteFrame="0" editorEntityUID="comp-entity">
+          <EntityName>comp-entity</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="4">
+            <Collision>
+              <Position x="0" y="0" z="0"/><Size x="64" y="64" z="64"/>
+              <Compound>${rawCompoundWithBadBlock}</Compound>
+            </Collision>
+          </Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+
+    useSceneStore.getState().selectEntity('comp-entity');
+    render(<Inspector />);
+
+    expect(screen.getByText(/Invalid collision · 1 issue/)).toBeTruthy();
+
+    // Explicit commit on Sub-shape 1 Name (blurring with same name) repairs the compound
+    const nameInput = screen.getByLabelText('Sub-shape 1 Name');
+    fireEvent.blur(nameInput);
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const afterRepair = useSceneStore.getState().scene.entities[0];
+    const serializedCompound = (afterRepair.inlineEntityData?.Collision as Record<string, unknown>)?.Compound as string;
+    expect(serializedCompound).not.toContain('capsule');
+    expect(serializedCompound).toContain('sub_0 {');
+    expect(afterRepair.inlineTemplate?.physics?.collision.valid).toBe(true);
+    expect(afterRepair.inlineTemplate?.physics?.diagnostics).toEqual([]);
+    expect(screen.queryByText(/Invalid collision/)).toBeNull();
+
+    // Subsequent commit with the same value on a now-clean collision is a no-op (no new history entry)
+    const historyLengthAfterRepair = useSceneStore.getState().history.length;
+    fireEvent.blur(nameInput);
+    act(() => useSceneStore.getState().flushInspectorEdits());
+    expect(useSceneStore.getState().history).toHaveLength(historyLengthAfterRepair);
+  });
 });

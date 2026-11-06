@@ -464,6 +464,14 @@ export type CollisionEditType =
   | { type: "compound" }
   | { type: "shape"; newShape: CollisionShape };
 
+function isCollisionTagMissingDiagnostic(d: CollisionDiagnostic): boolean {
+  return (
+    d.scope === "collision" &&
+    d.target === "Collision" &&
+    d.code === "TAG_MISSING"
+  );
+}
+
 export function filterDiagnosticsForEdit(
   diagnostics: CollisionDiagnostic[] | undefined,
   edit: CollisionEditType,
@@ -472,20 +480,29 @@ export function filterDiagnosticsForEdit(
   switch (edit.type) {
     case "position":
       return diagnostics.filter(
-        (d) => !(d.scope === "collision" && d.target === "Collision.Position"),
+        (d) =>
+          !isCollisionTagMissingDiagnostic(d) &&
+          !(d.scope === "collision" && d.target === "Collision.Position"),
       );
     case "size":
       return diagnostics.filter(
-        (d) => !(d.scope === "collision" && d.target === "Collision.Size"),
+        (d) =>
+          !isCollisionTagMissingDiagnostic(d) &&
+          !(d.scope === "collision" && d.target === "Collision.Size"),
       );
     case "polygon":
-      return diagnostics.filter((d) => d.scope !== "polygon");
+      return diagnostics.filter(
+        (d) => !isCollisionTagMissingDiagnostic(d) && d.scope !== "polygon",
+      );
     case "compound":
-      return diagnostics.filter((d) => d.scope !== "compound");
+      return diagnostics.filter(
+        (d) => !isCollisionTagMissingDiagnostic(d) && d.scope !== "compound",
+      );
     case "shape": {
       const { newShape } = edit;
       if (newShape === 0) return [];
       return diagnostics.filter((d) => {
+        if (isCollisionTagMissingDiagnostic(d)) return false;
         if (d.code === "UNSUPPORTED_SHAPE_VALUE") return false;
         if (
           (newShape === 1 || newShape === 2) &&
@@ -507,13 +524,28 @@ export function filterWarningsForEdit(
   if (!warnings || warnings.length === 0) return [];
   switch (edit.type) {
     case "position":
-      return warnings.filter((w) => !w.startsWith("Collision.Position"));
+      return warnings.filter(
+        (w) =>
+          w !== "Collision tag missing" && !w.startsWith("Collision.Position"),
+      );
     case "size":
-      return warnings.filter((w) => !w.startsWith("Collision.Size"));
+      return warnings.filter(
+        (w) => w !== "Collision tag missing" && !w.startsWith("Collision.Size"),
+      );
     case "polygon":
-      return warnings.filter((w) => !w.startsWith("Polygon"));
+      return warnings.filter(
+        (w) =>
+          w !== "Collision tag missing" &&
+          !w.startsWith("Polygon") &&
+          !w.startsWith("Collision.Polygon"),
+      );
     case "compound":
-      return warnings.filter((w) => !w.startsWith("Compound"));
+      return warnings.filter(
+        (w) =>
+          w !== "Collision tag missing" &&
+          !w.startsWith("Compound") &&
+          !w.startsWith("Collision.Compound"),
+      );
     case "shape": {
       const { newShape } = edit;
       if (newShape === 0) {
@@ -526,14 +558,26 @@ export function filterWarningsForEdit(
         );
       }
       return warnings.filter((w) => {
+        if (w === "Collision tag missing") return false;
         if (w.startsWith("Unsupported collision shape")) return false;
         if (
           (newShape === 1 || newShape === 2) &&
-          (w.startsWith("Polygon") || w.startsWith("Compound"))
+          (w.startsWith("Polygon") ||
+            w.startsWith("Collision.Polygon") ||
+            w.startsWith("Compound") ||
+            w.startsWith("Collision.Compound"))
         )
           return false;
-        if (newShape === 3 && w.startsWith("Compound")) return false;
-        if (newShape === 4 && w.startsWith("Polygon")) return false;
+        if (
+          newShape === 3 &&
+          (w.startsWith("Compound") || w.startsWith("Collision.Compound"))
+        )
+          return false;
+        if (
+          newShape === 4 &&
+          (w.startsWith("Polygon") || w.startsWith("Collision.Polygon"))
+        )
+          return false;
         return true;
       });
     }

@@ -1644,9 +1644,21 @@ export function Inspector() {
       const isUnsupportedShape = (basePhysics?.diagnostics ?? []).some(d => d.code === 'UNSUPPORTED_SHAPE_VALUE');
 
       if (basePhysics && (basePhysics.shape !== 0 || isUnsupportedShape)) {
+        const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, {
+          type: 'shape',
+          newShape,
+        });
+        const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, {
+          type: 'shape',
+          newShape,
+        });
+        const resolvedDiagnosticsOrWarnings =
+          remainingDiagnostics.length !== (basePhysics.diagnostics?.length ?? 0) ||
+          remainingWarnings.length !== (basePhysics.warnings?.length ?? 0);
         if (
           basePhysics.shape === newShape &&
-          !isUnsupportedShape
+          !isUnsupportedShape &&
+          !resolvedDiagnosticsOrWarnings
         ) {
           return currentEntity;
         }
@@ -1665,14 +1677,6 @@ export function Inspector() {
         ) {
           size = { x: 64, y: 64, z: 64 };
         }
-        const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, {
-          type: 'shape',
-          newShape,
-        });
-        const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, {
-          type: 'shape',
-          newShape,
-        });
         const nextPhysics: EntityPhysicsConfig = {
           ...basePhysics,
           shape: newShape,
@@ -1710,12 +1714,15 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(3);
-      if (polygonsEqual(basePhysics.collision.polygon, polygon)) {
+      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: 'polygon' });
+      const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: 'polygon' });
+      const resolvedDiagnosticsOrWarnings =
+        remainingDiagnostics.length !== (basePhysics.diagnostics?.length ?? 0) ||
+        remainingWarnings.length !== (basePhysics.warnings?.length ?? 0);
+      if (polygonsEqual(basePhysics.collision.polygon, polygon) && !resolvedDiagnosticsOrWarnings) {
         return currentEntity;
       }
-      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: 'polygon' });
       const polyValidation = validatePolygon(polygon);
-      const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: 'polygon' });
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         shape: 3,
@@ -1740,12 +1747,15 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(4);
-      if (compoundsEqual(basePhysics.collision.compound, compound)) {
+      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: 'compound' });
+      const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: 'compound' });
+      const resolvedDiagnosticsOrWarnings =
+        remainingDiagnostics.length !== (basePhysics.diagnostics?.length ?? 0) ||
+        remainingWarnings.length !== (basePhysics.warnings?.length ?? 0);
+      if (compoundsEqual(basePhysics.collision.compound, compound) && !resolvedDiagnosticsOrWarnings) {
         return currentEntity;
       }
-      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: 'compound' });
       const compValidation = validateCompound(compound);
-      const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: 'compound' });
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         shape: 4,
@@ -1770,12 +1780,20 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
-      const curPos = basePhysics.collision.position;
-      if (curPos.x === pos.x && curPos.y === pos.y && curPos.z === pos.z) {
-        return currentEntity;
-      }
       const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: 'position' });
       const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: 'position' });
+      const resolvedDiagnosticsOrWarnings =
+        remainingDiagnostics.length !== (basePhysics.diagnostics?.length ?? 0) ||
+        remainingWarnings.length !== (basePhysics.warnings?.length ?? 0);
+      const curPos = basePhysics.collision.position;
+      if (
+        curPos.x === pos.x &&
+        curPos.y === pos.y &&
+        curPos.z === pos.z &&
+        !resolvedDiagnosticsOrWarnings
+      ) {
+        return currentEntity;
+      }
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         collision: {
@@ -1799,12 +1817,20 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
-      const curSize = basePhysics.collision.size;
-      if (curSize.x === size.x && curSize.y === size.y && curSize.z === size.z) {
-        return currentEntity;
-      }
       const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: 'size' });
       const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: 'size' });
+      const resolvedDiagnosticsOrWarnings =
+        remainingDiagnostics.length !== (basePhysics.diagnostics?.length ?? 0) ||
+        remainingWarnings.length !== (basePhysics.warnings?.length ?? 0);
+      const curSize = basePhysics.collision.size;
+      if (
+        curSize.x === size.x &&
+        curSize.y === size.y &&
+        curSize.z === size.z &&
+        !resolvedDiagnosticsOrWarnings
+      ) {
+        return currentEntity;
+      }
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         collision: {
