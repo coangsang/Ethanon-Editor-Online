@@ -195,6 +195,9 @@ describe("saving scenes with invalid collision geometry", () => {
     await useSceneStore.getState().saveActiveScene();
     expect(write).toHaveBeenCalledTimes(1);
     expect(useSceneStore.getState().projectError).toBeNull();
+    const savedBoxXml = write.mock.calls[0][0] as string;
+    expect(savedBoxXml).not.toContain("<Polygon>");
+    expect(savedBoxXml).not.toContain("<Compound>");
 
     // 2. Invalid Polygon -> Circle (2)
     useSceneStore.setState({ scene: parseScene(sceneXml(CONCAVE)) });
@@ -224,6 +227,83 @@ describe("saving scenes with invalid collision geometry", () => {
     await useSceneStore.getState().saveActiveScene();
     expect(write).toHaveBeenCalledTimes(1);
     expect(useSceneStore.getState().projectError).toBeNull();
+    const savedCircleXml = write.mock.calls[0][0] as string;
+    expect(savedCircleXml).not.toContain("<Polygon>");
+    expect(savedCircleXml).not.toContain("<Compound>");
+  });
+
+  it("strips inactive geometry when converting between Polygon and Compound on save", async () => {
+    const { applyPhysicsToEntity } = await import("../../utils/entityTemplate");
+
+    // 1. Polygon -> Compound
+    useSceneStore.setState({ scene: parseScene(sceneXml(CONVEX)) });
+    const polyEntity = useSceneStore.getState().scene.entities[0];
+    useSceneStore.getState().queueInspectorEdit(polyEntity.editorEntityUID, "collision", (currentEntity) => {
+      const basePhysics = currentEntity.inlineTemplate!.physics!;
+      const nextPhysics = {
+        ...basePhysics,
+        shape: 4 as const,
+        collision: {
+          ...basePhysics.collision,
+          compound: [{ name: "part", shape: "box" as const, posX: 0, posY: 0, sizeX: 1, sizeY: 1 }],
+          valid: true,
+        },
+        diagnostics: [],
+        warnings: [],
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics, { forceSerializeCompound: true });
+    });
+
+    write.mockClear();
+    await useSceneStore.getState().saveActiveScene();
+    expect(write).toHaveBeenCalledTimes(1);
+    const compoundXml = write.mock.calls[0][0] as string;
+    expect(compoundXml).toContain("<Compound>");
+    expect(compoundXml).not.toContain("<Polygon>");
+
+    // 2. Compound -> Polygon
+    const rawCompoundXml = `<?xml version="1.0" encoding="utf-8"?>
+<Ethanon>
+  <SceneProperties lightIntensity="2" parallaxIntensity="0"><Ambient r="1" g="1" b="1" /><ZAxisDirection x="0" y="-1" /></SceneProperties>
+  <EntitiesInScene>
+    <Entity id="1" spriteFrame="0">
+      <EntityName>compEntity</EntityName>
+      <Position x="0" y="0" z="0" angle="0" />
+      <Entity shape="4" static="1">
+        <Collision><Position x="0" y="0" z="0" /><Size x="64" y="64" z="64" /><Compound>box0 { shape = box; posX = 0; posY = 0; sizeX = 1; sizeY = 1; }</Compound></Collision>
+      </Entity>
+    </Entity>
+  </EntitiesInScene>
+</Ethanon>`;
+    useSceneStore.setState({ scene: parseScene(rawCompoundXml) });
+    const compEntity = useSceneStore.getState().scene.entities[0];
+    useSceneStore.getState().queueInspectorEdit(compEntity.editorEntityUID, "collision", (currentEntity) => {
+      const basePhysics = currentEntity.inlineTemplate!.physics!;
+      const nextPhysics = {
+        ...basePhysics,
+        shape: 3 as const,
+        collision: {
+          ...basePhysics.collision,
+          polygon: [
+            { name: "v0", x: -0.5, y: -0.5 },
+            { name: "v1", x: 0.5, y: -0.5 },
+            { name: "v2", x: 0.5, y: 0.5 },
+            { name: "v3", x: -0.5, y: 0.5 },
+          ],
+          valid: true,
+        },
+        diagnostics: [],
+        warnings: [],
+      };
+      return applyPhysicsToEntity(currentEntity, nextPhysics, { forceSerializePolygon: true });
+    });
+
+    write.mockClear();
+    await useSceneStore.getState().saveActiveScene();
+    expect(write).toHaveBeenCalledTimes(1);
+    const polygonXml = write.mock.calls[0][0] as string;
+    expect(polygonXml).toContain("<Polygon>");
+    expect(polygonXml).not.toContain("<Compound>");
   });
 
   it("keeps raw block and invalid state on no-op commit, and replaces raw when geometry is actually edited", async () => {

@@ -318,9 +318,8 @@ export function applyPhysicsToEntity(
     } else {
       polygonValue = options?.forceSerializePolygon ? '' : (rawExistingPolygon ?? '');
     }
-  } else {
-    polygonValue = rawExistingPolygon;
   }
+
   const rawExistingCompound = typeof existingCollision.Compound === 'string' ? existingCollision.Compound : undefined;
   let compoundValue: string | undefined;
   if (physics.shape === 4) {
@@ -331,8 +330,6 @@ export function applyPhysicsToEntity(
     } else {
       compoundValue = options?.forceSerializeCompound ? '' : (rawExistingCompound ?? '');
     }
-  } else {
-    compoundValue = rawExistingCompound;
   }
 
   inlineEntityData.shape = String(physics.shape);

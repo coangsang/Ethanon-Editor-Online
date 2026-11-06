@@ -1299,4 +1299,225 @@ describe("collision validity after inspector edits", () => {
       shape4Diags.some((d) => d.scope === "polygon"),
     ).toBe(false);
   });
+
+  describe("applyPhysicsToEntity geometry cleanup on shape changes", () => {
+    const RAW_POLYGON = "/* custom comment */ v0 { x = -0.5; y = -0.5; } v1 { x = 0.5; y = -0.5; } v2 { x = 0.5; y = 0.5; } v3 { x = -0.5; y = 0.5; }";
+    const RAW_COMPOUND = "/* custom comment */ sub0 { shape = box; posX = 0; posY = 0; sizeX = 1; sizeY = 1; }";
+
+    const createPolygonEntity = (): EntityInstance => ({
+      id: 1,
+      entityName: "polyEntity",
+      editorEntityName: "polyEntity",
+      editorEntityUID: "poly-1",
+      position: { x: 0, y: 0, z: 0 },
+      angle: 0,
+      spriteFrame: 0,
+      hide: false,
+      flipX: false,
+      flipY: false,
+      customData: [],
+      inlineTemplate: {
+        name: "polyEntity",
+        physics: {
+          ...createDefaultPhysics(3),
+          collision: {
+            ...createDefaultPhysics(3).collision,
+            polygon: [
+              { name: "v0", x: -0.5, y: -0.5 },
+              { name: "v1", x: 0.5, y: -0.5 },
+              { name: "v2", x: 0.5, y: 0.5 },
+              { name: "v3", x: -0.5, y: 0.5 },
+            ],
+          },
+        },
+      },
+      inlineEntityData: {
+        shape: "3",
+        Collision: {
+          Position: { x: "0", y: "0", z: "0" },
+          Size: { x: "64", y: "64", z: "64" },
+          Polygon: RAW_POLYGON,
+        },
+      },
+    });
+
+    const createCompoundEntity = (): EntityInstance => ({
+      id: 2,
+      entityName: "compEntity",
+      editorEntityName: "compEntity",
+      editorEntityUID: "comp-1",
+      position: { x: 0, y: 0, z: 0 },
+      angle: 0,
+      spriteFrame: 0,
+      hide: false,
+      flipX: false,
+      flipY: false,
+      customData: [],
+      inlineTemplate: {
+        name: "compEntity",
+        physics: {
+          ...createDefaultPhysics(4),
+          collision: {
+            ...createDefaultPhysics(4).collision,
+            compound: [{ name: "sub0", shape: "box", posX: 0, posY: 0, sizeX: 1, sizeY: 1 }],
+          },
+        },
+      },
+      inlineEntityData: {
+        shape: "4",
+        Collision: {
+          Position: { x: "0", y: "0", z: "0" },
+          Size: { x: "64", y: "64", z: "64" },
+          Compound: RAW_COMPOUND,
+        },
+      },
+    });
+
+    it("removes Collision.Polygon when changing Polygon to Box (1) or Circle (2)", () => {
+      const polyEntity = createPolygonEntity();
+      const currentPhysics = polyEntity.inlineTemplate!.physics!;
+
+      // Polygon -> Box
+      const toBox = applyPhysicsToEntity(polyEntity, {
+        ...currentPhysics,
+        shape: 1,
+      });
+      const boxCollision = toBox.inlineEntityData?.Collision as Record<string, unknown>;
+      expect(toBox.inlineEntityData?.shape).toBe("1");
+      expect(boxCollision).toBeDefined();
+      expect(boxCollision.Polygon).toBeUndefined();
+      expect(boxCollision.Compound).toBeUndefined();
+      expect(boxCollision.Position).toBeDefined();
+      expect(boxCollision.Size).toBeDefined();
+      // In-memory model preserves polygon for session switching
+      expect(toBox.inlineTemplate?.physics?.collision.polygon).toHaveLength(4);
+
+      // Polygon -> Circle
+      const toCircle = applyPhysicsToEntity(polyEntity, {
+        ...currentPhysics,
+        shape: 2,
+      });
+      const circleCollision = toCircle.inlineEntityData?.Collision as Record<string, unknown>;
+      expect(toCircle.inlineEntityData?.shape).toBe("2");
+      expect(circleCollision).toBeDefined();
+      expect(circleCollision.Polygon).toBeUndefined();
+      expect(circleCollision.Compound).toBeUndefined();
+      expect(toCircle.inlineTemplate?.physics?.collision.polygon).toHaveLength(4);
+    });
+
+    it("removes Collision.Compound when changing Compound to Box (1) or Circle (2)", () => {
+      const compEntity = createCompoundEntity();
+      const currentPhysics = compEntity.inlineTemplate!.physics!;
+
+      // Compound -> Box
+      const toBox = applyPhysicsToEntity(compEntity, {
+        ...currentPhysics,
+        shape: 1,
+      });
+      const boxCollision = toBox.inlineEntityData?.Collision as Record<string, unknown>;
+      expect(toBox.inlineEntityData?.shape).toBe("1");
+      expect(boxCollision).toBeDefined();
+      expect(boxCollision.Compound).toBeUndefined();
+      expect(boxCollision.Polygon).toBeUndefined();
+      expect(toBox.inlineTemplate?.physics?.collision.compound).toHaveLength(1);
+
+      // Compound -> Circle
+      const toCircle = applyPhysicsToEntity(compEntity, {
+        ...currentPhysics,
+        shape: 2,
+      });
+      const circleCollision = toCircle.inlineEntityData?.Collision as Record<string, unknown>;
+      expect(toCircle.inlineEntityData?.shape).toBe("2");
+      expect(circleCollision).toBeDefined();
+      expect(circleCollision.Compound).toBeUndefined();
+      expect(circleCollision.Polygon).toBeUndefined();
+      expect(toCircle.inlineTemplate?.physics?.collision.compound).toHaveLength(1);
+    });
+
+    it("leaves only Compound when changing Polygon to Compound", () => {
+      const polyEntity = createPolygonEntity();
+      const currentPhysics = polyEntity.inlineTemplate!.physics!;
+      const nextPhysics: EntityPhysicsConfig = {
+        ...currentPhysics,
+        shape: 4,
+        collision: {
+          ...currentPhysics.collision,
+          compound: [{ name: "sub0", shape: "box", posX: 0, posY: 0, sizeX: 1, sizeY: 1 }],
+        },
+      };
+
+      const updated = applyPhysicsToEntity(polyEntity, nextPhysics, { forceSerializeCompound: true });
+      const collision = updated.inlineEntityData?.Collision as Record<string, unknown>;
+      expect(updated.inlineEntityData?.shape).toBe("4");
+      expect(collision.Polygon).toBeUndefined();
+      expect(collision.Compound).toBeDefined();
+      expect(typeof collision.Compound).toBe("string");
+    });
+
+    it("leaves only Polygon when changing Compound to Polygon", () => {
+      const compEntity = createCompoundEntity();
+      const currentPhysics = compEntity.inlineTemplate!.physics!;
+      const nextPhysics: EntityPhysicsConfig = {
+        ...currentPhysics,
+        shape: 3,
+        collision: {
+          ...currentPhysics.collision,
+          polygon: createDefaultPolygonVertices(),
+        },
+      };
+
+      const updated = applyPhysicsToEntity(compEntity, nextPhysics, { forceSerializePolygon: true });
+      const collision = updated.inlineEntityData?.Collision as Record<string, unknown>;
+      expect(updated.inlineEntityData?.shape).toBe("3");
+      expect(collision.Compound).toBeUndefined();
+      expect(collision.Polygon).toBeDefined();
+      expect(typeof collision.Polygon).toBe("string");
+    });
+
+    it("preserves verbatim raw ENML of active geometry when editing unrelated properties (friction/position)", () => {
+      const polyEntity = createPolygonEntity();
+      const polyPhysics = polyEntity.inlineTemplate!.physics!;
+      const editedPoly = applyPhysicsToEntity(polyEntity, {
+        ...polyPhysics,
+        friction: 0.25,
+        collision: {
+          ...polyPhysics.collision,
+          position: { x: 10, y: 20, z: 5 },
+        },
+      });
+      const polyCol = editedPoly.inlineEntityData?.Collision as Record<string, unknown>;
+      expect(polyCol.Polygon).toBe(RAW_POLYGON);
+      expect((polyCol.Position as Record<string, unknown>).x).toBe("10");
+      expect(editedPoly.inlineEntityData?.friction).toBe("0.25");
+      expect(polyCol.Compound).toBeUndefined();
+
+      const compEntity = createCompoundEntity();
+      const compPhysics = compEntity.inlineTemplate!.physics!;
+      const editedComp = applyPhysicsToEntity(compEntity, {
+        ...compPhysics,
+        friction: 0.75,
+        collision: {
+          ...compPhysics.collision,
+          position: { x: -5, y: 15, z: 0 },
+        },
+      });
+      const compCol = editedComp.inlineEntityData?.Collision as Record<string, unknown>;
+      expect(compCol.Compound).toBe(RAW_COMPOUND);
+      expect((compCol.Position as Record<string, unknown>).x).toBe("-5");
+      expect(editedComp.inlineEntityData?.friction).toBe("0.75");
+      expect(compCol.Polygon).toBeUndefined();
+    });
+
+    it("removes entire Collision block when shape is 0 (None)", () => {
+      const polyEntity = createPolygonEntity();
+      const toNone = applyPhysicsToEntity(polyEntity, createDefaultPhysics(0));
+      expect(toNone.inlineEntityData?.shape).toBe("0");
+      expect(toNone.inlineEntityData?.Collision).toBeUndefined();
+
+      const compEntity = createCompoundEntity();
+      const compToNone = applyPhysicsToEntity(compEntity, createDefaultPhysics(0));
+      expect(compToNone.inlineEntityData?.shape).toBe("0");
+      expect(compToNone.inlineEntityData?.Collision).toBeUndefined();
+    });
+  });
 });

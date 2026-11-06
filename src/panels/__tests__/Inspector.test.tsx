@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EntityTemplate } from '../../types';
 import { useSceneStore } from '../../store/sceneStore';
 import { entityHasFileNameTag } from '../../utils/entityTemplate';
+import { serializeScene } from '../../io/serializeScene';
 import { Inspector } from '../Inspector';
 
 const SCENE_PROPERTIES = `
@@ -675,5 +676,107 @@ describe('Inspector pending edit interactions', () => {
     expect(screen.queryByText(/Invalid collision/)).toBeNull();
     expect(shapeSelect.value).toBe('0');
     expect(useSceneStore.getState().history).toHaveLength(historyBefore + 1);
+  });
+
+  it('cleans up obsolete geometry tags when changing shape in Inspector and serializing scene', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="1" spriteFrame="0" editorEntityUID="poly-ent">
+          <EntityName>poly-ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="3">
+            <Collision>
+              <Position x="0" y="0" z="0"/><Size x="64" y="64" z="64"/>
+              <Polygon>v0 { x = -0.5; y = -0.5; } v1 { x = 0.5; y = -0.5; } v2 { x = 0.5; y = 0.5; } v3 { x = -0.5; y = 0.5; }</Polygon>
+            </Collision>
+          </Entity>
+        </Entity>
+        <Entity id="2" spriteFrame="0" editorEntityUID="comp-ent">
+          <EntityName>comp-ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="4">
+            <Collision>
+              <Position x="0" y="0" z="0"/><Size x="64" y="64" z="64"/>
+              <Compound>sub0 { shape = box; posX = 0; posY = 0; sizeX = 1; sizeY = 1; }</Compound>
+            </Collision>
+          </Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+
+    // 1. Polygon -> Box (1) via Inspector selector
+    useSceneStore.getState().selectEntity('poly-ent');
+    const { unmount: unmountPoly } = render(<Inspector />);
+
+    const polyShapeSelect = screen.getByLabelText('Collision Shape') as HTMLSelectElement;
+    expect(polyShapeSelect.value).toBe('3');
+
+    fireEvent.change(polyShapeSelect, { target: { value: '1' } });
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const polyToBox = useSceneStore.getState().scene.entities[0];
+    const polyBoxCol = polyToBox.inlineEntityData?.Collision as Record<string, unknown>;
+    expect(polyToBox.inlineEntityData?.shape).toBe('1');
+    expect(polyBoxCol).toBeDefined();
+    expect(polyBoxCol.Polygon).toBeUndefined();
+    expect(polyBoxCol.Compound).toBeUndefined();
+
+    // Serialize scene to XML: confirm no <Polygon> or <Compound> for this entity
+    let xml = serializeScene(useSceneStore.getState().scene);
+    const polyEntityXml = xml.slice(xml.indexOf('poly-ent'), xml.indexOf('comp-ent'));
+    expect(polyEntityXml).not.toContain('<Polygon>');
+    expect(polyEntityXml).not.toContain('<Compound>');
+
+    // 2. Box -> Compound (4) via Inspector selector
+    fireEvent.change(polyShapeSelect, { target: { value: '4' } });
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const polyToComp = useSceneStore.getState().scene.entities[0];
+    const polyCompCol = polyToComp.inlineEntityData?.Collision as Record<string, unknown>;
+    expect(polyToComp.inlineEntityData?.shape).toBe('4');
+    expect(polyCompCol.Compound).toBeDefined();
+    expect(polyCompCol.Polygon).toBeUndefined();
+
+    xml = serializeScene(useSceneStore.getState().scene);
+    const polyCompXml = xml.slice(xml.indexOf('poly-ent'), xml.indexOf('comp-ent'));
+    expect(polyCompXml).toContain('<Compound>');
+    expect(polyCompXml).not.toContain('<Polygon>');
+
+    // 3. Compound -> Polygon (3) restores model polygon and clears Compound
+    fireEvent.change(polyShapeSelect, { target: { value: '3' } });
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const polyRestored = useSceneStore.getState().scene.entities[0];
+    const polyRestoredCol = polyRestored.inlineEntityData?.Collision as Record<string, unknown>;
+    expect(polyRestored.inlineEntityData?.shape).toBe('3');
+    expect(polyRestoredCol.Polygon).toBeDefined();
+    expect(polyRestoredCol.Compound).toBeUndefined();
+
+    xml = serializeScene(useSceneStore.getState().scene);
+    const polyRestoredXml = xml.slice(xml.indexOf('poly-ent'), xml.indexOf('comp-ent'));
+    expect(polyRestoredXml).toContain('<Polygon>');
+    expect(polyRestoredXml).not.toContain('<Compound>');
+
+    unmountPoly();
+
+    // 4. Compound -> Circle (2) via Inspector selector
+    useSceneStore.getState().selectEntity('comp-ent');
+    render(<Inspector />);
+
+    const compShapeSelect = screen.getByLabelText('Collision Shape') as HTMLSelectElement;
+    expect(compShapeSelect.value).toBe('4');
+
+    fireEvent.change(compShapeSelect, { target: { value: '2' } });
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const compToCircle = useSceneStore.getState().scene.entities[1];
+    const compCircleCol = compToCircle.inlineEntityData?.Collision as Record<string, unknown>;
+    expect(compToCircle.inlineEntityData?.shape).toBe('2');
+    expect(compCircleCol).toBeDefined();
+    expect(compCircleCol.Compound).toBeUndefined();
+    expect(compCircleCol.Polygon).toBeUndefined();
+
+    xml = serializeScene(useSceneStore.getState().scene);
+    const compEntityXml = xml.slice(xml.indexOf('comp-ent'));
+    expect(compEntityXml).not.toContain('<Compound>');
+    expect(compEntityXml).not.toContain('<Polygon>');
   });
 });
