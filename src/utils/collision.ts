@@ -669,49 +669,7 @@ export function isCollisionGeometryValid(
     diagnostics?: CollisionDiagnostic[];
   },
 ): boolean {
-  if (physics.shape === 0) {
-    return !physics.diagnostics || physics.diagnostics.length === 0;
-  }
-  const { collision } = physics;
-  const isPositionValid =
-    Number.isFinite(collision.position.x) &&
-    Number.isFinite(collision.position.y) &&
-    Number.isFinite(collision.position.z);
-  if (!isPositionValid) return false;
-
-  const isSizeValid =
-    Number.isFinite(collision.size.x) &&
-    Number.isFinite(collision.size.y) &&
-    Number.isFinite(collision.size.z) &&
-    collision.size.x > 0 &&
-    collision.size.y > 0 &&
-    collision.size.z > 0;
-  if (!isSizeValid) return false;
-
-  if (physics.diagnostics && physics.diagnostics.length > 0) {
-    const relevantDiagnostics = physics.diagnostics.filter((d) => {
-      if (
-        (physics.shape === 1 || physics.shape === 2) &&
-        (d.scope === "polygon" || d.scope === "compound")
-      )
-        return false;
-      if (physics.shape === 3 && d.scope === "compound") return false;
-      if (physics.shape === 4 && d.scope === "polygon") return false;
-      return true;
-    });
-    if (relevantDiagnostics.length > 0) return false;
-  }
-
-  if (physics.shape === 1 || physics.shape === 2) {
-    return true;
-  }
-  if (physics.shape === 3) {
-    return validatePolygon(collision.polygon).valid;
-  }
-  if (physics.shape === 4) {
-    return validateCompound(collision.compound).valid;
-  }
-  return true;
+  return getCollisionDiagnostics(physics).length === 0;
 }
 
 export function parseCompound(
@@ -1121,12 +1079,14 @@ export function parseEntityPhysics(raw: RawMap): EntityPhysicsConfig {
     Number.isInteger(rawShape) && rawShape >= 0 && rawShape <= 4;
   const shape = (validShape ? rawShape : 0) as CollisionShape;
   if (!validShape) {
-    warnings.push(`Unsupported collision shape value "${String(raw.shape)}".`);
+    const rawValue = String(raw.shape);
+    warnings.push(`Unsupported collision shape value "${rawValue}".`);
     diagnostics.push({
       scope: "collision",
       target: "Collision",
       code: "UNSUPPORTED_SHAPE_VALUE",
-      message: `Unsupported collision shape value "${String(raw.shape)}".`,
+      message: `Unsupported collision shape value "${rawValue}".`,
+      rawValue,
     });
   }
 

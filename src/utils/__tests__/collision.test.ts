@@ -27,6 +27,7 @@ import type {
   CollisionDiagnostic,
   CollisionPolygonVertex,
   EntityInstance,
+  EntityPhysicsConfig,
 } from "../../types";
 
 describe("collision parsing and resolution", () => {
@@ -996,6 +997,7 @@ describe("collision validity after inspector edits", () => {
         scope: "collision",
         target: "Collision",
         code: "UNSUPPORTED_SHAPE_VALUE",
+        rawValue: "5",
       }),
     ]);
 
@@ -1003,6 +1005,7 @@ describe("collision validity after inspector edits", () => {
     const diags = getCollisionDiagnostics(parsed);
     expect(diags).toHaveLength(1);
     expect(diags[0].code).toBe("UNSUPPORTED_SHAPE_VALUE");
+    expect(diags[0].rawValue).toBe("5");
 
     // isCollisionGeometryValid returns false when diagnostics exist on shape 0
     expect(isCollisionGeometryValid(parsed)).toBe(false);
@@ -1029,6 +1032,57 @@ describe("collision validity after inspector edits", () => {
 
     expect(findEntitiesWithInvalidCollision([unsupportedEntity])).toEqual([
       unsupportedEntity,
+    ]);
+  });
+
+  it("derives validity from diagnostics regardless of stale collision.valid boolean", () => {
+    // 1. collision.valid = false, but geometry and diagnostics are valid -> valid
+    const staleFalsePhysics: EntityPhysicsConfig = {
+      ...createDefaultPhysics(1),
+      collision: {
+        ...createDefaultPhysics(1).collision,
+        valid: false,
+      },
+      diagnostics: [],
+    };
+    expect(isCollisionGeometryValid(staleFalsePhysics)).toBe(true);
+
+    const staleFalseEntity: EntityInstance = {
+      id: 1,
+      entityName: "stale_false",
+      editorEntityUID: "stale-false-1",
+      position: { x: 0, y: 0, z: 0 },
+      angle: 0,
+      spriteFrame: 0,
+      hide: false,
+      flipX: false,
+      flipY: false,
+      customData: [],
+      inlineTemplate: { name: "stale_false", physics: staleFalsePhysics },
+      inlineEntityData: { shape: "1" },
+    };
+    expect(findEntitiesWithInvalidCollision([staleFalseEntity])).toEqual([]);
+
+    // 2. collision.valid = true, but geometry has invalid size -> invalid
+    const staleTruePhysics: EntityPhysicsConfig = {
+      ...createDefaultPhysics(1),
+      collision: {
+        ...createDefaultPhysics(1).collision,
+        size: { x: 0, y: 64, z: 64 },
+        valid: true,
+      },
+      diagnostics: [],
+    };
+    expect(isCollisionGeometryValid(staleTruePhysics)).toBe(false);
+
+    const staleTrueEntity: EntityInstance = {
+      ...staleFalseEntity,
+      editorEntityUID: "stale-true-1",
+      entityName: "stale_true",
+      inlineTemplate: { name: "stale_true", physics: staleTruePhysics },
+    };
+    expect(findEntitiesWithInvalidCollision([staleTrueEntity])).toEqual([
+      staleTrueEntity,
     ]);
   });
 

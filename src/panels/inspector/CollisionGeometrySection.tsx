@@ -653,7 +653,14 @@ export function CollisionGeometrySection({
     diagnostics: physics?.diagnostics,
   });
   const sortedDiagnostics = sortCollisionDiagnostics(activeDiagnostics);
-  const isInvalid = sortedDiagnostics.length > 0 || !collision.valid;
+  const isInvalid = sortedDiagnostics.length > 0;
+  const unsupportedShapeDiag = sortedDiagnostics.find(
+    d => d.code === 'UNSUPPORTED_SHAPE_VALUE'
+  );
+  const unsupportedRawValue = unsupportedShapeDiag
+    ? (unsupportedShapeDiag.rawValue ?? unsupportedShapeDiag.message.match(/"([^"]*)"/)?.[1] ?? 'unknown')
+    : null;
+  const unsupportedLabel = unsupportedRawValue !== null ? `Unsupported (${unsupportedRawValue})` : null;
 
   const isGeometryWarning = (w: string) =>
     w.startsWith('Polygon') ||
@@ -701,15 +708,23 @@ export function CollisionGeometrySection({
         <span className="text-xs text-gray-400 w-16 shrink-0">Shape</span>
         {isReadOnly ? (
           <div className="flex-1 editor-input py-1 text-xs font-mono select-text cursor-default">
-            {shape} - {collisionShapeName(shape)}
+            {unsupportedLabel ?? `${shape} - ${collisionShapeName(shape)}`}
           </div>
         ) : (
           <select
             aria-label="Collision Shape"
-            value={shape}
-            onChange={e => onChangeShape?.(Number(e.target.value) as CollisionShape)}
+            value={unsupportedLabel ? 'unsupported' : shape}
+            onChange={e => {
+              if (e.target.value === 'unsupported') return;
+              onChangeShape?.(Number(e.target.value) as CollisionShape);
+            }}
             className="flex-1 editor-input py-1 text-xs font-mono cursor-pointer"
           >
+            {unsupportedLabel && (
+              <option value="unsupported" disabled>
+                {unsupportedLabel}
+              </option>
+            )}
             <option value={0}>0 - None</option>
             <option value={1}>1 - Box</option>
             <option value={2}>2 - Circle</option>

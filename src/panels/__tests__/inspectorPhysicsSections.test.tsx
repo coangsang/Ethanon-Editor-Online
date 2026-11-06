@@ -612,7 +612,7 @@ describe("Inspector Physics & Collision Sub-sections", () => {
   });
 
   describe("Unsupported collision shape in CollisionGeometrySection", () => {
-    it("displays error banner and allows changing shape even when shape is normalized to 0", () => {
+    it("displays Unsupported (rawValue) option, error banner, and allows selecting None or valid shapes", () => {
       const unsupportedTemplate: EntityTemplate = {
         name: "unsupported_entity",
         spriteFile: "test.png",
@@ -645,6 +645,7 @@ describe("Inspector Physics & Collision Sub-sections", () => {
               target: "Collision",
               code: "UNSUPPORTED_SHAPE_VALUE",
               message: 'Unsupported collision shape value "5".',
+              rawValue: "5",
             },
           ],
           warnings: ['Unsupported collision shape value "5".'],
@@ -652,7 +653,7 @@ describe("Inspector Physics & Collision Sub-sections", () => {
       };
 
       const onChangeShape = vi.fn();
-      render(
+      const { rerender } = render(
         <CollisionGeometrySection
           template={unsupportedTemplate}
           source="Inline"
@@ -660,11 +661,16 @@ describe("Inspector Physics & Collision Sub-sections", () => {
         />,
       );
 
-      // 1. Selector shows 0 - None
+      // 1. Selector shows Unsupported (5) instead of 0 - None
       const shapeSelect = screen.getByLabelText(
         "Collision Shape",
       ) as HTMLSelectElement;
-      expect(shapeSelect.value).toBe("0");
+      expect(shapeSelect.value).toBe("unsupported");
+      const unsupportedOption = screen.getByRole("option", {
+        name: "Unsupported (5)",
+      }) as HTMLOptionElement;
+      expect(unsupportedOption).toBeDefined();
+      expect(unsupportedOption.disabled).toBe(true);
 
       // 2. Error banner is rendered despite shape === 0
       expect(screen.getByText("Invalid collision · 1 issue")).toBeDefined();
@@ -672,9 +678,79 @@ describe("Inspector Physics & Collision Sub-sections", () => {
         screen.getByText(/Unsupported collision shape value "5"/),
       ).toBeDefined();
 
-      // 3. User can switch to 1 - Box
+      // 3. User can directly select 0 - None and callback receives 0
+      fireEvent.change(shapeSelect, { target: { value: "0" } });
+      expect(onChangeShape).toHaveBeenCalledWith(0);
+
+      // 4. User can switch to 1 - Box, 3 - Polygon, or 4 - Compound
+      onChangeShape.mockClear();
       fireEvent.change(shapeSelect, { target: { value: "1" } });
       expect(onChangeShape).toHaveBeenCalledWith(1);
+
+      onChangeShape.mockClear();
+      fireEvent.change(shapeSelect, { target: { value: "3" } });
+      expect(onChangeShape).toHaveBeenCalledWith(3);
+
+      onChangeShape.mockClear();
+      fireEvent.change(shapeSelect, { target: { value: "4" } });
+      expect(onChangeShape).toHaveBeenCalledWith(4);
+
+      // 5. Read-only template renders Unsupported (5) instead of 0 - None
+      rerender(
+        <CollisionGeometrySection
+          template={unsupportedTemplate}
+          source="Template"
+          readOnly
+        />,
+      );
+      expect(screen.getByText("Unsupported (5)")).toBeDefined();
+      expect(screen.queryByText("0 - None")).toBeNull();
+    });
+
+    it("renders 'No collision assigned' and no invalid banner when template has no physics or stale collision.valid=false", () => {
+      const noPhysicsTemplate: EntityTemplate = {
+        name: "no_physics_entity",
+        spriteFile: "test.png",
+        spriteCut: { x: 1, y: 1 },
+        type: "horizontal",
+        pivotAdjust: { x: 0, y: 0 },
+        scale: { x: 1, y: 1 },
+        parallaxIntensity: 1,
+      };
+
+      const { rerender } = render(
+        <CollisionGeometrySection template={noPhysicsTemplate} source="Inline" />,
+      );
+
+      expect(screen.getByText("No collision assigned")).toBeDefined();
+      expect(screen.queryByText(/Invalid collision/)).toBeNull();
+      expect(screen.queryByText(/Invalid collision · 0 issues/)).toBeNull();
+
+      // Also test stale collision.valid=false on valid Box geometry with 0 diagnostics
+      const staleFalseBoxTemplate = createBaseTemplate();
+      staleFalseBoxTemplate.physics!.collision.valid = false;
+      staleFalseBoxTemplate.physics!.diagnostics = [];
+
+      rerender(
+        <CollisionGeometrySection
+          template={staleFalseBoxTemplate}
+          source="Inline"
+        />,
+      );
+      expect(screen.queryByText(/Invalid collision/)).toBeNull();
+
+      // Also test stale collision.valid=true on invalid Box geometry (size 0)
+      const staleTrueInvalidTemplate = createBaseTemplate();
+      staleTrueInvalidTemplate.physics!.collision.valid = true;
+      staleTrueInvalidTemplate.physics!.collision.size = { x: 0, y: 40, z: 50 };
+
+      rerender(
+        <CollisionGeometrySection
+          template={staleTrueInvalidTemplate}
+          source="Inline"
+        />,
+      );
+      expect(screen.getByText("Invalid collision · 1 issue")).toBeDefined();
     });
 
     it("does not render invalid banner for new collision with valid default dimensions", () => {

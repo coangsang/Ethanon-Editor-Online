@@ -86,6 +86,7 @@ export interface CollisionDiagnostic {
   target: string;
   code: string;
   message: string;
+  rawValue?: string;
 }
 
 export interface CollisionMaterial {

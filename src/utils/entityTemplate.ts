@@ -3,6 +3,8 @@ import {
   compoundsEqual,
   createDefaultCompoundSubShape,
   createDefaultPolygonVertices,
+  filterDiagnosticsForEdit,
+  filterWarningsForEdit,
   isCollisionGeometryValid,
   parseCompoundShapes,
   parsePolygonVertices,
@@ -257,6 +259,7 @@ export function createDefaultPhysics(
       joints: [],
     },
     warnings: [],
+    diagnostics: [],
   };
 }
 
@@ -278,7 +281,15 @@ export function applyPhysicsToEntity(
   };
 
   if (!physics || physics.shape === 0) {
-    inlineTemplate.physics = physics ? { ...physics, shape: 0 } : createDefaultPhysics(0);
+    inlineTemplate.physics = physics
+      ? {
+          ...physics,
+          shape: 0,
+          collision: { ...physics.collision, valid: true },
+          warnings: filterWarningsForEdit(physics.warnings, { type: 'shape', newShape: 0 }),
+          diagnostics: filterDiagnosticsForEdit(physics.diagnostics, { type: 'shape', newShape: 0 }),
+        }
+      : createDefaultPhysics(0);
     inlineEntityData.shape = '0';
     delete inlineEntityData.Collision;
     return {
@@ -361,10 +372,6 @@ export function findEntitiesWithInvalidCollision(entities: EntityInstance[]): En
   return entities.filter(entity => {
     const physics = entity.inlineTemplate?.physics;
     if (!physics || entityHasFileNameTag(entity)) return false;
-    const hasUnsupportedShape = (physics.diagnostics ?? []).some(d => d.code === 'UNSUPPORTED_SHAPE_VALUE');
-    if (physics.shape === 0) {
-      return hasUnsupportedShape || (!physics.collision.valid && (physics.diagnostics ?? []).length > 0);
-    }
-    return !physics.collision.valid;
+    return !isCollisionGeometryValid(physics);
   });
 }

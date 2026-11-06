@@ -685,4 +685,79 @@ describe('useCollisionRenderer', () => {
       expect.objectContaining({ color: 0x00bb00 }),
     );
   });
+
+  it('derives collision validity from geometry and diagnostics even when cached collision.valid is stale', () => {
+    const data = fixture();
+
+    // 1. Cached collision.valid is true, but actual polygon geometry is concave (invalid) -> renders red
+    const staleValidTemplate: EntityTemplate = {
+      ...data.templates.box,
+      physics: {
+        ...data.templates.box.physics!,
+        shape: 3,
+        collision: {
+          ...data.templates.box.physics!.collision,
+          valid: true,
+          polygon: [
+            { name: 'v0', x: -0.5, y: -0.5 },
+            { name: 'v1', x: 0, y: 0 },
+            { name: 'v2', x: 0.5, y: -0.5 },
+            { name: 'v3', x: 0.5, y: 0.5 },
+            { name: 'v4', x: -0.5, y: 0.5 },
+          ],
+        },
+        diagnostics: [],
+      },
+    };
+
+    const initialProps = {
+      refs: data.refs,
+      scene: data.scene,
+      templates: { box: staleValidTemplate },
+      selectedUIDs: ['uid'],
+      showCollisions: true,
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    };
+
+    const { rerender } = renderHook(props => useCollisionRenderer(props), { initialProps });
+    flushAnimationFrames();
+
+    expect(data.selectedGraphics.fill).toHaveBeenCalledWith(
+      expect.objectContaining({ color: 0xef4444, alpha: 0.3 }),
+    );
+    expect(data.selectedGraphics.stroke).toHaveBeenLastCalledWith(
+      expect.objectContaining({ color: 0xef4444 }),
+    );
+
+    // 2. Cached collision.valid is false, but actual box geometry and diagnostics are valid -> renders green
+    data.selectedGraphics.fill.mockClear();
+    data.selectedGraphics.stroke.mockClear();
+
+    const staleInvalidTemplate: EntityTemplate = {
+      ...data.templates.box,
+      physics: {
+        ...data.templates.box.physics!,
+        shape: 1,
+        collision: {
+          ...data.templates.box.physics!.collision,
+          valid: false,
+          position: { x: 0, y: 0, z: 0 },
+          size: { x: 20, y: 10, z: 10 },
+        },
+        diagnostics: [],
+      },
+    };
+
+    rerender({ ...initialProps, templates: { box: staleInvalidTemplate } });
+    flushAnimationFrames();
+
+    expect(data.selectedGraphics.fill).not.toHaveBeenCalled();
+    expect(data.selectedGraphics.stroke).toHaveBeenLastCalledWith(
+      expect.objectContaining({ color: 0x00bb00 }),
+    );
+  });
 });

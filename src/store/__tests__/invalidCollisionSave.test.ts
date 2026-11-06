@@ -136,6 +136,7 @@ describe("saving scenes with invalid collision geometry", () => {
                   polygon: newPolygon,
                   valid: true,
                 },
+                diagnostics: [],
               },
             },
             inlineEntityData: {
@@ -351,5 +352,30 @@ describe("saving scenes with invalid collision geometry", () => {
     const savedXml = write.mock.calls[0][0] as string;
     expect(savedXml).toContain('shape="5"');
     expect(savedXml).toContain('<Position x="10" y="20" z="0"');
+  });
+
+  it("evaluates save warnings from actual geometry/diagnostics even if cached collision.valid is stale", async () => {
+    // 1. Stale collision.valid = true on concave polygon -> still warns on save
+    const invalidScene = parseScene(sceneXml(CONCAVE));
+    invalidScene.entities[0].inlineTemplate!.physics!.collision.valid = true;
+    useSceneStore.setState({ scene: invalidScene });
+    write.mockClear();
+
+    await useSceneStore.getState().saveActiveScene();
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(useSceneStore.getState().projectError).toBe(
+      "Scene saved, but 1 entity has invalid collision geometry: rock.",
+    );
+
+    // 2. Stale collision.valid = false on convex polygon with no diagnostics -> saves without warning
+    const validScene = parseScene(sceneXml(CONVEX));
+    validScene.entities[0].inlineTemplate!.physics!.collision.valid = false;
+    validScene.entities[0].inlineTemplate!.physics!.diagnostics = [];
+    useSceneStore.setState({ scene: validScene });
+    write.mockClear();
+
+    await useSceneStore.getState().saveActiveScene();
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(useSceneStore.getState().projectError).toBeNull();
   });
 });

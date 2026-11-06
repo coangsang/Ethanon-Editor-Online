@@ -638,4 +638,42 @@ describe('Inspector pending edit interactions', () => {
     act(() => useSceneStore.getState().flushInspectorEdits());
     expect(useSceneStore.getState().history).toHaveLength(historyLengthAfterRepair);
   });
+
+  it('allows selecting None directly from an unsupported shape in Inspector and clears diagnostics, warnings, and Collision block', () => {
+    useSceneStore.getState().loadScene(`
+      <Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>
+        <Entity id="1" spriteFrame="0" editorEntityUID="unsupported-ent">
+          <EntityName>unsupported-ent</EntityName><Position x="0" y="0" z="0" angle="0" />
+          <Entity shape="5">
+            <Collision>
+              <Position x="10" y="20" z="0"/><Size x="64" y="64" z="64"/>
+            </Collision>
+          </Entity>
+        </Entity>
+      </EntitiesInScene></Ethanon>
+    `);
+
+    useSceneStore.getState().selectEntity('unsupported-ent');
+    render(<Inspector />);
+
+    expect(screen.getByText(/Invalid collision · 1 issue/)).toBeTruthy();
+    const shapeSelect = screen.getByLabelText('Collision Shape') as HTMLSelectElement;
+    expect(shapeSelect.value).toBe('unsupported');
+    expect(screen.getByRole('option', { name: 'Unsupported (5)' })).toBeTruthy();
+
+    const historyBefore = useSceneStore.getState().history.length;
+    fireEvent.change(shapeSelect, { target: { value: '0' } });
+    act(() => useSceneStore.getState().flushInspectorEdits());
+
+    const updated = useSceneStore.getState().scene.entities[0];
+    expect(updated.inlineTemplate?.physics?.shape).toBe(0);
+    expect(updated.inlineTemplate?.physics?.collision.valid).toBe(true);
+    expect(updated.inlineTemplate?.physics?.diagnostics).toEqual([]);
+    expect(updated.inlineTemplate?.physics?.warnings).toEqual([]);
+    expect(updated.inlineEntityData?.shape).toBe('0');
+    expect(updated.inlineEntityData?.Collision).toBeUndefined();
+    expect(screen.queryByText(/Invalid collision/)).toBeNull();
+    expect(shapeSelect.value).toBe('0');
+    expect(useSceneStore.getState().history).toHaveLength(historyBefore + 1);
+  });
 });

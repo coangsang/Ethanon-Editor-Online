@@ -257,7 +257,9 @@ function rebuildEntry(
     resolved.template.scale,
   );
   if (!geometry) return;
-  const isValid = resolved.template.physics?.collision.valid ?? true;
+  const isValid = resolved.template.physics
+    ? isCollisionGeometryValid(resolved.template.physics)
+    : true;
   runtime.entries.set(uid, {
     uid,
     geometry,
