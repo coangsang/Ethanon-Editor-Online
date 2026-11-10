@@ -169,8 +169,8 @@ function parseCustomData(entityData: RawSceneEntityData | RawSceneEntityData[] |
   });
 }
 
-//{Tag FileName is a marker to mark this entity have reference to a {EntityName}.ent file}
-function hasInlineTemplateData(entityData: RawSceneEntityData | undefined) {
+// {Tag FileName is a marker to mark this entity have reference to a {EntityName}.ent file}
+export function hasInlineTemplateData(entityData: RawSceneEntityData | undefined) {
   if (!entityData) return false;
 
   const hasFileName = typeof entityData.FileName === 'string' && entityData.FileName.trim().length > 0;
@@ -201,7 +201,7 @@ function hasInlineTemplateData(entityData: RawSceneEntityData | undefined) {
   );
 }
 
-function parseInlineTemplate(name: string, entityData: RawSceneEntityData): InlineEntityTemplate {
+export function parseInlineTemplate(name: string, entityData: RawSceneEntityData): InlineEntityTemplate {
   const template: InlineEntityTemplate = { name };
 
   if (entityData.Sprite !== undefined) template.spriteFile = String(entityData.Sprite);
