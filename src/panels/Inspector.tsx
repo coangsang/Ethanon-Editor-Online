@@ -4,7 +4,17 @@ import './Inspector.css';
 import type { CollisionCompoundShape, CollisionPolygonVertex, CollisionShape, CustomDataRefType, CustomDataValue, CustomDataVariable, CustomDataVectorValue, EntityInstance, EntityPhysicsConfig, EntityTemplate, SpriteAtlas } from '../types';
 import { useSceneStore } from '../store/sceneStore';
 import { applyPhysicsToEntity, createDefaultPhysics, entityHasFileNameTag, getTemplateKey, resolveEntityTemplate, resolveExternalTemplate, unpackEntityInstance } from '../utils/entityTemplate';
-import { createDefaultCompoundSubShape, createDefaultPolygonVertices } from '../utils/collision';
+import {
+  compoundsEqual,
+  createDefaultCompoundSubShape,
+  createDefaultPolygonVertices,
+  filterDiagnosticsForEdit,
+  filterWarningsForEdit,
+  isCollisionGeometryValid,
+  polygonsEqual,
+  validateCompound,
+  validatePolygon,
+} from '../utils/collision';
 import {
   buildCustomDataRefIndex,
   isBaseDataFieldCompatibleWithType,
@@ -1631,7 +1641,27 @@ export function Inspector() {
       }
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics;
-      if (basePhysics && basePhysics.shape !== 0) {
+      const isUnsupportedShape = (basePhysics?.diagnostics ?? []).some(d => d.code === 'UNSUPPORTED_SHAPE_VALUE');
+
+      if (basePhysics && (basePhysics.shape !== 0 || isUnsupportedShape)) {
+        const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, {
+          type: 'shape',
+          newShape,
+        });
+        const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, {
+          type: 'shape',
+          newShape,
+        });
+        const resolvedDiagnosticsOrWarnings =
+          remainingDiagnostics.length !== (basePhysics.diagnostics?.length ?? 0) ||
+          remainingWarnings.length !== (basePhysics.warnings?.length ?? 0);
+        if (
+          basePhysics.shape === newShape &&
+          !isUnsupportedShape &&
+          !resolvedDiagnosticsOrWarnings
+        ) {
+          return currentEntity;
+        }
         let compound = basePhysics.collision.compound;
         if (newShape === 4 && compound.length === 0) {
           compound = [createDefaultCompoundSubShape([])];
@@ -1640,17 +1670,39 @@ export function Inspector() {
         if (newShape === 3 && polygon.length === 0) {
           polygon = createDefaultPolygonVertices();
         }
+        let size = basePhysics.collision.size;
+        if (
+          !Number.isFinite(size.x) || !Number.isFinite(size.y) || !Number.isFinite(size.z) ||
+          size.x <= 0 || size.y <= 0 || size.z <= 0
+        ) {
+          size = { x: 64, y: 64, z: 64 };
+        }
         const nextPhysics: EntityPhysicsConfig = {
           ...basePhysics,
           shape: newShape,
           collision: {
             ...basePhysics.collision,
+            size,
             polygon,
             compound,
-            valid: newShape === 4 ? compound.length > 0 : newShape === 3 ? polygon.length >= 3 : true,
+            valid: isCollisionGeometryValid({
+              shape: newShape,
+              collision: {
+                ...basePhysics.collision,
+                size,
+                polygon,
+                compound,
+              },
+              diagnostics: remainingDiagnostics,
+            }),
           },
+          diagnostics: remainingDiagnostics,
+          warnings: remainingWarnings,
         };
-        return applyPhysicsToEntity(currentEntity, nextPhysics);
+        return applyPhysicsToEntity(currentEntity, nextPhysics, {
+          forceSerializePolygon: newShape === 3 && polygon.length > 0 && basePhysics.shape !== 3,
+          forceSerializeCompound: newShape === 4 && compound.length > 0 && basePhysics.shape !== 4,
+        });
       }
       const freshPhysics = createDefaultPhysics(newShape);
       return applyPhysicsToEntity(currentEntity, freshPhysics);
@@ -1662,16 +1714,31 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(3);
+      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: 'polygon' });
+      const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: 'polygon' });
+      const resolvedDiagnosticsOrWarnings =
+        remainingDiagnostics.length !== (basePhysics.diagnostics?.length ?? 0) ||
+        remainingWarnings.length !== (basePhysics.warnings?.length ?? 0);
+      if (polygonsEqual(basePhysics.collision.polygon, polygon) && !resolvedDiagnosticsOrWarnings) {
+        return currentEntity;
+      }
+      const polyValidation = validatePolygon(polygon);
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         shape: 3,
         collision: {
           ...basePhysics.collision,
           polygon,
-          valid: polygon.length >= 3,
+          valid: isCollisionGeometryValid({
+            shape: 3,
+            collision: { ...basePhysics.collision, polygon },
+            diagnostics: remainingDiagnostics,
+          }),
         },
+        diagnostics: remainingDiagnostics,
+        warnings: polyValidation.valid ? remainingWarnings : [...remainingWarnings, ...polyValidation.errors],
       };
-      return applyPhysicsToEntity(currentEntity, nextPhysics);
+      return applyPhysicsToEntity(currentEntity, nextPhysics, { forceSerializePolygon: true });
     });
   };
 
@@ -1680,16 +1747,31 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(4);
+      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: 'compound' });
+      const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: 'compound' });
+      const resolvedDiagnosticsOrWarnings =
+        remainingDiagnostics.length !== (basePhysics.diagnostics?.length ?? 0) ||
+        remainingWarnings.length !== (basePhysics.warnings?.length ?? 0);
+      if (compoundsEqual(basePhysics.collision.compound, compound) && !resolvedDiagnosticsOrWarnings) {
+        return currentEntity;
+      }
+      const compValidation = validateCompound(compound);
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         shape: 4,
         collision: {
           ...basePhysics.collision,
           compound,
-          valid: compound.length > 0,
+          valid: isCollisionGeometryValid({
+            shape: 4,
+            collision: { ...basePhysics.collision, compound },
+            diagnostics: remainingDiagnostics,
+          }),
         },
+        diagnostics: remainingDiagnostics,
+        warnings: compValidation.valid ? remainingWarnings : [...remainingWarnings, ...compValidation.errors],
       };
-      return applyPhysicsToEntity(currentEntity, nextPhysics);
+      return applyPhysicsToEntity(currentEntity, nextPhysics, { forceSerializeCompound: true });
     });
   };
 
@@ -1698,13 +1780,33 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
+      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: 'position' });
+      const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: 'position' });
+      const resolvedDiagnosticsOrWarnings =
+        remainingDiagnostics.length !== (basePhysics.diagnostics?.length ?? 0) ||
+        remainingWarnings.length !== (basePhysics.warnings?.length ?? 0);
+      const curPos = basePhysics.collision.position;
+      if (
+        curPos.x === pos.x &&
+        curPos.y === pos.y &&
+        curPos.z === pos.z &&
+        !resolvedDiagnosticsOrWarnings
+      ) {
+        return currentEntity;
+      }
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         collision: {
           ...basePhysics.collision,
           position: pos,
-          valid: true,
+          valid: isCollisionGeometryValid({
+            shape: basePhysics.shape,
+            collision: { ...basePhysics.collision, position: pos },
+            diagnostics: remainingDiagnostics,
+          }),
         },
+        diagnostics: remainingDiagnostics,
+        warnings: remainingWarnings,
       };
       return applyPhysicsToEntity(currentEntity, nextPhysics);
     });
@@ -1715,13 +1817,33 @@ export function Inspector() {
       if (entityHasFileNameTag(currentEntity)) return currentEntity;
       const resolved = resolveEntityTemplate(currentEntity, useSceneStore.getState().templates);
       const basePhysics = resolved?.physics ?? createDefaultPhysics(1);
+      const remainingDiagnostics = filterDiagnosticsForEdit(basePhysics.diagnostics, { type: 'size' });
+      const remainingWarnings = filterWarningsForEdit(basePhysics.warnings, { type: 'size' });
+      const resolvedDiagnosticsOrWarnings =
+        remainingDiagnostics.length !== (basePhysics.diagnostics?.length ?? 0) ||
+        remainingWarnings.length !== (basePhysics.warnings?.length ?? 0);
+      const curSize = basePhysics.collision.size;
+      if (
+        curSize.x === size.x &&
+        curSize.y === size.y &&
+        curSize.z === size.z &&
+        !resolvedDiagnosticsOrWarnings
+      ) {
+        return currentEntity;
+      }
       const nextPhysics: EntityPhysicsConfig = {
         ...basePhysics,
         collision: {
           ...basePhysics.collision,
           size,
-          valid: true,
+          valid: isCollisionGeometryValid({
+            shape: basePhysics.shape,
+            collision: { ...basePhysics.collision, size },
+            diagnostics: remainingDiagnostics,
+          }),
         },
+        diagnostics: remainingDiagnostics,
+        warnings: remainingWarnings,
       };
       return applyPhysicsToEntity(currentEntity, nextPhysics);
     });

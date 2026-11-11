@@ -57,7 +57,6 @@ export function buildCollisionWorldGeometry(
 ): CollisionWorldGeometry | null {
   if (!physics || physics.shape === 0) return null;
   const { collision } = physics;
-  if (!collision.valid) return null;
   if (!finite([
     entity.position.x, entity.position.y, entity.position.z, entity.angle,
     scale.x, scale.y,
@@ -121,16 +120,23 @@ export function buildCollisionWorldGeometry(
   } else if (physics.shape === 2) {
     extrudeCircle(scaledCenter, (Math.abs(scaledSize.x) + Math.abs(scaledSize.y)) / 4);
   } else if (physics.shape === 3) {
-    if (collision.polygon.length < 3) return null;
-    const points = collision.polygon.map(vertex => ({
-      x: scaledCenter.x + vertex.x * scaledSize.x / 2,
-      y: scaledCenter.y + vertex.y * scaledSize.y / 2,
-    }));
-    if (!points.every(point => finite([point.x, point.y]))) return null;
-    extrudePath(points);
+    if (collision.polygon.length >= 3) {
+      const points = collision.polygon.map(vertex => ({
+        x: scaledCenter.x + vertex.x * scaledSize.x / 2,
+        y: scaledCenter.y + vertex.y * scaledSize.y / 2,
+      }));
+      if (points.every(point => finite([point.x, point.y]))) {
+        extrudePath(points);
+      } else {
+        extrudePath(rectangle(scaledCenter, scaledSize.x / 2, scaledSize.y / 2));
+      }
+    } else {
+      extrudePath(rectangle(scaledCenter, scaledSize.x / 2, scaledSize.y / 2));
+    }
   } else {
     const halfUnscaledX = collision.size.x / 2;
     const halfUnscaledY = collision.size.y / 2;
+    let renderedCount = 0;
     for (const item of collision.compound) {
       if (!finite([item.posX, item.posY, item.angle])) continue;
       const center = {
@@ -138,10 +144,14 @@ export function buildCollisionWorldGeometry(
         y: (collision.position.y + item.posY * halfUnscaledY) * scale.y,
       };
       if (item.shape === 'circle') {
-        extrudeCircle(center, (item.radius ?? 0) * halfUnscaledX * Math.abs(scale.x));
+        const radius = (item.radius ?? 0) * halfUnscaledX * Math.abs(scale.x);
+        if (Number.isFinite(radius) && radius > 0) {
+          extrudeCircle(center, radius);
+          renderedCount++;
+        }
         continue;
       }
-      if (!item.sizeX || !item.sizeY || item.sizeX <= 0 || item.sizeY <= 0) continue;
+      if (!item.sizeX || !item.sizeY || item.sizeX <= 0 || item.sizeY <= 0 || !Number.isFinite(item.sizeX) || !Number.isFinite(item.sizeY)) continue;
       const itemCos = Math.cos(item.angle);
       const itemSin = Math.sin(item.angle);
       const points = rectangle(
@@ -152,6 +162,10 @@ export function buildCollisionWorldGeometry(
         itemSin,
       ).map(point => ({ x: center.x + point.x * scale.x, y: center.y + point.y * scale.y }));
       extrudePath(points);
+      renderedCount++;
+    }
+    if (renderedCount === 0) {
+      extrudePath(rectangle(scaledCenter, scaledSize.x / 2, scaledSize.y / 2));
     }
   }
 
