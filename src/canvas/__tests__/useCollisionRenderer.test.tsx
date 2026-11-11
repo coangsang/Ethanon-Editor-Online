@@ -58,8 +58,8 @@ function fixture() {
       inlineEntityData: { FileName: 'box.ent' },
     }],
   };
-  const unselectedGraphics = { clear: vi.fn(), poly: vi.fn(), circle: vi.fn(), stroke: vi.fn(), position: { set: vi.fn() }, scale: { set: vi.fn() } };
-  const selectedGraphics = { clear: vi.fn(), poly: vi.fn(), circle: vi.fn(), stroke: vi.fn(), position: { set: vi.fn() }, scale: { set: vi.fn() } };
+  const unselectedGraphics = { clear: vi.fn(), poly: vi.fn(), circle: vi.fn(), stroke: vi.fn(), fill: vi.fn(), position: { set: vi.fn() }, scale: { set: vi.fn() } };
+  const selectedGraphics = { clear: vi.fn(), poly: vi.fn(), circle: vi.fn(), stroke: vi.fn(), fill: vi.fn(), position: { set: vi.fn() }, scale: { set: vi.fn() } };
   const refs = {
     collisionGraphicsRef: { current: unselectedGraphics },
     selectedCollisionGraphicsRef: { current: selectedGraphics },
@@ -295,6 +295,114 @@ describe('useCollisionRenderer', () => {
     expect(data.graphics.poly).toHaveBeenCalled();
   });
 
+  it('stops drawing a live polygon preview that becomes invalid', () => {
+    const data = fixture();
+    const polyTemplate: EntityTemplate = {
+      ...data.templates.box,
+      physics: {
+        ...createDefaultPhysics(3),
+        shape: 3,
+        collision: {
+          valid: true,
+          position: { x: 0, y: 0, z: 0 },
+          size: { x: 64, y: 64, z: 32 },
+          polygon: [
+            { name: 'v0', x: 0, y: -1 },
+            { name: 'v1', x: 1, y: 1 },
+            { name: 'v2', x: -1, y: 1 },
+          ],
+          compound: [],
+          joints: [],
+        },
+      },
+    };
+    renderHook(() => useCollisionRenderer({
+      refs: data.refs,
+      scene: data.scene,
+      templates: { box: polyTemplate },
+      selectedUIDs: [],
+      showCollisions: true,
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    }));
+    flushAnimationFrames();
+    expect(data.graphics.poly).toHaveBeenCalled();
+    data.graphics.poly.mockClear();
+    data.graphics.stroke.mockClear();
+    data.graphics.fill.mockClear();
+
+    act(() => transformEventBus.emit([{
+      uid: 'uid',
+      collisionPolygon: [
+        { name: 'v0', x: -0.5, y: -0.5 },
+        { name: 'v1', x: 0, y: 0 },
+        { name: 'v2', x: 0.5, y: -0.5 },
+        { name: 'v3', x: 0.5, y: 0.5 },
+        { name: 'v4', x: -0.5, y: 0.5 },
+      ],
+    }]));
+    flushAnimationFrames();
+
+    expect(data.graphics.poly).toHaveBeenCalled();
+    expect(data.graphics.fill).toHaveBeenCalledWith(expect.objectContaining({
+      color: 0xef4444,
+      alpha: 0.3,
+    }));
+    expect(data.graphics.stroke).toHaveBeenCalledWith(expect.objectContaining({
+      color: 0xef4444,
+      alpha: 0.9,
+    }));
+  });
+
+  it('renders invalid selection in red with fill even when showCollisions is false', () => {
+    const data = fixture();
+    const invalidTemplate: EntityTemplate = {
+      ...data.templates.box,
+      physics: {
+        ...data.templates.box.physics!,
+        shape: 3,
+        collision: {
+          ...data.templates.box.physics!.collision,
+          valid: false,
+          polygon: [
+            { name: 'v0', x: -0.5, y: -0.5 },
+            { name: 'v1', x: 0, y: 0 },
+            { name: 'v2', x: 0.5, y: -0.5 },
+            { name: 'v3', x: 0.5, y: 0.5 },
+            { name: 'v4', x: -0.5, y: 0.5 },
+          ],
+        },
+      },
+    };
+    renderHook(() => useCollisionRenderer({
+      refs: data.refs,
+      scene: data.scene,
+      templates: { box: invalidTemplate },
+      selectedUIDs: ['uid'],
+      showCollisions: false,
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    }));
+    flushAnimationFrames();
+
+    expect(data.selectedGraphics.poly).toHaveBeenCalled();
+    expect(data.selectedGraphics.fill).toHaveBeenCalledWith(expect.objectContaining({
+      color: 0xef4444,
+      alpha: 0.3,
+    }));
+    expect(data.selectedGraphics.stroke).toHaveBeenCalledWith(expect.objectContaining({
+      color: 0xef4444,
+      alpha: 0.9,
+      width: 2,
+    }));
+  });
+
   it('redraws parallax geometry when the camera changes', () => {
     const data = fixture();
     data.scene.entities[0].position.z = 10;
@@ -468,5 +576,188 @@ describe('useCollisionRenderer', () => {
 
     expect(data.graphics.clear).toHaveBeenCalledTimes(clearCalls);
     expect(data.graphics.poly).toHaveBeenCalledTimes(polyCalls);
+  });
+
+  it('maintains invalid red color during live preview when entity has parser diagnostics, and turns valid when geometry is fixed', () => {
+    const data = fixture();
+    const invalidPhysics: EntityPhysicsConfig = {
+      shape: 4,
+      static: false,
+      sensor: false,
+      bullet: false,
+      fixedRotation: false,
+      friction: 1,
+      density: 1,
+      restitution: 0,
+      gravityScale: 1,
+      collision: {
+        valid: false,
+        position: { x: 0, y: 0, z: 0 },
+        size: { x: 40, y: 40, z: 10 },
+        polygon: [],
+        compound: [
+          { name: 'outside', shape: 'box', posX: 0, posY: 0, sizeX: 1, sizeY: 1 },
+        ],
+        joints: [],
+      },
+      diagnostics: [
+        {
+          scope: 'compound',
+          target: 'Compound bad',
+          code: 'UNSUPPORTED_SHAPE_TYPE',
+          message: 'has unsupported type "capsule"',
+        },
+      ],
+      warnings: ['Compound shape "bad" has unsupported type "capsule".'],
+    };
+
+    const template: EntityTemplate = {
+      name: 'compoundBad',
+      spriteFile: '',
+      spriteCut: { x: 1, y: 1 },
+      type: 'horizontal',
+      pivotAdjust: { x: 0, y: 0 },
+      scale: { x: 1, y: 1 },
+      parallaxIntensity: 1,
+      physics: invalidPhysics,
+    };
+
+    const scene: SceneData = {
+      properties: { ambient: { r: 1, g: 1, b: 1 }, lightIntensity: 1, zAxisDirection: { x: 0, y: 0 }, parallaxIntensity: 0 },
+      entities: [{
+        id: 1,
+        entityName: 'compoundBad',
+        editorEntityUID: 'comp-1',
+        position: { x: 0, y: 0, z: 0 },
+        angle: 0,
+        spriteFrame: 0,
+        hide: false,
+        flipX: false,
+        flipY: false,
+        customData: [],
+        inlineEntityData: { FileName: 'compoundBad.ent' },
+      }],
+    };
+
+    renderHook(() => useCollisionRenderer({
+      refs: data.refs,
+      scene,
+      templates: { compoundBad: template },
+      selectedUIDs: ['comp-1'],
+      showCollisions: true,
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    }));
+    flushAnimationFrames();
+
+    // 1. Initial render has red stroke (0xef4444)
+    expect(data.selectedGraphics.stroke).toHaveBeenLastCalledWith(
+      expect.objectContaining({ color: 0xef4444 }),
+    );
+
+    // 2. Dragging Position (preview) keeps red stroke because compound diagnostic still persists
+    act(() => {
+      transformEventBus.emit([{ uid: 'comp-1', collisionPos: { x: 10, y: 10, z: 0 } }]);
+    });
+    flushAnimationFrames();
+
+    expect(data.selectedGraphics.stroke).toHaveBeenLastCalledWith(
+      expect.objectContaining({ color: 0xef4444 }),
+    );
+
+    // 3. Fixing compound geometry during preview turns stroke green (0x00bb00)
+    act(() => {
+      transformEventBus.emit([
+        {
+          uid: 'comp-1',
+          collisionCompound: [
+            { name: 'fixedBox', shape: 'box', posX: 0, posY: 0, sizeX: 1, sizeY: 1 },
+          ],
+        },
+      ]);
+    });
+    flushAnimationFrames();
+
+    expect(data.selectedGraphics.stroke).toHaveBeenLastCalledWith(
+      expect.objectContaining({ color: 0x00bb00 }),
+    );
+  });
+
+  it('derives collision validity from geometry and diagnostics even when cached collision.valid is stale', () => {
+    const data = fixture();
+
+    // 1. Cached collision.valid is true, but actual polygon geometry is concave (invalid) -> renders red
+    const staleValidTemplate: EntityTemplate = {
+      ...data.templates.box,
+      physics: {
+        ...data.templates.box.physics!,
+        shape: 3,
+        collision: {
+          ...data.templates.box.physics!.collision,
+          valid: true,
+          polygon: [
+            { name: 'v0', x: -0.5, y: -0.5 },
+            { name: 'v1', x: 0, y: 0 },
+            { name: 'v2', x: 0.5, y: -0.5 },
+            { name: 'v3', x: 0.5, y: 0.5 },
+            { name: 'v4', x: -0.5, y: 0.5 },
+          ],
+        },
+        diagnostics: [],
+      },
+    };
+
+    const initialProps = {
+      refs: data.refs,
+      scene: data.scene,
+      templates: { box: staleValidTemplate },
+      selectedUIDs: ['uid'],
+      showCollisions: true,
+      camera: { x: 0, y: 0, zoom: 1 },
+      viewportSize: { width: 100, height: 100 },
+      parallaxOriginNormalized: { x: 0.5, y: 0.5 },
+      parallaxPreviewActive: false,
+      appReadyRevision: 1,
+    };
+
+    const { rerender } = renderHook(props => useCollisionRenderer(props), { initialProps });
+    flushAnimationFrames();
+
+    expect(data.selectedGraphics.fill).toHaveBeenCalledWith(
+      expect.objectContaining({ color: 0xef4444, alpha: 0.3 }),
+    );
+    expect(data.selectedGraphics.stroke).toHaveBeenLastCalledWith(
+      expect.objectContaining({ color: 0xef4444 }),
+    );
+
+    // 2. Cached collision.valid is false, but actual box geometry and diagnostics are valid -> renders green
+    data.selectedGraphics.fill.mockClear();
+    data.selectedGraphics.stroke.mockClear();
+
+    const staleInvalidTemplate: EntityTemplate = {
+      ...data.templates.box,
+      physics: {
+        ...data.templates.box.physics!,
+        shape: 1,
+        collision: {
+          ...data.templates.box.physics!.collision,
+          valid: false,
+          position: { x: 0, y: 0, z: 0 },
+          size: { x: 20, y: 10, z: 10 },
+        },
+        diagnostics: [],
+      },
+    };
+
+    rerender({ ...initialProps, templates: { box: staleInvalidTemplate } });
+    flushAnimationFrames();
+
+    expect(data.selectedGraphics.fill).not.toHaveBeenCalled();
+    expect(data.selectedGraphics.stroke).toHaveBeenLastCalledWith(
+      expect.objectContaining({ color: 0x00bb00 }),
+    );
   });
 });

@@ -3,6 +3,8 @@ import type { EntityInstance, EntityTemplate, PrefabExportOptions } from '../../
 import { serializePrefab } from '../serializePrefab';
 import { parsePrefab } from '../parsePrefab';
 import { instantiatePrefab } from '../../utils/prefabUtils';
+import { resolveEntityTemplate } from '../../utils/entityTemplate';
+import { serializeScene } from '../serializeScene';
 
 describe('Prefab System (.prf)', () => {
   const parentEntity: EntityInstance = {
@@ -155,5 +157,62 @@ describe('Prefab System (.prf)', () => {
 
     const ids = new Set(scene2.map(e => e.id));
     expect(ids.size).toBe(4); // All numeric IDs are unique
+  });
+
+  it('should parse inline collision/physics data in unpacked prefab and retain it across instantiation', () => {
+    const rawXml = `<?xml version="1.0" encoding="utf-8"?>
+<Ethanon isPrefab="1">
+  <Entity editorEntityUID="uid-collider-1" editorEntityName="ColliderEntity" spriteFrame="0">
+    <EntityName>box_collider.ent</EntityName>
+    <Position x="0" y="0" z="0" angle="0" />
+    <Entity shape="1" density="2" friction="0.4" restitution="0.1" gravityScale="1" static="1" sensor="0" bullet="0" fixedRotation="1">
+      <Collision>
+        <Position x="5" y="10" z="0" />
+        <Size x="64" y="32" z="16" />
+      </Collision>
+    </Entity>
+  </Entity>
+</Ethanon>`;
+
+    const parsed = parsePrefab(rawXml);
+    expect(parsed).toHaveLength(1);
+    const parsedEntity = parsed[0];
+
+    // inlineTemplate and its physics must be populated
+    expect(parsedEntity.inlineTemplate).toBeDefined();
+    expect(parsedEntity.inlineTemplate?.physics).toBeDefined();
+    expect(parsedEntity.inlineTemplate?.physics?.shape).toBe(1);
+    expect(parsedEntity.inlineTemplate?.physics?.collision.position).toEqual({ x: 5, y: 10, z: 0 });
+    expect(parsedEntity.inlineTemplate?.physics?.collision.size).toEqual({ x: 64, y: 32, z: 16 });
+
+    // resolveEntityTemplate should resolve effective physics without external templates
+    const resolved = resolveEntityTemplate(parsedEntity, {});
+    expect(resolved?.physics).toBeDefined();
+    expect(resolved?.physics?.shape).toBe(1);
+
+    // Instantiating into scene must preserve inlineTemplate and physics
+    const instantiated = instantiatePrefab(parsed, { x: 150, y: 250 }, []);
+    expect(instantiated).toHaveLength(1);
+    const placedEntity = instantiated[0];
+    expect(placedEntity.inlineTemplate?.physics).toBeDefined();
+    expect(placedEntity.inlineTemplate?.physics?.shape).toBe(1);
+    expect(placedEntity.inlineTemplate?.physics?.collision.position).toEqual({ x: 5, y: 10, z: 0 });
+
+    const resolvedPlaced = resolveEntityTemplate(placedEntity, {});
+    expect(resolvedPlaced?.physics).toBeDefined();
+    expect(resolvedPlaced?.physics?.shape).toBe(1);
+
+    // Serializing to scene should preserve the raw Collision and physics tags
+    const sceneXml = serializeScene({
+      properties: {
+        ambient: { r: 0.5, g: 0.5, b: 0.5 },
+        lightIntensity: 2,
+        parallaxIntensity: 3,
+        zAxisDirection: { x: 0, y: -1 },
+      },
+      entities: instantiated,
+    });
+    expect(sceneXml).toContain('shape="1"');
+    expect(sceneXml).toContain('<Collision>');
   });
 });

@@ -6,6 +6,12 @@ import {
   type TransformUpdate,
 } from "../store/TransformEventBus";
 import { BucketManager } from "../utils/BucketManager";
+import {
+  compoundsEqual,
+  filterDiagnosticsForEdit,
+  isCollisionGeometryValid,
+  polygonsEqual,
+} from "../utils/collision";
 import { resolveEntityTemplate } from "../utils/entityTemplate";
 import {
   isPerformanceProfilerEnabled,
@@ -41,6 +47,7 @@ type CollisionCacheEntry = {
   templateParallaxIntensity: number;
   bounds: Bounds | null;
   projected: CollisionPrimitive[] | null;
+  isValid: boolean;
 };
 
 type CollisionRuntime = {
@@ -140,18 +147,66 @@ function applyPreview(
     preview.collisionCompound !== undefined
   ) {
     if (nextTemplate.physics) {
+      let remainingDiagnostics = nextTemplate.physics.diagnostics ?? [];
+      const curCollision = nextTemplate.physics.collision;
+
+      if (preview.collisionPos !== undefined) {
+        const hasChanged =
+          preview.collisionPos.x !== curCollision.position.x ||
+          preview.collisionPos.y !== curCollision.position.y ||
+          preview.collisionPos.z !== curCollision.position.z;
+        if (hasChanged) {
+          remainingDiagnostics = filterDiagnosticsForEdit(remainingDiagnostics, { type: 'position' });
+        }
+      }
+
+      if (preview.collisionSize !== undefined) {
+        const hasChanged =
+          preview.collisionSize.x !== curCollision.size.x ||
+          preview.collisionSize.y !== curCollision.size.y ||
+          preview.collisionSize.z !== curCollision.size.z;
+        if (hasChanged) {
+          remainingDiagnostics = filterDiagnosticsForEdit(remainingDiagnostics, { type: 'size' });
+        }
+      }
+
+      if (preview.collisionPolygon !== undefined) {
+        const hasChanged = !polygonsEqual(curCollision.polygon, preview.collisionPolygon);
+        if (hasChanged) {
+          remainingDiagnostics = filterDiagnosticsForEdit(remainingDiagnostics, { type: 'polygon' });
+        }
+      }
+
+      if (preview.collisionCompound !== undefined) {
+        const hasChanged = !compoundsEqual(curCollision.compound, preview.collisionCompound);
+        if (hasChanged) {
+          remainingDiagnostics = filterDiagnosticsForEdit(remainingDiagnostics, { type: 'compound' });
+        }
+      }
+
+      const collision = {
+        ...curCollision,
+        ...(preview.collisionPos ? { position: preview.collisionPos } : {}),
+        ...(preview.collisionSize ? { size: preview.collisionSize } : {}),
+        ...(preview.collisionPolygon ? { polygon: preview.collisionPolygon } : {}),
+        ...(preview.collisionCompound ? { compound: preview.collisionCompound } : {}),
+      };
+
+      const isValid = isCollisionGeometryValid({
+        shape: nextTemplate.physics.shape,
+        collision,
+        diagnostics: remainingDiagnostics,
+      });
+
       nextTemplate = {
         ...nextTemplate,
         physics: {
           ...nextTemplate.physics,
           collision: {
-            ...nextTemplate.physics.collision,
-            ...(preview.collisionPos ? { position: preview.collisionPos } : {}),
-            ...(preview.collisionSize ? { size: preview.collisionSize } : {}),
-            ...(preview.collisionPolygon ? { polygon: preview.collisionPolygon } : {}),
-            ...(preview.collisionCompound ? { compound: preview.collisionCompound } : {}),
-            valid: true,
+            ...collision,
+            valid: isValid,
           },
+          diagnostics: remainingDiagnostics,
         },
       };
     }
@@ -202,12 +257,16 @@ function rebuildEntry(
     resolved.template.scale,
   );
   if (!geometry) return;
+  const isValid = resolved.template.physics
+    ? isCollisionGeometryValid(resolved.template.physics)
+    : true;
   runtime.entries.set(uid, {
     uid,
     geometry,
     templateParallaxIntensity: resolved.template.parallaxIntensity,
     bounds: null,
     projected: null,
+    isValid,
   });
 }
 
@@ -248,6 +307,19 @@ function appendPrimitives(
     if (primitive.kind === "circle")
       graphics.circle(primitive.center.x, primitive.center.y, primitive.radius);
     else graphics.poly(primitive.points, primitive.closed);
+  }
+}
+
+function appendFillPrimitives(
+  graphics: NonNullable<ViewportRefs["collisionGraphicsRef"]["current"]>,
+  primitives: CollisionPrimitive[],
+) {
+  for (const primitive of primitives) {
+    if (primitive.kind === "circle") {
+      graphics.circle(primitive.center.x, primitive.center.y, primitive.radius);
+    } else if (primitive.closed) {
+      graphics.poly(primitive.points, true);
+    }
   }
 }
 
@@ -364,7 +436,8 @@ function flushCollisionRenderer(
 
   if (params.showCollisions) {
     unselectedGraphics.clear();
-    let unselectedHasGeometry = false;
+    const validPrimitives: CollisionPrimitive[] = [];
+    const invalidPrimitives: CollisionPrimitive[] = [];
     for (const uid of runtime.visibleSet) {
       if (selected.has(uid)) continue;
       const entry = runtime.entries.get(uid);
@@ -376,14 +449,31 @@ function flushCollisionRenderer(
         );
       }
       if (entry.projected.length === 0) continue;
-      appendPrimitives(unselectedGraphics, entry.projected);
       primitiveCount += entry.projected.length;
-      unselectedHasGeometry = true;
+      if (entry.isValid) {
+        validPrimitives.push(...entry.projected);
+      } else {
+        invalidPrimitives.push(...entry.projected);
+      }
     }
-    if (unselectedHasGeometry) {
+    if (validPrimitives.length > 0) {
+      appendPrimitives(unselectedGraphics, validPrimitives);
       unselectedGraphics.stroke({
         width: 1 / zoom,
         color: 0x22d3ee,
+        alpha: 0.9,
+      });
+    }
+    if (invalidPrimitives.length > 0) {
+      appendFillPrimitives(unselectedGraphics, invalidPrimitives);
+      unselectedGraphics.fill?.({
+        color: 0xef4444,
+        alpha: 0.3,
+      });
+      appendPrimitives(unselectedGraphics, invalidPrimitives);
+      unselectedGraphics.stroke({
+        width: 1 / zoom,
+        color: 0xef4444,
         alpha: 0.9,
       });
     }
@@ -393,7 +483,8 @@ function flushCollisionRenderer(
 
   selectedGraphics.clear();
   if (hasSelection) {
-    let selectedHasGeometry = false;
+    const validPrimitives: CollisionPrimitive[] = [];
+    const invalidPrimitives: CollisionPrimitive[] = [];
     for (const uid of params.selectedUIDs) {
       const entry = runtime.entries.get(uid);
       if (!entry) continue;
@@ -404,15 +495,33 @@ function flushCollisionRenderer(
         );
       }
       if (entry.projected.length === 0) continue;
-      appendPrimitives(selectedGraphics, entry.projected);
       primitiveCount += entry.projected.length;
-      selectedHasGeometry = true;
+      if (entry.isValid) {
+        validPrimitives.push(...entry.projected);
+      } else {
+        invalidPrimitives.push(...entry.projected);
+      }
     }
-    if (selectedHasGeometry) {
+    if (validPrimitives.length > 0) {
+      appendPrimitives(selectedGraphics, validPrimitives);
       selectedGraphics.stroke({
         width: 2 / zoom,
         alignment: 1,
         color: 0x00bb00,
+        alpha: 0.9,
+      });
+    }
+    if (invalidPrimitives.length > 0) {
+      appendFillPrimitives(selectedGraphics, invalidPrimitives);
+      selectedGraphics.fill?.({
+        color: 0xef4444,
+        alpha: 0.3,
+      });
+      appendPrimitives(selectedGraphics, invalidPrimitives);
+      selectedGraphics.stroke({
+        width: 2 / zoom,
+        alignment: 1,
+        color: 0xef4444,
         alpha: 0.9,
       });
     }

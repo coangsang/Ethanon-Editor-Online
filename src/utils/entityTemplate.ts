@@ -1,7 +1,12 @@
 import type { CollisionShape, EntityInstance, EntityPhysicsConfig, EntityTemplate, InlineEntityTemplate } from '../types';
 import {
+  compoundsEqual,
   createDefaultCompoundSubShape,
   createDefaultPolygonVertices,
+  filterDiagnosticsForEdit,
+  filterWarningsForEdit,
+  isCollisionGeometryValid,
+  parseCompoundShapes,
   parsePolygonVertices,
   polygonsEqual,
   serializeCompoundEnml,
@@ -246,7 +251,7 @@ export function createDefaultPhysics(
     restitution: 0,
     gravityScale: 1,
     collision: {
-      valid: shape !== 0,
+      valid: true,
       position: { x: 0, y: 0, z: 0 },
       size: { x: sizeX, y: sizeY, z: sizeZ },
       polygon,
@@ -254,12 +259,19 @@ export function createDefaultPhysics(
       joints: [],
     },
     warnings: [],
+    diagnostics: [],
   };
+}
+
+export interface ApplyPhysicsOptions {
+  forceSerializePolygon?: boolean;
+  forceSerializeCompound?: boolean;
 }
 
 export function applyPhysicsToEntity(
   entity: EntityInstance,
   physics: EntityPhysicsConfig | null,
+  options?: ApplyPhysicsOptions,
 ): EntityInstance {
   const inlineTemplate = {
     ...(entity.inlineTemplate ?? { name: entity.entityName }),
@@ -269,7 +281,15 @@ export function applyPhysicsToEntity(
   };
 
   if (!physics || physics.shape === 0) {
-    inlineTemplate.physics = physics ? { ...physics, shape: 0 } : createDefaultPhysics(0);
+    inlineTemplate.physics = physics
+      ? {
+          ...physics,
+          shape: 0,
+          collision: { ...physics.collision, valid: true },
+          warnings: filterWarningsForEdit(physics.warnings, { type: 'shape', newShape: 0 }),
+          diagnostics: filterDiagnosticsForEdit(physics.diagnostics, { type: 'shape', newShape: 0 }),
+        }
+      : createDefaultPhysics(0);
     inlineEntityData.shape = '0';
     delete inlineEntityData.Collision;
     return {
@@ -283,7 +303,7 @@ export function applyPhysicsToEntity(
     ...physics,
     collision: {
       ...physics.collision,
-      valid: true,
+      valid: isCollisionGeometryValid(physics),
     },
   };
 
@@ -291,21 +311,26 @@ export function applyPhysicsToEntity(
   const rawExistingPolygon = typeof existingCollision.Polygon === 'string' ? existingCollision.Polygon : undefined;
   let polygonValue: string | undefined;
   if (physics.shape === 3) {
-    if (rawExistingPolygon !== undefined && polygonsEqual(parsePolygonVertices(rawExistingPolygon), physics.collision.polygon)) {
+    if (!options?.forceSerializePolygon && rawExistingPolygon !== undefined && polygonsEqual(parsePolygonVertices(rawExistingPolygon), physics.collision.polygon)) {
       polygonValue = rawExistingPolygon;
     } else if (physics.collision.polygon.length > 0) {
       polygonValue = serializePolygonEnml(physics.collision.polygon);
     } else {
-      polygonValue = rawExistingPolygon ?? '';
+      polygonValue = options?.forceSerializePolygon ? '' : (rawExistingPolygon ?? '');
     }
-  } else {
-    polygonValue = rawExistingPolygon;
   }
-  const compoundValue = physics.shape === 4
-    ? (physics.collision.compound.length > 0
-        ? serializeCompoundEnml(physics.collision.compound)
-        : (typeof existingCollision.Compound === 'string' ? existingCollision.Compound : ''))
-    : (typeof existingCollision.Compound === 'string' ? existingCollision.Compound : undefined);
+
+  const rawExistingCompound = typeof existingCollision.Compound === 'string' ? existingCollision.Compound : undefined;
+  let compoundValue: string | undefined;
+  if (physics.shape === 4) {
+    if (!options?.forceSerializeCompound && rawExistingCompound !== undefined && compoundsEqual(parseCompoundShapes(rawExistingCompound), physics.collision.compound)) {
+      compoundValue = rawExistingCompound;
+    } else if (physics.collision.compound.length > 0) {
+      compoundValue = serializeCompoundEnml(physics.collision.compound);
+    } else {
+      compoundValue = options?.forceSerializeCompound ? '' : (rawExistingCompound ?? '');
+    }
+  }
 
   inlineEntityData.shape = String(physics.shape);
   inlineEntityData.static = physics.static ? '1' : '0';
@@ -338,4 +363,12 @@ export function applyPhysicsToEntity(
     inlineTemplate,
     inlineEntityData,
   };
+}
+
+export function findEntitiesWithInvalidCollision(entities: EntityInstance[]): EntityInstance[] {
+  return entities.filter(entity => {
+    const physics = entity.inlineTemplate?.physics;
+    if (!physics || entityHasFileNameTag(entity)) return false;
+    return !isCollisionGeometryValid(physics);
+  });
 }

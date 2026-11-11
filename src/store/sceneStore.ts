@@ -5,7 +5,7 @@ import { parseTextureAtlas } from '../io/parseTextureAtlas';
 import { serializeScene } from '../io/serializeScene';
 import { serializePrefab } from '../io/serializePrefab';
 import { computeLocalFromWorld } from '../utils/transformMath';
-import { ensureEntExtension, entityHasFileNameTag } from '../utils/entityTemplate';
+import { ensureEntExtension, entityHasFileNameTag, findEntitiesWithInvalidCollision } from '../utils/entityTemplate';
 import { instantiatePrefab, cloneEntityTree } from '../utils/prefabUtils';
 import { collectAffectedSubscriberUids, syncEntitiesCustomDataRefs } from '../utils/customDataRef';
 import {
@@ -44,6 +44,16 @@ import { decodeProjectText } from '../io/decodeProjectText';
 import { pushHistorySnapshot, type HistoryEntry } from './sceneHistory';
 import { resetPerformanceProfiler, setPerformanceProfilerEnabled } from '../utils/performanceProfiler';
 import { DEFAULT_VIEWPORT_ZOOM } from '../canvas/viewportMath';
+
+function getInvalidCollisionSaveWarning(entities: EntityInstance[]): string | null {
+  const invalid = findEntitiesWithInvalidCollision(entities);
+  if (invalid.length === 0) return null;
+  const names = [...new Set(invalid.map(entity => entity.entityName || `#${entity.id}`))];
+  const listed = names.slice(0, 3).join(', ');
+  const suffix = names.length > 3 ? ` and ${names.length - 3} more` : '';
+  const noun = invalid.length === 1 ? 'entity has' : 'entities have';
+  return `Scene saved, but ${invalid.length} ${noun} invalid collision geometry: ${listed}${suffix}.`;
+}
 
 function snapVal(v: number, active: boolean, step = 16): number {
   return active ? Math.round(v / step) * step : Math.round(v);
@@ -569,7 +579,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
     try {
       await writeSceneFile(activeSceneHandle, serializeScene(syncedScene, options));
       savedSceneSnapshot = JSON.stringify(syncedScene);
-      set({ projectStatus: 'ready', projectError: null });
+      set({ projectStatus: 'ready', projectError: getInvalidCollisionSaveWarning(syncedScene.entities) });
     } catch (e) {
       set({
         projectStatus: 'error',
@@ -610,7 +620,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
           projectScenes: scenes,
           activeSceneHandle: refreshedEntry.handle,
           projectStatus: 'ready',
-          projectError: null,
+          projectError: getInvalidCollisionSaveWarning(syncedScene.entities),
         });
       } catch (e) {
         set({

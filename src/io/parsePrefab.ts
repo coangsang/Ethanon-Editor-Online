@@ -1,7 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
-import type { EntityInstance, InlineEntityTemplate, CustomDataVariable } from '../types';
+import type { EntityInstance, CustomDataVariable } from '../types';
 import { normalizeHierarchy } from '../utils/sceneHierarchy';
-import { extractCustomDataRefMetadata, parseParticleSystem } from './parseScene';
+import { extractCustomDataRefMetadata, hasInlineTemplateData, parseInlineTemplate } from './parseScene';
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' });
 
@@ -56,11 +56,6 @@ function parseColor(color?: any): { r: number; g: number; b: number; a: number }
   };
 }
 
-function parseEmissiveColor(color?: any): { r: number; g: number; b: number; a: number } | undefined {
-  const parsed = parseColor(color);
-  return parsed ? { ...parsed, a: toNumber(color?.a, 0) } : undefined;
-}
-
 function parseCustomData(entityData: Record<string, unknown> | Array<Record<string, unknown>> | undefined): CustomDataVariable[] {
   const nestedEntity = firstNestedEntity(entityData);
   const customData = (nestedEntity && typeof nestedEntity.CustomData === 'object') ? nestedEntity.CustomData as any : null;
@@ -98,80 +93,6 @@ function parseCustomData(entityData: Record<string, unknown> | Array<Record<stri
       ...refMeta,
     };
   });
-}
-
-const TYPE_MAP: Record<string, import('../types').EntityType> = {
-  '0': 'horizontal',
-  '1': 'ground_decal',
-  '2': 'vertical',
-  '3': 'opaque_decal',
-  '4': 'overall',
-  '5': 'layerable',
-};
-
-function hasInlineTemplateData(entityData: Record<string, unknown> | undefined) {
-  return Boolean(entityData && (
-    entityData.Sprite !== undefined ||
-    entityData.SpriteCut !== undefined ||
-    entityData.Pivot !== undefined ||
-    entityData.PivotAdjust !== undefined ||
-    entityData.Scale !== undefined ||
-    entityData.type !== undefined ||
-    entityData.parallaxIntensity !== undefined ||
-    entityData.blendMode !== undefined ||
-    entityData.DiffuseColor !== undefined ||
-    entityData.EmissiveColor !== undefined ||
-    entityData.Particles !== undefined
-  ));
-}
-
-function parseInlineTemplate(name: string, entityData: Record<string, unknown>): InlineEntityTemplate {
-  const template: InlineEntityTemplate = { name };
-
-  if (entityData.Sprite !== undefined) template.spriteFile = String(entityData.Sprite);
-  if (entityData.SpriteCut && typeof entityData.SpriteCut === 'object') {
-    const sc = entityData.SpriteCut as any;
-    template.spriteCut = {
-      x: toNumber(sc.x, 1),
-      y: toNumber(sc.y, 1),
-    };
-  }
-  const pivot = (entityData.PivotAdjust ?? entityData.Pivot) as any;
-  if (pivot && typeof pivot === 'object') {
-    template.pivotAdjust = {
-      x: toNumber(pivot.x, 0),
-      y: toNumber(pivot.y, 0),
-    };
-  }
-  if (entityData.Scale && typeof entityData.Scale === 'object') {
-    const sc = entityData.Scale as any;
-    template.scale = {
-      x: toNumber(sc.x, 1),
-      y: toNumber(sc.y, 1),
-    };
-  }
-  if (entityData.type !== undefined) {
-    template.type = TYPE_MAP[String(entityData.type ?? '0')] ?? 'horizontal';
-  }
-  if (entityData.parallaxIntensity !== undefined) {
-    template.parallaxIntensity = toNumber(entityData.parallaxIntensity, 1);
-  }
-  if (entityData.blendMode !== undefined) {
-    template.blendMode = toNumber(entityData.blendMode, 0);
-  }
-  if (entityData.DiffuseColor !== undefined) {
-    template.diffuseColor = parseColor(entityData.DiffuseColor);
-  }
-  if (entityData.EmissiveColor !== undefined) {
-    template.emissiveColor = parseEmissiveColor(entityData.EmissiveColor);
-  }
-  if (entityData.Particles !== undefined) {
-    const rawParticles = typeof entityData.Particles === 'object' && entityData.Particles ? entityData.Particles : {};
-    const rawSystems = toArray((rawParticles as { ParticleSystem?: unknown }).ParticleSystem);
-    template.particleSystems = rawSystems.map(parseParticleSystem);
-  }
-
-  return template;
 }
 
 export function parsePrefab(xmlString: string): EntityInstance[] {

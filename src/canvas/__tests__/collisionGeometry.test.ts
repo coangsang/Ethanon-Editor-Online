@@ -105,9 +105,18 @@ describe('collision geometry', () => {
     expect(compound[6]).toMatchObject({ kind: 'circle', radius: 10 });
   });
 
-  it('does not render a collision marked invalid', () => {
+  it('renders geometry even when collision is marked invalid, but not when position or size is non-positive or non-finite', () => {
     const config = physics(1);
     config.collision.valid = false;
+    expect(buildCollisionPrimitives(entity(), config, { x: 1, y: 1 }).length).toBeGreaterThan(0);
+
+    // Non-positive size -> no render
+    config.collision.size.x = 0;
+    expect(buildCollisionPrimitives(entity(), config, { x: 1, y: 1 })).toEqual([]);
+
+    // Non-finite position -> no render
+    config.collision.size.x = 20;
+    config.collision.position.x = NaN;
     expect(buildCollisionPrimitives(entity(), config, { x: 1, y: 1 })).toEqual([]);
   });
 
@@ -151,5 +160,41 @@ describe('collision geometry', () => {
       zAxisDirection: { x: 0, y: 0 },
       templateParallaxIntensity: 1,
     })).toEqual([]);
+  });
+
+  it('renders usable compound children when some children are invalid', () => {
+    const config = physics(4);
+    config.collision.valid = false;
+    config.collision.compound = [
+      { name: 'validBox', shape: 'box', posX: 0, posY: 0, sizeX: 1, sizeY: 1, angle: 0 },
+      { name: 'invalidRadius', shape: 'circle', posX: 0, posY: 0, radius: -5, angle: 0 },
+      { name: 'invalidSize', shape: 'box', posX: 0, posY: 0, sizeX: -1, sizeY: 1, angle: 0 },
+    ];
+    const primitives = buildCollisionPrimitives(entity(), config, { x: 1, y: 1 });
+    // Should render the validBox (which has extruded faces and edges)
+    expect(primitives.length).toBeGreaterThan(0);
+    // Should NOT contain circles because the circle radius was -5
+    expect(primitives.some(p => p.kind === 'circle')).toBe(false);
+  });
+
+  it('falls back to collision box when geometry lacks sufficient data', () => {
+    // Polygon with fewer than 3 vertices falls back to box
+    const polyConfig = physics(3);
+    polyConfig.collision.valid = false;
+    polyConfig.collision.polygon = [
+      { name: 'v0', x: 0, y: 0 },
+      { name: 'v1', x: 1, y: 1 },
+    ];
+    const polyPrimitives = buildCollisionPrimitives(entity(), polyConfig, { x: 1, y: 1 });
+    expect(polyPrimitives.length).toBeGreaterThan(0);
+
+    // Compound with 0 usable shapes falls back to box
+    const compoundConfig = physics(4);
+    compoundConfig.collision.valid = false;
+    compoundConfig.collision.compound = [
+      { name: 'invalidRadius', shape: 'circle', posX: 0, posY: 0, radius: -5, angle: 0 },
+    ];
+    const compPrimitives = buildCollisionPrimitives(entity(), compoundConfig, { x: 1, y: 1 });
+    expect(compPrimitives.length).toBeGreaterThan(0);
   });
 });
