@@ -1,15 +1,28 @@
-import type { EntityTemplate, ProjectCharacterEntry, ProjectPrefabEntry, ProjectSpriteItem, SpriteAtlas } from '../types';
-import { parseEntityTemplate } from './parseScene';
-import { parsePrefab } from './parsePrefab';
-import { parseTextureAtlas } from './parseTextureAtlas';
-import { normalizeImageLookupKey, resolveImageUrl } from '../utils/resolveImageUrl';
-import { prefabNameFromThumbnailFile } from '../utils/generatePrefabThumbnail';
-import { isTauri } from '@tauri-apps/api/core';
-import { openTauriProjectFolder, releaseTauriProjectFolder } from './tauriProjectFolder';
-import { decodeProjectText } from './decodeProjectText';
+import type {
+  EntityTemplate,
+  ProjectCharacterEntry,
+  ProjectPrefabEntry,
+  ProjectSpriteItem,
+  SpriteAtlas,
+} from "../types";
+import { parseEntityTemplate } from "./parseScene";
+import { parsePrefab } from "./parsePrefab";
+import { parseTextureAtlas } from "./parseTextureAtlas";
+import {
+  normalizeImageLookupKey,
+  resolveImageUrl,
+} from "../utils/resolveImageUrl";
+import { prefabNameFromThumbnailFile } from "../utils/generatePrefabThumbnail";
+import { isTauri } from "@tauri-apps/api/core";
+import {
+  openTauriProjectFolder,
+  releaseTauriProjectFolder,
+} from "./tauriProjectFolder";
+import { decodeProjectText } from "./decodeProjectText";
+import { parseCharacter } from "./parseCharacter";
 
 export interface ProjectFileHandle {
-  kind: 'file';
+  kind: "file";
   name: string;
   path?: string;
   assetUrl?: string;
@@ -21,13 +34,25 @@ export interface ProjectFileHandle {
 }
 
 export interface ProjectDirectoryHandle {
-  kind: 'directory';
+  kind: "directory";
   name: string;
-  getDirectoryHandle: (name: string, options?: { create?: boolean }) => Promise<ProjectDirectoryHandle>;
-  getFileHandle: (name: string, options?: { create?: boolean }) => Promise<ProjectFileHandle>;
-  entries: () => AsyncIterableIterator<[string, ProjectFileHandle | ProjectDirectoryHandle]>;
-  queryPermission?: (descriptor?: { mode?: 'read' | 'readwrite' }) => Promise<PermissionState>;
-  requestPermission?: (descriptor?: { mode?: 'read' | 'readwrite' }) => Promise<PermissionState>;
+  getDirectoryHandle: (
+    name: string,
+    options?: { create?: boolean },
+  ) => Promise<ProjectDirectoryHandle>;
+  getFileHandle: (
+    name: string,
+    options?: { create?: boolean },
+  ) => Promise<ProjectFileHandle>;
+  entries: () => AsyncIterableIterator<
+    [string, ProjectFileHandle | ProjectDirectoryHandle]
+  >;
+  queryPermission?: (descriptor?: {
+    mode?: "read" | "readwrite";
+  }) => Promise<PermissionState>;
+  requestPermission?: (descriptor?: {
+    mode?: "read" | "readwrite";
+  }) => Promise<PermissionState>;
 }
 
 export interface ProjectSceneEntry {
@@ -55,12 +80,14 @@ export interface ProjectFolderData {
 
 export interface ProjectScanIssue {
   path: string;
-  stage: 'read' | 'parse';
+  stage: "read" | "parse";
   message: string;
 }
 
 type WindowWithDirectoryPicker = Window & {
-  showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<ProjectDirectoryHandle>;
+  showDirectoryPicker?: (options?: {
+    mode?: "read" | "readwrite";
+  }) => Promise<ProjectDirectoryHandle>;
 };
 
 const PROJECT_IMAGE_RE = /\.(png|jpg|jpeg|gif|webp|bmp)$/i;
@@ -69,25 +96,31 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-export async function readProjectText(handle: ProjectFileHandle): Promise<string> {
+export async function readProjectText(
+  handle: ProjectFileHandle,
+): Promise<string> {
   return decodeProjectText(await (await handle.getFile()).arrayBuffer());
 }
 
 export function supportsProjectFolders(): boolean {
-  return isTauri() || typeof (window as WindowWithDirectoryPicker).showDirectoryPicker === 'function';
+  return (
+    isTauri() ||
+    typeof (window as WindowWithDirectoryPicker).showDirectoryPicker ===
+      "function"
+  );
 }
 
 export function isUserAbortError(e: unknown): boolean {
-  if (e && typeof e === 'object') {
+  if (e && typeof e === "object") {
     const err = e as { name?: string; message?: string };
-    if (err.name === 'AbortError') return true;
-    if (typeof err.message === 'string') {
+    if (err.name === "AbortError") return true;
+    if (typeof err.message === "string") {
       const msg = err.message.toLowerCase();
       if (
-        msg.includes('user aborted') ||
-        msg.includes('aborted a request') ||
-        msg.includes('the user aborted') ||
-        msg.includes('aborterror')
+        msg.includes("user aborted") ||
+        msg.includes("aborted a request") ||
+        msg.includes("the user aborted") ||
+        msg.includes("aborterror")
       ) {
         return true;
       }
@@ -99,14 +132,17 @@ export function isUserAbortError(e: unknown): boolean {
 async function ensureReadWritePermission(handle: ProjectDirectoryHandle) {
   if (!handle.queryPermission || !handle.requestPermission) return;
 
-  const descriptor = { mode: 'readwrite' as const };
-  if ((await handle.queryPermission(descriptor)) === 'granted') return;
-  if ((await handle.requestPermission(descriptor)) !== 'granted') {
-    throw new Error('Project folder permission was not granted.');
+  const descriptor = { mode: "readwrite" as const };
+  if ((await handle.queryPermission(descriptor)) === "granted") return;
+  if ((await handle.requestPermission(descriptor)) !== "granted") {
+    throw new Error("Project folder permission was not granted.");
   }
 }
 
-async function getRequiredDirectory(root: ProjectDirectoryHandle, name: string) {
+async function getRequiredDirectory(
+  root: ProjectDirectoryHandle,
+  name: string,
+) {
   try {
     return await root.getDirectoryHandle(name);
   } catch {
@@ -114,11 +150,13 @@ async function getRequiredDirectory(root: ProjectDirectoryHandle, name: string) 
   }
 }
 
-async function scanScenes(scenesHandle: ProjectDirectoryHandle): Promise<ProjectSceneEntry[]> {
+async function scanScenes(
+  scenesHandle: ProjectDirectoryHandle,
+): Promise<ProjectSceneEntry[]> {
   const scenes: ProjectSceneEntry[] = [];
 
   for await (const [name, handle] of scenesHandle.entries()) {
-    if (handle.kind === 'file' && name.toLowerCase().endsWith('.esc')) {
+    if (handle.kind === "file" && name.toLowerCase().endsWith(".esc")) {
       scenes.push({ name, handle: handle as ProjectFileHandle });
     }
   }
@@ -126,19 +164,21 @@ async function scanScenes(scenesHandle: ProjectDirectoryHandle): Promise<Project
   return scenes.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-async function scanPrefabs(prefabsHandle: ProjectDirectoryHandle | null): Promise<ProjectPrefabEntry[]> {
+async function scanPrefabs(
+  prefabsHandle: ProjectDirectoryHandle | null,
+): Promise<ProjectPrefabEntry[]> {
   if (!prefabsHandle) return [];
   const prefabs: ProjectPrefabEntry[] = [];
 
   for await (const [name, handle] of prefabsHandle.entries()) {
-    if (handle.kind === 'file' && name.toLowerCase().endsWith('.prf')) {
+    if (handle.kind === "file" && name.toLowerCase().endsWith(".prf")) {
       try {
         const fileHandle = handle as ProjectFileHandle;
         const text = await readProjectText(fileHandle);
         const entities = parsePrefab(text);
         prefabs.push({ name, handle: fileHandle, entities });
       } catch (e) {
-        console.warn('[ProjectFolder] Failed to parse prefab file:', name, e);
+        console.warn("[ProjectFolder] Failed to parse prefab file:", name, e);
       }
     }
   }
@@ -146,36 +186,45 @@ async function scanPrefabs(prefabsHandle: ProjectDirectoryHandle | null): Promis
   return prefabs.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function scanCharacters(npcsHandle: ProjectDirectoryHandle | null): Promise<ProjectCharacterEntry[]> {
+export async function scanCharacters(
+  npcsHandle: ProjectDirectoryHandle | null,
+): Promise<ProjectCharacterEntry[]> {
   if (!npcsHandle) return [];
   try {
     const fileEntries = await collectAllFiles(npcsHandle);
     const characters: ProjectCharacterEntry[] = [];
     for (const [relativePath, handle] of fileEntries) {
-      if (relativePath.toLowerCase().endsWith('.character')) {
-        const name = relativePath.split('/').pop() ?? relativePath;
-        characters.push({ name, relativePath, handle });
+      if (relativePath.toLowerCase().endsWith(".character")) {
+        const name = relativePath.split("/").pop() ?? relativePath;
+        const context = await readProjectText(handle);
+        const parsedData = parseCharacter(context);
+        //console.log(parsedData);
+        characters.push({ name, relativePath, handle, objects: parsedData });
       }
     }
-    return characters.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+    return characters.sort((a, b) =>
+      a.relativePath.localeCompare(b.relativePath),
+    );
   } catch (error) {
-    console.warn('[ProjectFolder] Failed to scan characters directory:', error);
+    console.warn("[ProjectFolder] Failed to scan characters directory:", error);
     return [];
   }
 }
 
-
 async function collectAllFiles(
   dirHandle: ProjectDirectoryHandle,
-  prefix = ''
+  prefix = "",
 ): Promise<Array<[string, ProjectFileHandle]>> {
   const files: Array<[string, ProjectFileHandle]> = [];
   for await (const [name, handle] of dirHandle.entries()) {
     const relativePath = prefix ? `${prefix}/${name}` : name;
-    if (handle.kind === 'file') {
+    if (handle.kind === "file") {
       files.push([relativePath, handle as ProjectFileHandle]);
-    } else if (handle.kind === 'directory') {
-      const subFiles = await collectAllFiles(handle as ProjectDirectoryHandle, relativePath);
+    } else if (handle.kind === "directory") {
+      const subFiles = await collectAllFiles(
+        handle as ProjectDirectoryHandle,
+        relativePath,
+      );
       files.push(...subFiles);
     }
   }
@@ -185,7 +234,7 @@ async function collectAllFiles(
 async function mapConcurrent<T, R>(
   items: T[],
   limit: number,
-  fn: (item: T) => Promise<R>
+  fn: (item: T) => Promise<R>,
 ): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let index = 0;
@@ -197,9 +246,13 @@ async function mapConcurrent<T, R>(
     }
   };
 
-  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () =>
+    worker(),
+  );
   const settled = await Promise.allSettled(workers);
-  const failed = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  const failed = settled.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
   if (failed) throw failed.reason;
   return results;
 }
@@ -218,7 +271,7 @@ function registerImageAliases(
   url: string,
 ) {
   const normalizedPath = normalizeImageLookupKey(relativePath);
-  const basename = normalizedPath.split('/').pop() ?? normalizedPath;
+  const basename = normalizedPath.split("/").pop() ?? normalizedPath;
 
   [
     normalizedPath,
@@ -229,22 +282,22 @@ function registerImageAliases(
     `particles/${normalizedPath}`,
     `Particles/${basename}`,
     `Particles/${normalizedPath}`,
-  ].forEach(alias => addLookupAlias(templateImageUrls, alias, url));
+  ].forEach((alias) => addLookupAlias(templateImageUrls, alias, url));
 }
 
 function directoryName(relativePath: string) {
   const normalized = normalizeImageLookupKey(relativePath);
-  const lastSlash = normalized.lastIndexOf('/');
-  return lastSlash === -1 ? '' : normalized.slice(0, lastSlash);
+  const lastSlash = normalized.lastIndexOf("/");
+  return lastSlash === -1 ? "" : normalized.slice(0, lastSlash);
 }
 
 function isAbsoluteOrProjectRootPath(path: string) {
   const normalized = normalizeImageLookupKey(path);
   return (
-    path.startsWith('/') ||
+    path.startsWith("/") ||
     /^[a-zA-Z]:[\\/]/.test(path) ||
     /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(path) ||
-    normalized.toLowerCase().startsWith('entities/')
+    normalized.toLowerCase().startsWith("entities/")
   );
 }
 
@@ -253,13 +306,16 @@ function registerAtlasAliases(
   xmlRelativePath: string,
   atlas: SpriteAtlas,
 ) {
-  const imagePath = normalizeImageLookupKey(xmlRelativePath).replace(/\.xml$/i, '.png');
+  const imagePath = normalizeImageLookupKey(xmlRelativePath).replace(
+    /\.xml$/i,
+    ".png",
+  );
   const xmlDir = directoryName(xmlRelativePath);
   const resolvedImagePath =
     xmlDir && !isAbsoluteOrProjectRootPath(imagePath)
       ? `${xmlDir}/${imagePath}`
       : imagePath;
-  const basename = imagePath.split('/').pop() ?? imagePath;
+  const basename = imagePath.split("/").pop() ?? imagePath;
 
   [
     imagePath,
@@ -268,13 +324,15 @@ function registerAtlasAliases(
     `entities/${basename}`,
     `entities/${imagePath}`,
     `entities/${resolvedImagePath}`,
-  ].forEach(alias => addLookupAlias(templateAtlases, alias, atlas));
+  ].forEach((alias) => addLookupAlias(templateAtlases, alias, atlas));
 }
 
-function createImagePathLookup(fileEntries: Array<[string, ProjectFileHandle]>) {
+function createImagePathLookup(
+  fileEntries: Array<[string, ProjectFileHandle]>,
+) {
   const imagePaths = new Set<string>();
   for (const [relativePath] of fileEntries) {
-    const filename = relativePath.split('/').pop() ?? relativePath;
+    const filename = relativePath.split("/").pop() ?? relativePath;
     if (PROJECT_IMAGE_RE.test(filename)) {
       imagePaths.add(normalizeImageLookupKey(relativePath).toLowerCase());
     }
@@ -311,9 +369,17 @@ async function scanEntities(entitiesHandle: ProjectDirectoryHandle) {
   const templates: Record<string, EntityTemplate> = {};
   const templateImageUrls: Record<string, string> = {};
   const templateAtlases: Record<string, SpriteAtlas> = {};
-  const scannedTemplates: Array<{ relativePath: string; template: EntityTemplate }> = [];
-  const scannedAtlases: Array<{ relativePath: string; atlas: SpriteAtlas }> = [];
-  const scannedImages: Array<{ filename: string; relativePath: string; url: string }> = [];
+  const scannedTemplates: Array<{
+    relativePath: string;
+    template: EntityTemplate;
+  }> = [];
+  const scannedAtlases: Array<{ relativePath: string; atlas: SpriteAtlas }> =
+    [];
+  const scannedImages: Array<{
+    filename: string;
+    relativePath: string;
+    url: string;
+  }> = [];
   const scanIssues: ProjectScanIssue[] = [];
 
   const fileEntries = await collectAllFiles(entitiesHandle);
@@ -321,39 +387,55 @@ async function scanEntities(entitiesHandle: ProjectDirectoryHandle) {
 
   await mapConcurrent(fileEntries, 10, async ([relativePath, handle]) => {
     const lowerName = relativePath.toLowerCase();
-    const filename = relativePath.split('/').pop() ?? relativePath;
+    const filename = relativePath.split("/").pop() ?? relativePath;
 
-    if (lowerName.endsWith('.ent')) {
+    if (lowerName.endsWith(".ent")) {
       let text: string;
       try {
         text = await readProjectText(handle);
       } catch (error) {
         const message = errorMessage(error);
-        scanIssues.push({ path: relativePath, stage: 'read', message });
-        console.warn('[ProjectFolder] Failed to read entity template:', relativePath, error);
+        scanIssues.push({ path: relativePath, stage: "read", message });
+        console.warn(
+          "[ProjectFolder] Failed to read entity template:",
+          relativePath,
+          error,
+        );
         return;
       }
 
       try {
-        const templateName = relativePath.replace(/\.ent$/i, '');
+        const templateName = relativePath.replace(/\.ent$/i, "");
         const template = parseEntityTemplate(templateName, text);
-        template.spriteFile = resolveTemplateSpriteFile(template.spriteFile, relativePath, imagePaths);
+        template.spriteFile = resolveTemplateSpriteFile(
+          template.spriteFile,
+          relativePath,
+          imagePaths,
+        );
         scannedTemplates.push({ relativePath, template });
       } catch (error) {
         const message = errorMessage(error);
-        scanIssues.push({ path: relativePath, stage: 'parse', message });
-        console.warn('[ProjectFolder] Failed to parse entity template:', relativePath, error);
+        scanIssues.push({ path: relativePath, stage: "parse", message });
+        console.warn(
+          "[ProjectFolder] Failed to parse entity template:",
+          relativePath,
+          error,
+        );
       }
       return;
     }
 
-    if (lowerName.endsWith('.xml')) {
+    if (lowerName.endsWith(".xml")) {
       try {
         const text = await readProjectText(handle);
         const atlas = parseTextureAtlas(text);
         scannedAtlases.push({ relativePath, atlas });
       } catch (e) {
-        console.warn('[ProjectFolder] Failed to parse texture atlas:', relativePath, e);
+        console.warn(
+          "[ProjectFolder] Failed to parse texture atlas:",
+          relativePath,
+          e,
+        );
       }
       return;
     }
@@ -363,21 +445,31 @@ async function scanEntities(entitiesHandle: ProjectDirectoryHandle) {
         const url = await getProjectImageUrl(handle);
         scannedImages.push({ filename, relativePath, url });
       } catch (e) {
-        console.error('[ProjectFolder] Failed to load image file:', relativePath, e);
+        console.error(
+          "[ProjectFolder] Failed to load image file:",
+          relativePath,
+          e,
+        );
       }
     }
-  }).catch(error => {
-    revokeObjectUrls(templateImageUrls, scannedImages.map(image => image.url));
+  }).catch((error) => {
+    revokeObjectUrls(
+      templateImageUrls,
+      scannedImages.map((image) => image.url),
+    );
     throw error;
   });
 
   scannedTemplates.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
   for (const { relativePath, template } of scannedTemplates) {
-    templates[relativePath.replace(/\.ent$/i, '')] = template;
+    templates[relativePath.replace(/\.ent$/i, "")] = template;
   }
   for (const { relativePath, template } of scannedTemplates) {
-    if (!relativePath.includes('/')) continue;
-    const baseName = (relativePath.split('/').pop() ?? relativePath).replace(/\.ent$/i, '');
+    if (!relativePath.includes("/")) continue;
+    const baseName = (relativePath.split("/").pop() ?? relativePath).replace(
+      /\.ent$/i,
+      "",
+    );
     if (!templates[baseName]) templates[baseName] = template;
   }
   scannedAtlases.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
@@ -393,7 +485,7 @@ async function scanEntities(entitiesHandle: ProjectDirectoryHandle) {
   const loadedImageKeysCount = Object.keys(templateImageUrls).length;
   console.info(
     `[ProjectFolder] 📦 Scanned ${fileEntries.length} files in entities directory: ` +
-    `${parsedTemplateNames.length} templates, ${Object.keys(templateAtlases).length} atlases, ${loadedImageKeysCount} image entries.`
+      `${parsedTemplateNames.length} templates, ${Object.keys(templateAtlases).length} atlases, ${loadedImageKeysCount} image entries.`,
   );
 
   const missingImageTemplates: Array<{ name: string; spriteFile: string }> = [];
@@ -401,73 +493,96 @@ async function scanEntities(entitiesHandle: ProjectDirectoryHandle) {
     if (tmpl.spriteFile) {
       const resolved = resolveImageUrl(templateImageUrls, tmpl.spriteFile);
       if (!resolved) {
-        missingImageTemplates.push({ name: tmplName, spriteFile: tmpl.spriteFile });
+        missingImageTemplates.push({
+          name: tmplName,
+          spriteFile: tmpl.spriteFile,
+        });
       }
     }
   }
 
   if (missingImageTemplates.length > 0) {
     console.warn(
-      `[ProjectFolder] ⚠️ WARNING: ${missingImageTemplates.length} / ${parsedTemplateNames.length} entity templates could NOT find their image file:`
+      `[ProjectFolder] ⚠️ WARNING: ${missingImageTemplates.length} / ${parsedTemplateNames.length} entity templates could NOT find their image file:`,
     );
     missingImageTemplates.forEach(({ name, spriteFile }) => {
-      console.warn(`   ❌ Entity: "${name}" => expected spriteFile: "${spriteFile}"`);
+      console.warn(
+        `   ❌ Entity: "${name}" => expected spriteFile: "${spriteFile}"`,
+      );
     });
   } else if (parsedTemplateNames.length > 0) {
-    console.info(`[ProjectFolder] ✅ All ${parsedTemplateNames.length} entity templates successfully matched their image files!`);
+    console.info(
+      `[ProjectFolder] ✅ All ${parsedTemplateNames.length} entity templates successfully matched their image files!`,
+    );
   }
 
   const templatesByImageName = new Map<string, string[]>();
   for (const [name, template] of Object.entries(templates)) {
     if (!template.spriteFile) continue;
-    const normalized = normalizeImageLookupKey(template.spriteFile).toLowerCase();
-    const imageName = normalized.split('/').pop() ?? normalized;
+    const normalized = normalizeImageLookupKey(
+      template.spriteFile,
+    ).toLowerCase();
+    const imageName = normalized.split("/").pop() ?? normalized;
     const names = templatesByImageName.get(imageName) ?? [];
     names.push(name);
     templatesByImageName.set(imageName, names);
   }
 
   // Build ProjectSpriteItem list
-  const sprites: ProjectSpriteItem[] = scannedImages.map(img => {
-    const normKey = normalizeImageLookupKey(img.relativePath);
-    const atlas = templateAtlases[normKey]
-      ?? templateAtlases[normKey.toLowerCase()]
-      ?? templateAtlases[img.filename]
-      ?? templateAtlases[img.filename.toLowerCase()];
+  const sprites: ProjectSpriteItem[] = scannedImages
+    .map((img) => {
+      const normKey = normalizeImageLookupKey(img.relativePath);
+      const atlas =
+        templateAtlases[normKey] ??
+        templateAtlases[normKey.toLowerCase()] ??
+        templateAtlases[img.filename] ??
+        templateAtlases[img.filename.toLowerCase()];
 
-    const lowerFilename = img.filename.toLowerCase();
+      const lowerFilename = img.filename.toLowerCase();
 
-    return {
-      name: img.filename,
-      relativePath: img.relativePath,
-      url: img.url,
-      hasAtlas: Boolean(atlas),
-      atlasFrameCount: atlas?.frames?.length,
-      usedByTemplates: [...(templatesByImageName.get(lowerFilename) ?? [])].sort(),
-    };
-  }).sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+      return {
+        name: img.filename,
+        relativePath: img.relativePath,
+        url: img.url,
+        hasAtlas: Boolean(atlas),
+        atlasFrameCount: atlas?.frames?.length,
+        usedByTemplates: [
+          ...(templatesByImageName.get(lowerFilename) ?? []),
+        ].sort(),
+      };
+    })
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 
   scanIssues.sort((a, b) => a.path.localeCompare(b.path));
   return { templates, templateImageUrls, templateAtlases, sprites, scanIssues };
 }
 
-export function revokeObjectUrls(urls: Record<string, string>, additionalUrls: string[] = []) {
+export function revokeObjectUrls(
+  urls: Record<string, string>,
+  additionalUrls: string[] = [],
+) {
   const seen = new Set<string>();
   for (const url of [...Object.values(urls), ...additionalUrls]) {
-    if (url.startsWith('blob:') && !seen.has(url)) {
+    if (url.startsWith("blob:") && !seen.has(url)) {
       URL.revokeObjectURL(url);
       seen.add(url);
     }
   }
 }
 
-async function tryGetDirectory(root: ProjectDirectoryHandle, name: string): Promise<ProjectDirectoryHandle | null> {
+async function tryGetDirectory(
+  root: ProjectDirectoryHandle,
+  name: string,
+): Promise<ProjectDirectoryHandle | null> {
   try {
     return await root.getDirectoryHandle(name);
   } catch {
     try {
       for await (const [entryName, handle] of root.entries()) {
-        if (handle.kind === 'directory' && entryName.toLowerCase() === name.toLowerCase()) {
+        if (
+          handle.kind === "directory" &&
+          entryName.toLowerCase() === name.toLowerCase()
+        ) {
           return handle as ProjectDirectoryHandle;
         }
       }
@@ -478,18 +593,25 @@ async function tryGetDirectory(root: ProjectDirectoryHandle, name: string): Prom
   }
 }
 
-async function scanParticlesFolder(particlesHandle: ProjectDirectoryHandle, templateImageUrls: Record<string, string>) {
+async function scanParticlesFolder(
+  particlesHandle: ProjectDirectoryHandle,
+  templateImageUrls: Record<string, string>,
+) {
   try {
     const fileEntries = await collectAllFiles(particlesHandle);
     const scannedImages: Array<{ relativePath: string; url: string }> = [];
     await mapConcurrent(fileEntries, 10, async ([relativePath, handle]) => {
-      const filename = relativePath.split('/').pop() ?? relativePath;
+      const filename = relativePath.split("/").pop() ?? relativePath;
       if (PROJECT_IMAGE_RE.test(filename)) {
         try {
           const url = await getProjectImageUrl(handle);
           scannedImages.push({ relativePath, url });
         } catch (e) {
-          console.error('[ProjectFolder] Failed to load particle image:', relativePath, e);
+          console.error(
+            "[ProjectFolder] Failed to load particle image:",
+            relativePath,
+            e,
+          );
         }
       }
     });
@@ -498,7 +620,7 @@ async function scanParticlesFolder(particlesHandle: ProjectDirectoryHandle, temp
       registerImageAliases(templateImageUrls, relativePath, url);
     }
   } catch (e) {
-    console.warn('[ProjectFolder] Failed to scan Particles directory:', e);
+    console.warn("[ProjectFolder] Failed to scan Particles directory:", e);
   }
 }
 
@@ -508,15 +630,22 @@ export async function openProjectFolder(): Promise<ProjectFolderData> {
     rootHandle = await openTauriProjectFolder();
   } else {
     const picker = (window as WindowWithDirectoryPicker).showDirectoryPicker;
-    if (!picker) throw new Error('Open Project requires Chrome/Edge File System Access API support.');
-    rootHandle = await picker({ mode: 'readwrite' });
+    if (!picker)
+      throw new Error(
+        "Open Project requires Chrome/Edge File System Access API support.",
+      );
+    rootHandle = await picker({ mode: "readwrite" });
     await ensureReadWritePermission(rootHandle);
   }
 
   try {
-    const scenesHandle = await getRequiredDirectory(rootHandle, 'scenes');
-    const entitiesHandle = await getRequiredDirectory(rootHandle, 'entities');
-    const rescanned = await rescanProject(rootHandle, scenesHandle, entitiesHandle);
+    const scenesHandle = await getRequiredDirectory(rootHandle, "scenes");
+    const entitiesHandle = await getRequiredDirectory(rootHandle, "entities");
+    const rescanned = await rescanProject(
+      rootHandle,
+      scenesHandle,
+      entitiesHandle,
+    );
     return { rootHandle, scenesHandle, entitiesHandle, ...rescanned };
   } catch (error) {
     await releaseTauriProjectFolder(rootHandle).catch(console.warn);
@@ -541,21 +670,25 @@ export async function rescanProject(
   prefabThumbnailUrls: Record<string, string>;
   scanIssues: ProjectScanIssue[];
 }> {
-  const resolvedPrefabsHandle = await tryGetDirectory(rootHandle, 'prefabs');
-  const resolvedNpcsHandle = await tryGetDirectory(rootHandle, 'npcs');
+  const resolvedPrefabsHandle = await tryGetDirectory(rootHandle, "prefabs");
+  const resolvedNpcsHandle = await tryGetDirectory(rootHandle, "npcs");
   const scenes = await scanScenes(scenesHandle);
   const prefabs = await scanPrefabs(resolvedPrefabsHandle);
   const characters = await scanCharacters(resolvedNpcsHandle);
-  const { templates, templateImageUrls, templateAtlases, sprites, scanIssues } = await scanEntities(entitiesHandle);
+  const { templates, templateImageUrls, templateAtlases, sprites, scanIssues } =
+    await scanEntities(entitiesHandle);
   let prefabThumbnailUrls: Record<string, string> = {};
   try {
-    const particlesHandle = await tryGetDirectory(rootHandle, 'particles');
+    const particlesHandle = await tryGetDirectory(rootHandle, "particles");
     if (particlesHandle) {
       await scanParticlesFolder(particlesHandle, templateImageUrls);
     }
 
     if (resolvedPrefabsHandle) {
-      const thumbsHandle = await tryGetDirectory(resolvedPrefabsHandle, '.thumbnails');
+      const thumbsHandle = await tryGetDirectory(
+        resolvedPrefabsHandle,
+        ".thumbnails",
+      );
       prefabThumbnailUrls = await scanPrefabThumbnails(thumbsHandle);
     }
 
@@ -573,34 +706,49 @@ export async function rescanProject(
       scanIssues,
     };
   } catch (error) {
-    revokeObjectUrls(templateImageUrls, sprites.map(sprite => sprite.url));
+    revokeObjectUrls(
+      templateImageUrls,
+      sprites.map((sprite) => sprite.url),
+    );
     revokeObjectUrls(prefabThumbnailUrls);
     throw error;
   }
 }
 
-
-export async function refreshProjectScenes(scenesHandle: ProjectDirectoryHandle): Promise<ProjectSceneEntry[]> {
+export async function refreshProjectScenes(
+  scenesHandle: ProjectDirectoryHandle,
+): Promise<ProjectSceneEntry[]> {
   return scanScenes(scenesHandle);
 }
 
-export async function refreshProjectCharacters(npcsHandle: ProjectDirectoryHandle | null): Promise<ProjectCharacterEntry[]> {
+export async function refreshProjectCharacters(
+  npcsHandle: ProjectDirectoryHandle | null,
+): Promise<ProjectCharacterEntry[]> {
   return scanCharacters(npcsHandle);
 }
 
-export async function refreshProjectPrefabs(prefabsHandle: ProjectDirectoryHandle | null): Promise<ProjectPrefabEntry[]> {
+export async function refreshProjectPrefabs(
+  prefabsHandle: ProjectDirectoryHandle | null,
+): Promise<ProjectPrefabEntry[]> {
   return scanPrefabs(prefabsHandle);
 }
 
-export async function readSceneFile(handle: ProjectFileHandle): Promise<string> {
+export async function readSceneFile(
+  handle: ProjectFileHandle,
+): Promise<string> {
   return readProjectText(handle);
 }
 
-export async function readPrefabFile(handle: ProjectFileHandle): Promise<string> {
+export async function readPrefabFile(
+  handle: ProjectFileHandle,
+): Promise<string> {
   return readProjectText(handle);
 }
 
-export async function writeSceneFile(handle: ProjectFileHandle, xml: string): Promise<void> {
+export async function writeSceneFile(
+  handle: ProjectFileHandle,
+  xml: string,
+): Promise<void> {
   const writable = await handle.createWritable();
   try {
     await writable.write(xml);
@@ -609,7 +757,10 @@ export async function writeSceneFile(handle: ProjectFileHandle, xml: string): Pr
   }
 }
 
-export async function writePrefabFile(handle: ProjectFileHandle, xml: string): Promise<void> {
+export async function writePrefabFile(
+  handle: ProjectFileHandle,
+  xml: string,
+): Promise<void> {
   const writable = await handle.createWritable();
   try {
     await writable.write(xml);
@@ -623,7 +774,9 @@ export async function writeSceneAs(
   filename: string,
   xml: string,
 ): Promise<ProjectSceneEntry> {
-  const normalized = filename.toLowerCase().endsWith('.esc') ? filename : `${filename}.esc`;
+  const normalized = filename.toLowerCase().endsWith(".esc")
+    ? filename
+    : `${filename}.esc`;
   const handle = await scenesHandle.getFileHandle(normalized, { create: true });
   await writeSceneFile(handle, xml);
   return { name: normalized, handle };
@@ -634,8 +787,12 @@ export async function writePrefabAs(
   filename: string,
   xml: string,
 ): Promise<ProjectPrefabEntry> {
-  const normalized = filename.toLowerCase().endsWith('.prf') ? filename : `${filename}.prf`;
-  const handle = await prefabsHandle.getFileHandle(normalized, { create: true });
+  const normalized = filename.toLowerCase().endsWith(".prf")
+    ? filename
+    : `${filename}.prf`;
+  const handle = await prefabsHandle.getFileHandle(normalized, {
+    create: true,
+  });
   await writePrefabFile(handle, xml);
   const entities = parsePrefab(xml);
   return { name: normalized, handle, entities };
@@ -646,7 +803,7 @@ export async function findEntityFileHandle(
   name: string,
 ): Promise<ProjectFileHandle | null> {
   if (!entitiesHandle) return null;
-  const normalizedName = name.replace(/\.ent$/i, '');
+  const normalizedName = name.replace(/\.ent$/i, "");
   const fileName = `${normalizedName}.ent`;
   try {
     const fileEntries = await collectAllFiles(entitiesHandle);
@@ -654,7 +811,7 @@ export async function findEntityFileHandle(
       if (
         relativePath === fileName ||
         relativePath.endsWith(`/${fileName}`) ||
-        relativePath.replace(/\.ent$/i, '') === normalizedName
+        relativePath.replace(/\.ent$/i, "") === normalizedName
       ) {
         return handle;
       }
@@ -675,7 +832,9 @@ export async function getOrCreateThumbnailsHandle(
   prefabsHandle: ProjectDirectoryHandle,
 ): Promise<ProjectDirectoryHandle | null> {
   try {
-    return await prefabsHandle.getDirectoryHandle('.thumbnails', { create: true });
+    return await prefabsHandle.getDirectoryHandle(".thumbnails", {
+      create: true,
+    });
   } catch {
     return null;
   }
@@ -690,9 +849,11 @@ export async function writePrefabThumbnail(
   prefabName: string,
   blob: Blob,
 ): Promise<void> {
-  const base = prefabName.replace(/\.prf$/i, '');
+  const base = prefabName.replace(/\.prf$/i, "");
   const fileName = `.${base}.jpg`;
-  const fileHandle = await thumbnailsHandle.getFileHandle(fileName, { create: true });
+  const fileHandle = await thumbnailsHandle.getFileHandle(fileName, {
+    create: true,
+  });
   const writable = await fileHandle.createWritable();
   try {
     await writable.write(blob);
@@ -712,7 +873,7 @@ export async function scanPrefabThumbnails(
   const result: Record<string, string> = {};
   try {
     for await (const [name, handle] of thumbnailsHandle.entries()) {
-      if (handle.kind === 'file' && name.toLowerCase().endsWith('.jpg')) {
+      if (handle.kind === "file" && name.toLowerCase().endsWith(".jpg")) {
         try {
           const fileHandle = handle as ProjectFileHandle;
           const file = await fileHandle.getFile();

@@ -1,4 +1,4 @@
-import type { ProjectFileHandle } from './io/projectFolder';
+import type { ProjectFileHandle } from "./io/projectFolder";
 
 export interface SceneProperties {
   ambient: { r: number; g: number; b: number };
@@ -28,7 +28,13 @@ export interface EntityInstance {
   localPosition?: { x: number; y: number; z: number; angle: number };
 }
 
-export type EntityType = 'horizontal' | 'ground_decal' | 'vertical' | 'opaque_decal' | 'overall' | 'layerable';
+export type EntityType =
+  | "horizontal"
+  | "ground_decal"
+  | "vertical"
+  | "opaque_decal"
+  | "overall"
+  | "layerable";
 
 export type CustomDataVectorValue = {
   x: number;
@@ -38,7 +44,7 @@ export type CustomDataVectorValue = {
 
 export type CustomDataValue = string | CustomDataVectorValue;
 
-export type CustomDataRefType = 'baseData' | 'customData';
+export type CustomDataRefType = "baseData" | "customData";
 
 export interface CustomDataVariable {
   type: string;
@@ -82,7 +88,7 @@ export interface ParticleSystemConfig {
 export type CollisionShape = 0 | 1 | 2 | 3 | 4;
 
 export interface CollisionDiagnostic {
-  scope: 'collision' | 'polygon' | 'compound';
+  scope: "collision" | "polygon" | "compound";
   target: string;
   code: string;
   message: string;
@@ -103,7 +109,7 @@ export interface CollisionPolygonVertex {
 
 export interface CollisionCompoundShape extends CollisionMaterial {
   name: string;
-  shape: 'box' | 'circle';
+  shape: "box" | "circle";
   posX: number;
   posY: number;
   sizeX?: number;
@@ -166,7 +172,7 @@ export interface EntityTemplate {
   rawEntityData?: Record<string, unknown>;
 }
 
-export type InlineEntityTemplate = Partial<Omit<EntityTemplate, 'name'>> & {
+export type InlineEntityTemplate = Partial<Omit<EntityTemplate, "name">> & {
   name: string;
 };
 
@@ -205,10 +211,16 @@ export interface ProjectSceneEntry {
   handle: ProjectFileHandle;
 }
 
-export interface ProjectCharacterEntry {
+export interface CharacterObject {
   name: string;
-  relativePath: string;
+  properties: Record<string, string | number | boolean>;
+}
+
+export interface ProjectCharacterEntry {
+  name: string; //alien.character
+  relativePath: string; //enemies/alien.character
   handle: ProjectFileHandle;
+  objects?: CharacterObject[]; //.character blocks data
 }
 
 export interface ProjectPrefabEntry {
@@ -218,7 +230,7 @@ export interface ProjectPrefabEntry {
 }
 
 export interface PrefabExportOptions {
-  mode: 'keepReference' | 'unpack';
+  mode: "keepReference" | "unpack";
 }
 
 export interface SceneData {

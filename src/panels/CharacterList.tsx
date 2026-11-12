@@ -1,22 +1,24 @@
-import { useMemo, useState } from 'react';
-import { useSceneStore } from '../store/sceneStore';
-import { ViewModeToggle } from '../components/ViewModeToggle';
+import { useMemo, useState } from "react";
+import { useSceneStore } from "../store/sceneStore";
+import { ViewModeToggle } from "../components/ViewModeToggle";
 
-const ACTIVE_CHARACTER_VIEW_MODE_KEY = 'ethanon_character_view_mode';
+const ACTIVE_CHARACTER_VIEW_MODE_KEY = "ethanon_character_view_mode";
 
-function getSavedCharacterViewMode(): 'grid' | 'list' {
+function getSavedCharacterViewMode(): "grid" | "list" {
   const saved = localStorage.getItem(ACTIVE_CHARACTER_VIEW_MODE_KEY);
-  return saved === 'list' || saved === 'grid' ? saved : 'grid';
+  return saved === "list" || saved === "grid" ? saved : "grid";
 }
 
 export function CharacterList() {
-  const projectName = useSceneStore(s => s.projectName);
-  const projectCharacters = useSceneStore(s => s.projectCharacters);
+  const projectName = useSceneStore((s) => s.projectName);
+  const projectCharacters = useSceneStore((s) => s.projectCharacters);
 
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>(getSavedCharacterViewMode);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<"grid" | "list">(
+    getSavedCharacterViewMode,
+  );
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const handleSetViewMode = (mode: 'grid' | 'list') => {
+  const handleSetViewMode = (mode: "grid" | "list") => {
     setViewMode(mode);
     localStorage.setItem(ACTIVE_CHARACTER_VIEW_MODE_KEY, mode);
   };
@@ -25,13 +27,19 @@ export function CharacterList() {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return projectCharacters;
 
-    return projectCharacters.filter(character => {
+    return projectCharacters.filter((character) => {
       const cleanName =
-        character.name.replace(/\.character$/i, '') || character.name;
+        character.name.replace(/\.character$/i, "") || character.name;
+
+      const matchObject = character.objects?.[0]?.name
+        .toLowerCase()
+        .includes(query);
+
       return (
         cleanName.toLowerCase().includes(query) ||
         character.name.toLowerCase().includes(query) ||
-        character.relativePath.toLowerCase().includes(query)
+        character.relativePath.toLowerCase().includes(query) ||
+        Boolean(matchObject)
       );
     });
   }, [projectCharacters, searchQuery]);
@@ -48,7 +56,10 @@ export function CharacterList() {
     return (
       <div className="project-empty-state flex h-full flex-col items-center justify-center px-4 text-center text-xs text-[#a2a5aa] gap-1.5">
         <span>
-          No characters in <code className="text-[#eceeef] font-mono px-1 py-0.5 bg-[#292a2d] rounded border border-[#46484d]">/npcs</code>
+          No characters in{" "}
+          <code className="text-[#eceeef] font-mono px-1 py-0.5 bg-[#292a2d] rounded border border-[#46484d]">
+            /npcs
+          </code>
         </span>
       </div>
     );
@@ -63,7 +74,7 @@ export function CharacterList() {
             type="text"
             placeholder="Filter characters (.character)..."
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="asset-list-search editor-input bg-[#303135] border-[#46484d] text-[#eceeef] placeholder-[#a2a5aa] focus:border-[#d2d5db] w-44"
           />
         </div>
@@ -78,16 +89,16 @@ export function CharacterList() {
           <div className="px-3 py-6 text-xs text-[#a2a5aa] text-center italic">
             No matching characters found
           </div>
-        ) : viewMode === 'grid' ? (
+        ) : viewMode === "grid" ? (
           <div className="grid gap-2 grid-auto-scenes">
-            {filteredCharacters.map(character => {
-              const lastSlash = character.relativePath.lastIndexOf('/');
+            {filteredCharacters.map((character) => {
+              const lastSlash = character.relativePath.lastIndexOf("/");
               const dirPrefix =
                 lastSlash !== -1
                   ? character.relativePath.slice(0, lastSlash + 1)
-                  : '/';
+                  : "/";
               const cleanName =
-                character.name.replace(/\.character$/i, '') || character.name;
+                character.name.replace(/\.character$/i, "") || character.name;
 
               return (
                 <div
@@ -114,14 +125,14 @@ export function CharacterList() {
           </div>
         ) : (
           <div className="flex flex-col gap-1">
-            {filteredCharacters.map(character => {
-              const lastSlash = character.relativePath.lastIndexOf('/');
+            {filteredCharacters.map((character) => {
+              const lastSlash = character.relativePath.lastIndexOf("/");
               const dirPrefix =
                 lastSlash !== -1
                   ? character.relativePath.slice(0, lastSlash + 1)
-                  : '/';
+                  : "/";
               const cleanName =
-                character.name.replace(/\.character$/i, '') || character.name;
+                character.name.replace(/\.character$/i, "") || character.name;
 
               return (
                 <div
