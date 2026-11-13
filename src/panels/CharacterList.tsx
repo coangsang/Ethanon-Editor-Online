@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useSceneStore } from "../store/sceneStore";
 import { ViewModeToggle } from "../components/ViewModeToggle";
+import type { CharacterObject } from "../types";
+import { resolveImageUrl } from "../utils/resolveImageUrl";
 
 const ACTIVE_CHARACTER_VIEW_MODE_KEY = "ethanon_character_view_mode";
 
@@ -9,10 +11,78 @@ function getSavedCharacterViewMode(): "grid" | "list" {
   return saved === "list" || saved === "grid" ? saved : "grid";
 }
 
+interface CharacterObjectsProps {
+  objects?: CharacterObject[];
+}
+
+function CharacterObjects({ objects }: CharacterObjectsProps) {
+  if (!objects?.length) {
+    return null;
+  }
+
+  const characterInfo = objects.find((object) => object.name === "character");
+
+  return (
+    <div className="mt-2 flex flex-col gap-2">
+      {characterInfo?.properties?.name ?? ""}
+    </div>
+  );
+}
+
+function getCharacterBodySprite(
+  objects: CharacterObject[] | undefined,
+): string | null {
+  const characterInfo = objects?.find(
+    (object) => object.name.toLowerCase() === "character",
+  );
+  const bodySprite = characterInfo?.properties.bodySprite;
+  return typeof bodySprite === "string" && bodySprite.trim()
+    ? bodySprite.trim()
+    : null;
+}
+
+interface CharacterThumbnailProps {
+  imageUrl: string | null;
+  label: string;
+  compact?: boolean;
+}
+
+function CharacterThumbnail({
+  imageUrl,
+  label,
+  compact = false,
+}: CharacterThumbnailProps) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const imageFailed = imageUrl !== null && failedUrl === imageUrl;
+
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded border border-[#46484d] bg-checkerboard ${
+        compact ? "h-7 w-7" : "h-8 w-8"
+      }`}
+    >
+      {imageUrl && !imageFailed ? (
+        <img
+          src={imageUrl}
+          alt={`${label} preview`}
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailedUrl(imageUrl)}
+          className="h-full w-full object-contain pointer-events-none"
+        />
+      ) : (
+        <span className="font-mono text-xs font-bold text-[#bec1c5] select-none">
+          C
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function CharacterList() {
   const projectName = useSceneStore((s) => s.projectName);
   const projectCharacters = useSceneStore((s) => s.projectCharacters);
-
+  const templateImageUrls = useSceneStore((s) => s.templateImageUrls);
   const [viewMode, setViewMode] = useState<"grid" | "list">(
     getSavedCharacterViewMode,
   );
@@ -99,18 +169,15 @@ export function CharacterList() {
                   : "/";
               const cleanName =
                 character.name.replace(/\.character$/i, "") || character.name;
-
+              const bodySprite = getCharacterBodySprite(character.objects);
+              const imageUrl = resolveImageUrl(templateImageUrls, bodySprite);
               return (
                 <div
                   key={character.relativePath}
                   title={`npcs/${character.relativePath}`}
                   className="project-resource-card project-resource-card-static flex min-w-0 items-center gap-2 rounded border border-[#46484d] bg-[#2b2c2f] px-2.5 py-2 text-left text-[#eceeef] select-none cursor-default"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[#46484d] bg-[#202124]">
-                    <span className="font-mono text-xs font-bold text-[#bec1c5] select-none">
-                      C
-                    </span>
-                  </div>
+                  <CharacterThumbnail imageUrl={imageUrl} label={cleanName} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-medium text-[#eceeef]">
                       {cleanName}
@@ -118,6 +185,7 @@ export function CharacterList() {
                     <span className="block truncate text-[10px] text-[#bec1c5] font-mono">
                       {dirPrefix}
                     </span>
+                    {/*<CharacterObjects objects={character.objects} />*/}
                   </span>
                 </div>
               );
@@ -133,7 +201,8 @@ export function CharacterList() {
                   : "/";
               const cleanName =
                 character.name.replace(/\.character$/i, "") || character.name;
-
+              const bodySprite = getCharacterBodySprite(character.objects);
+              const imageUrl = resolveImageUrl(templateImageUrls, bodySprite);
               return (
                 <div
                   key={character.relativePath}
@@ -141,11 +210,11 @@ export function CharacterList() {
                   className="project-resource-card project-resource-card-static flex min-w-0 items-center justify-between gap-2 rounded border border-[#46484d] bg-[#2b2c2f] px-2.5 py-1.5 text-left text-[#eceeef] select-none cursor-default"
                 >
                   <div className="flex min-w-0 items-center gap-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[#46484d] bg-[#202124]">
-                      <span className="font-mono text-xs font-bold text-[#bec1c5] select-none">
-                        C
-                      </span>
-                    </div>
+                    <CharacterThumbnail
+                      imageUrl={imageUrl}
+                      label={cleanName}
+                      compact
+                    />
                     <div className="min-w-0 flex items-center gap-1.5">
                       <span className="text-xs text-[#eceeef] truncate font-medium">
                         {cleanName}

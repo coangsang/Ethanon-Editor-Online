@@ -34,6 +34,7 @@ describe('ProjectPanel with Characters tab', () => {
       projectScenes: [],
       projectPrefabs: [],
       templates: {},
+      templateImageUrls: {},
       projectSprites: [],
       projectCharacters: [],
       activeSceneName: null,
@@ -79,6 +80,72 @@ describe('ProjectPanel with Characters tab', () => {
     const warlockCard = screen.getByTitle('npcs/bosses/evil-warlock.character');
     expect(warlockCard).toBeTruthy();
     expect(warlockCard.textContent).toContain('C');
+  });
+
+  it('renders the character bodySprite as a thumbnail in grid and list views', () => {
+    const character: ProjectCharacterEntry = {
+      name: 'dude-guard.character',
+      relativePath: 'guards/dude-guard.character',
+      handle: dummyFileHandle('dude-guard.character'),
+      objects: [
+        {
+          name: 'character',
+          properties: {
+            name: 'Dude Guard',
+            bodySprite: 'character_body.png',
+            hairSprite: 'castleGuard1',
+          },
+        },
+      ],
+    };
+
+    useSceneStore.setState({
+      projectCharacters: [character],
+      templateImageUrls: {
+        'character_body.png': 'blob:character-body',
+      },
+    });
+
+    render(<ProjectPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /Characters/i }));
+
+    const gridThumbnail = screen.getByRole('img', { name: 'dude-guard preview' });
+    expect(gridThumbnail.getAttribute('src')).toBe('blob:character-body');
+
+    fireEvent.click(screen.getByRole('button', { name: /List View/i }));
+
+    const listThumbnail = screen.getByRole('img', { name: 'dude-guard preview' });
+    expect(listThumbnail.getAttribute('src')).toBe('blob:character-body');
+  });
+
+  it('falls back to the character icon when the bodySprite image fails to load', () => {
+    const character: ProjectCharacterEntry = {
+      name: 'missing-body.character',
+      relativePath: 'missing-body.character',
+      handle: dummyFileHandle('missing-body.character'),
+      objects: [
+        {
+          name: 'character',
+          properties: { bodySprite: 'missing.png' },
+        },
+      ],
+    };
+
+    useSceneStore.setState({
+      projectCharacters: [character],
+      templateImageUrls: { 'missing.png': 'blob:missing-body' },
+    });
+
+    render(<ProjectPanel />);
+    fireEvent.click(screen.getByRole('button', { name: /Characters/i }));
+
+    fireEvent.error(
+      screen.getByRole('img', { name: 'missing-body preview' }),
+    );
+
+    const characterCard = screen.getByTitle('npcs/missing-body.character');
+    expect(characterCard.textContent).toContain('C');
+    expect(screen.queryByRole('img', { name: 'missing-body preview' })).toBeNull();
   });
 
   it('restores Characters tab from localStorage', () => {
