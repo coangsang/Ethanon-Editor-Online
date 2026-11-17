@@ -1,7 +1,7 @@
 /* eslint react-hooks/immutability: off */
 import { useEffect } from 'react';
 import * as PIXI from 'pixi.js';
-import type { SceneData } from '../types';
+import type { ProjectCharacterEntry, SceneData } from '../types';
 import { transformEventBus } from '../store/TransformEventBus';
 import { getEntityCustomLabel } from './entityCustomRender';
 import { transformBounds } from './viewportMath';
@@ -11,6 +11,7 @@ type UseEntityCustomRendererParams = {
   refs: ViewportRefs;
   camera: { x: number; y: number; zoom: number };
   scene: SceneData;
+  characters: readonly ProjectCharacterEntry[];
   textureRevision: number;
   appReadyRevision?: number;
 };
@@ -26,6 +27,7 @@ export function useEntityCustomRenderer({
   refs,
   camera,
   scene,
+  characters,
   textureRevision,
   appReadyRevision,
 }: UseEntityCustomRendererParams) {
@@ -56,7 +58,7 @@ export function useEntityCustomRenderer({
 
     for (const entity of scene.entities) {
       if (entity.hide) continue;
-      const text = getEntityCustomLabel(entity);
+      const text = getEntityCustomLabel(entity, { characters });
       if (!text) continue;
       const label = new PIXI.Text({
         text,
@@ -85,5 +87,5 @@ export function useEntityCustomRenderer({
       app.stage.removeChild(layer);
       layer.destroy({ children: true });
     };
-  }, [refs, camera, scene.entities, textureRevision, appReadyRevision]);
+  }, [refs, camera, scene.entities, characters, textureRevision, appReadyRevision]);
 }

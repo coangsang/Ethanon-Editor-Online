@@ -25,6 +25,7 @@ export function Viewport() {
   const tool = useSceneStore(s => s.tool);
   const placingTemplate = useSceneStore(s => s.placingTemplate);
   const templates = useSceneStore(s => s.templates);
+  const projectCharacters = useSceneStore(s => s.projectCharacters);
   const templateAtlases = useSceneStore(s => s.templateAtlases);
   const templateImageUrls = useSceneStore(s => s.templateImageUrls);
   const showGrid = useSceneStore(s => s.showGrid);
@@ -77,6 +78,7 @@ export function Viewport() {
     refs,
     camera,
     scene,
+    characters: projectCharacters,
     textureRevision,
     appReadyRevision,
   });

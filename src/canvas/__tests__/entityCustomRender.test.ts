@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EntityInstance } from '../../types';
+import type { EntityInstance, ProjectCharacterEntry } from '../../types';
 import { getEntityCustomLabel, getEntityCustomRenderer } from '../entityCustomRender';
 
 function entity(entityName: string, customData: EntityInstance['customData'] = []): EntityInstance {
@@ -17,11 +17,38 @@ function entity(entityName: string, customData: EntityInstance['customData'] = [
   };
 }
 
-const fileName = [{ type: 'string', name: 'fileName', value: 'npcs/enemies/blood-priest.character' }];
+const PATH = 'npcs/enemies/blood-priest.character';
+const fileName = [{ type: 'string', name: 'fileName', value: PATH }];
+
+function character(relativePath: string, objects: ProjectCharacterEntry['objects']): ProjectCharacterEntry {
+  return {
+    name: relativePath.split('/').pop() ?? relativePath,
+    relativePath,
+    handle: {} as ProjectCharacterEntry['handle'],
+    objects,
+  };
+}
 
 describe('entity custom render registry', () => {
-  it('labels character_spawn with its fileName custom data', () => {
-    expect(getEntityCustomLabel(entity('character_spawn', fileName))).toBe('npcs/enemies/blood-priest.character');
+  it('uses character.properties.name from the existing character file', () => {
+    const characters = [
+      character('enemies/blood-priest.character', [
+        { name: 'character', properties: { name: 'Blood Priest' } },
+      ]),
+    ];
+    expect(getEntityCustomLabel(entity('character_spawn', fileName), { characters })).toBe('Blood Priest');
+  });
+
+  it('falls back to the file base name when the character file is missing', () => {
+    expect(getEntityCustomLabel(entity('character_spawn', fileName), { characters: [] })).toBe('blood-priest');
+    expect(getEntityCustomLabel(entity('character_spawn', fileName))).toBe('blood-priest');
+  });
+
+  it('falls back to the file base name when the file has no character name', () => {
+    const noName = [character('enemies/blood-priest.character', [{ name: 'character', properties: { hp: 5 } }])];
+    const noObject = [character('enemies/blood-priest.character', [])];
+    expect(getEntityCustomLabel(entity('character_spawn', fileName), { characters: noName })).toBe('blood-priest');
+    expect(getEntityCustomLabel(entity('character_spawn', fileName), { characters: noObject })).toBe('blood-priest');
   });
 
   it('matches the entity name exactly, so the .ent variant is a different entity', () => {
