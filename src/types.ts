@@ -170,6 +170,8 @@ export interface EntityTemplate {
   customData?: CustomDataVariable[];
   physics?: EntityPhysicsConfig;
   rawEntityData?: Record<string, unknown>;
+  /** Runtime-only (never serialized): viewport always draws the sprite's first frame. */
+  renderFirstFrameOnly?: boolean;
 }
 
 export type InlineEntityTemplate = Partial<Omit<EntityTemplate, "name">> & {

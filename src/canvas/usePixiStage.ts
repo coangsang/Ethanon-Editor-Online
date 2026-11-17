@@ -51,6 +51,7 @@ function resetStageRefs(refs: ViewportRefs) {
     textureRevision: -1,
     parallaxOrigin: null,
     parallaxActive: false,
+    customRenderContext: null,
   };
 }
 

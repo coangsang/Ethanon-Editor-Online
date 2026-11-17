@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as PIXI from 'pixi.js';
 import type { EntityTemplate, SpriteAtlas } from '../types';
-import { resolveEntityTemplate, resolveExternalTemplate } from '../utils/entityTemplate';
+import { resolveExternalTemplate } from '../utils/entityTemplate';
+import { resolveEntityRenderTemplate, type EntityCustomRenderContext } from './entityCustomRender';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { measurePerformanceMetric } from '../utils/performanceProfiler';
 import {
@@ -45,6 +46,7 @@ type UseViewportTexturesParams = {
   templateAtlases: Record<string, SpriteAtlas>;
   templateImageUrls: Record<string, string>;
   placingTemplate?: string | null;
+  customRenderContext?: EntityCustomRenderContext;
 };
 
 export function useViewportTextures({
@@ -54,6 +56,7 @@ export function useViewportTextures({
   templateAtlases,
   templateImageUrls,
   placingTemplate,
+  customRenderContext,
 }: UseViewportTexturesParams) {
   const [textureRevision, setTextureRevision] = useState(0);
   const [assetManager] = useState(() => new ViewportTextureAssetManager<PIXI.Texture>(
@@ -80,7 +83,7 @@ export function useViewportTextures({
         }
       }
       for (const entity of sceneEntities) {
-        const template = resolveEntityTemplate(entity, templates);
+        const template = resolveEntityRenderTemplate(entity, templates, customRenderContext);
         if (template?.spriteFile) templateValuesBySprite.set(template.spriteFile, template);
         for (const particleSystem of template?.particleSystems ?? []) {
           if (particleSystem.bitmap) {
@@ -176,7 +179,7 @@ export function useViewportTextures({
 
     void load();
     return () => { cancelled = true; };
-  }, [assetManager, refs, templateImageUrls, templates, sceneEntities, placingTemplate]);
+  }, [assetManager, refs, templateImageUrls, templates, sceneEntities, placingTemplate, customRenderContext]);
 
   useEffect(() => () => {
     generationRef.current++;
@@ -198,7 +201,8 @@ export function useViewportTextures({
     refs.textureUrlMapRef.current.clear();
   }, [assetManager, refs]);
 
-  const getRenderFrame = useCallback((template: EntityTemplate, spriteFrame: number): RenderFrame => {
+  const getRenderFrame = useCallback((template: EntityTemplate, requestedFrame: number): RenderFrame => {
+    const spriteFrame = template.renderFirstFrameOnly ? 0 : requestedFrame;
     const key = template.spriteFile;
     const fullTexture = refs.baseTextureMapRef.current.get(key);
 

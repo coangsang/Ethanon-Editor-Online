@@ -13,6 +13,7 @@ export function useViewportRefs(): ViewportRefs {
     textureRevision: -1,
     parallaxOrigin: null,
     parallaxActive: false,
+    customRenderContext: null,
   };
 
   const containerRef = useRef<HTMLDivElement>(null);

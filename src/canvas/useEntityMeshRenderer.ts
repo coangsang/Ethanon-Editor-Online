@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react';
 import * as PIXI from 'pixi.js';
 import type { EntityInstance, EntityTemplate, SceneData, SpriteAtlas } from '../types';
-import { resolveEntityTemplate } from '../utils/entityTemplate';
+import { resolveEntityRenderTemplate, type EntityCustomRenderContext } from './entityCustomRender';
 import { ParticleSystemRuntime } from './particleSystem';
 import {
   applyEntityTransformToMesh,
@@ -39,6 +39,7 @@ type UseEntityMeshRendererParams = {
   showParticles: boolean;
   viewportSize: { width: number; height: number };
   onEntityPointerDown: (entityUid: string, e: PIXI.FederatedPointerEvent) => void;
+  customRenderContext?: EntityCustomRenderContext;
 };
 
 const particleBucketManager = new BucketManager();
@@ -86,6 +87,7 @@ export function useEntityMeshRenderer({
   showParticles,
   viewportSize,
   onEntityPointerDown,
+  customRenderContext,
 }: UseEntityMeshRendererParams) {
   const inspectorPreviewRef = useRef(new Map<string, TransformUpdate>());
   const ambientTintFrameRef = useRef<number | null>(null);
@@ -106,6 +108,7 @@ export function useEntityMeshRenderer({
       lastSync.templates !== templates ||
       lastSync.templateAtlases !== templateAtlases ||
       lastSync.textureRevision !== textureRevision ||
+      lastSync.customRenderContext !== customRenderContext ||
       lastSync.parallaxOrigin !== parallaxOriginNormalized ||
       lastSync.parallaxActive !== parallaxPreviewActive;
     const finishPlacementMetric = lastSync.entities !== scene.entities && !isManipulatingEntity
@@ -116,6 +119,7 @@ export function useEntityMeshRenderer({
     if (
       lastSync.entities !== scene.entities ||
       lastSync.templates !== templates ||
+      lastSync.customRenderContext !== customRenderContext ||
       lastSync.zAxisDirection !== scene.properties.zAxisDirection
     ) {
       bucketManager.clear();
@@ -128,7 +132,7 @@ export function useEntityMeshRenderer({
           angle: entity.angle,
           hide: entity.hide,
         });
-        const template = resolveEntityTemplate(entity, templates);
+        const template = resolveEntityRenderTemplate(entity, templates, customRenderContext);
         let w = 256;
         let h = 256;
         if (template) {
@@ -185,7 +189,7 @@ export function useEntityMeshRenderer({
       }
 
       for (const entity of scene.entities) {
-        const template = resolveEntityTemplate(entity, templates);
+        const template = resolveEntityRenderTemplate(entity, templates, customRenderContext);
         const type = template?.type ?? 'horizontal';
         const drawKey = computeEntityDrawSortKey(entity, type);
         sortSignatureParts.push(`${entity.editorEntityUID}:${drawSortKeySignature(drawKey)}:${entity.hide ? 'h' : 'v'}`);
@@ -354,6 +358,7 @@ export function useEntityMeshRenderer({
         templates,
         templateAtlases,
         textureRevision,
+        customRenderContext,
         parallaxOrigin: parallaxOriginNormalized,
         parallaxActive: parallaxPreviewActive,
       };
@@ -390,7 +395,7 @@ export function useEntityMeshRenderer({
         mesh.renderable = !entity.hide && isVisibleInViewport;
         // If parallax geometry is active, re-apply transform to update screen-space vertex projections relative to camera
         if (isVisibleInViewport && refs.parallaxGeometryActiveRef.current) {
-          const template = resolveEntityTemplate(entity, templates);
+          const template = resolveEntityRenderTemplate(entity, templates, customRenderContext);
           const useVerticalGeometry = template?.type === 'vertical';
           const renderFrame = template ? getRenderFrame(template, entity.spriteFrame) : {
             texture: PIXI.Texture.WHITE,
@@ -449,7 +454,7 @@ export function useEntityMeshRenderer({
       );
     }
     finishPlacementMetric?.();
-  }, [refs, camera, scene.entities, scene.properties.parallaxIntensity, scene.properties.zAxisDirection, templates, templateAtlases, textureRevision, appReadyRevision, getRenderFrame, parallaxOriginNormalized, parallaxPreviewActive, showParticles, viewportSize, onEntityPointerDown]);
+  }, [refs, camera, scene.entities, scene.properties.parallaxIntensity, scene.properties.zAxisDirection, templates, templateAtlases, textureRevision, appReadyRevision, getRenderFrame, parallaxOriginNormalized, parallaxPreviewActive, showParticles, viewportSize, onEntityPointerDown, customRenderContext]);
 
   // Ambient edits only change material tint. Coalesce picker updates per frame and
   // keep them out of the structural mesh, spatial-index, particle, and sort pass.
@@ -464,7 +469,7 @@ export function useEntityMeshRenderer({
         const mesh = refs.spriteMapRef.current.get(entity.editorEntityUID);
         if (!mesh) continue;
 
-        const template = resolveEntityTemplate(entity, templates);
+        const template = resolveEntityRenderTemplate(entity, templates, customRenderContext);
         const previewDiffuse = inspectorPreviewRef.current.get(entity.editorEntityUID)?.diffuseColor;
         const diffuse = previewDiffuse ?? entity.diffuseColor ?? entity.color ?? template?.diffuseColor;
         const ambientColor = computeAmbientColor(scene.properties.ambient, template?.emissiveColor, diffuse);
@@ -479,7 +484,7 @@ export function useEntityMeshRenderer({
         ambientTintFrameRef.current = null;
       }
     };
-  }, [refs, scene.entities, scene.properties.ambient, templates, appReadyRevision]);
+  }, [refs, scene.entities, scene.properties.ambient, templates, customRenderContext, appReadyRevision]);
 
   // Live transform preview from Inspector and viewport drags via EventBus
   useEffect(() => {
@@ -513,7 +518,7 @@ export function useEntityMeshRenderer({
         if (preview.flipY !== undefined) simulatedEntity.flipY = preview.flipY;
         if (preview.hide !== undefined) simulatedEntity.hide = preview.hide;
 
-        let template = resolveEntityTemplate(simulatedEntity, templates);
+        let template = resolveEntityRenderTemplate(simulatedEntity, templates, customRenderContext);
         if (template && (preview.scaleX !== undefined || preview.scaleY !== undefined || preview.blendMode !== undefined || preview.diffuseColor !== undefined)) {
           template = {
             ...template,
@@ -617,5 +622,5 @@ export function useEntityMeshRenderer({
         refs.updateSelectionOutlinesRef.current?.();
       }
     });
-  }, [refs, camera, scene, templates, parallaxOriginNormalized, parallaxPreviewActive, getRenderFrame, showParticles]);
+  }, [refs, camera, scene, templates, customRenderContext, parallaxOriginNormalized, parallaxPreviewActive, getRenderFrame, showParticles]);
 }

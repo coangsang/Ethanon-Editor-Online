@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useSceneStore } from '../store/sceneStore';
 import { useEntityMeshRenderer } from './useEntityMeshRenderer';
 import { useEntityCustomRenderer } from './useEntityCustomRenderer';
@@ -40,6 +41,11 @@ export function Viewport() {
   const updateWorldTransform = useSceneStore(s => s.updateWorldTransform);
   const setParallaxOriginNormalized = useSceneStore(s => s.setParallaxOriginNormalized);
 
+  const customRenderContext = useMemo(
+    () => ({ characters: projectCharacters, templateImageUrls }),
+    [projectCharacters, templateImageUrls],
+  );
+
   const { viewportSize, appReadyRevision, runtimeState, retryViewport } = usePixiStage({ refs, camera, showGrid });
   const { textureRevision, getRenderFrame } = useViewportTextures({
     refs,
@@ -48,6 +54,7 @@ export function Viewport() {
     templateAtlases,
     templateImageUrls,
     placingTemplate,
+    customRenderContext,
   });
   const { onEntityPointerDown, onStartGizmoDrag, onViewportClick, zoomIn, zoomOut, resetZoom } = useViewportInteractions({
     refs,
@@ -72,6 +79,7 @@ export function Viewport() {
     showParticles,
     viewportSize,
     onEntityPointerDown,
+    customRenderContext,
   });
 
   useEntityCustomRenderer({

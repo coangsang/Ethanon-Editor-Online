@@ -11,24 +11,6 @@ function getSavedCharacterViewMode(): "grid" | "list" {
   return saved === "list" || saved === "grid" ? saved : "grid";
 }
 
-interface CharacterObjectsProps {
-  objects?: CharacterObject[];
-}
-
-function CharacterObjects({ objects }: CharacterObjectsProps) {
-  if (!objects?.length) {
-    return null;
-  }
-
-  const characterInfo = objects.find((object) => object.name === "character");
-
-  return (
-    <div className="mt-2 flex flex-col gap-2">
-      {characterInfo?.properties?.name ?? ""}
-    </div>
-  );
-}
-
 function getCharacterBodySprite(
   objects: CharacterObject[] | undefined,
 ): string | null {
@@ -185,7 +167,6 @@ export function CharacterList() {
                     <span className="block truncate text-[10px] text-[#bec1c5] font-mono">
                       {dirPrefix}
                     </span>
-                    {/*<CharacterObjects objects={character.objects} />*/}
                   </span>
                 </div>
               );

@@ -32,6 +32,7 @@ export type MeshSyncRefs = {
   textureRevision: number;
   parallaxOrigin: { x: number; y: number } | null;
   parallaxActive: boolean;
+  customRenderContext: unknown;
 };
 
 export type AxisConstraint = 'x' | 'y' | 'free';

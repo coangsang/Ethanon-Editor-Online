@@ -1,4 +1,6 @@
-import type { EntityInstance, ProjectCharacterEntry } from '../types';
+import type { EntityInstance, EntityTemplate, ProjectCharacterEntry } from '../types';
+import { resolveEntityTemplate } from '../utils/entityTemplate';
+import { resolveImageUrl } from '../utils/resolveImageUrl';
 
 /**
  * Custom render hooks keyed by the scene entity's `EntityName`.
@@ -10,11 +12,15 @@ import type { EntityInstance, ProjectCharacterEntry } from '../types';
  */
 export type EntityCustomRenderContext = {
   characters: readonly ProjectCharacterEntry[];
+  /** Needed to check that a custom sprite image actually exists. */
+  templateImageUrls?: Record<string, string>;
 };
 
 export type EntityCustomRenderer = {
   /** Text drawn above the entity's sprite, or null/empty for no label. */
   getLabel?: (entity: EntityInstance, context: EntityCustomRenderContext) => string | null;
+  /** Replaces the entity's sprite image (first frame is drawn), or null to keep it. */
+  getSpriteFile?: (entity: EntityInstance, context: EntityCustomRenderContext) => string | null;
 };
 
 function customDataString(entity: EntityInstance, name: string): string | null {
@@ -42,13 +48,16 @@ function findCharacterEntry(
   }) ?? null;
 }
 
+function getCharacterObject(fileName: string, characters: readonly ProjectCharacterEntry[]) {
+  return findCharacterEntry(fileName, characters)?.objects?.find(o => o.name === 'character') ?? null;
+}
+
 /**
  * `character.properties.name` from the .character file when it exists,
  * otherwise the file's base name without extension (e.g. "blood-priest").
  */
 function characterDisplayName(fileName: string, characters: readonly ProjectCharacterEntry[]): string {
-  const entry = findCharacterEntry(fileName, characters);
-  const name = entry?.objects?.find(o => o.name === 'character')?.properties.name;
+  const name = getCharacterObject(fileName, characters)?.properties.name;
   if (typeof name === 'string' && name.trim().length > 0) return name.trim();
   const base = fileName.trim().replace(/\\/g, '/').split('/').pop() ?? fileName;
   return base.replace(/\.character$/i, '');
@@ -59,6 +68,12 @@ export const ENTITY_CUSTOM_RENDERERS: Readonly<Record<string, EntityCustomRender
     getLabel: (entity, { characters }) => {
       const fileName = customDataString(entity, 'fileName');
       return fileName ? characterDisplayName(fileName, characters) : null;
+    },
+    getSpriteFile: (entity, { characters }) => {
+      const fileName = customDataString(entity, 'fileName');
+      if (!fileName) return null;
+      const bodySprite = getCharacterObject(fileName, characters)?.properties.bodySprite;
+      return typeof bodySprite === 'string' && bodySprite.trim() ? bodySprite.trim() : null;
     },
   },
 };
@@ -74,4 +89,37 @@ export function getEntityCustomLabel(
   context: EntityCustomRenderContext = { characters: [] },
 ): string | null {
   return getEntityCustomRenderer(entity.entityName)?.getLabel?.(entity, context) ?? null;
+}
+
+/**
+ * Template used by the viewport to draw an entity: the normal resolved template,
+ * with its sprite replaced when the entity's custom renderer supplies one and the
+ * image exists in the project. Scale is reset to 1; type and pivot adjust stay
+ * those of the entity's own template.
+ */
+export function resolveEntityRenderTemplate(
+  entity: EntityInstance,
+  templates: Record<string, EntityTemplate>,
+  context?: EntityCustomRenderContext,
+): EntityTemplate | null {
+  const base = resolveEntityTemplate(entity, templates);
+  if (!context) return base;
+  const spriteFile = getEntityCustomRenderer(entity.entityName)?.getSpriteFile?.(entity, context);
+  if (!spriteFile) return base;
+  if (context.templateImageUrls && !resolveImageUrl(context.templateImageUrls, spriteFile)) return base;
+  return {
+    name: entity.entityName,
+    type: 'horizontal',
+    pivotAdjust: { x: 0, y: 0 },
+    parallaxIntensity: 1,
+    blendMode: 0,
+    ...base,
+    spriteFile,
+    // The entity template's scale belongs to its own sprite, not the body sprite.
+    scale: { x: 1, y: 1 },
+    // The custom sprite is read through its texture atlas only; the original
+    // grid cut does not apply to it.
+    spriteCut: { x: 1, y: 1 },
+    renderFirstFrameOnly: true,
+  };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EntityInstance, ProjectCharacterEntry } from '../../types';
-import { getEntityCustomLabel, getEntityCustomRenderer } from '../entityCustomRender';
+import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate } from '../entityCustomRender';
 
 function entity(entityName: string, customData: EntityInstance['customData'] = []): EntityInstance {
   return {
@@ -64,5 +64,41 @@ describe('entity custom render registry', () => {
   it('returns no label when fileName is missing or blank', () => {
     expect(getEntityCustomLabel(entity('character_spawn'))).toBeNull();
     expect(getEntityCustomLabel(entity('character_spawn', [{ type: 'string', name: 'fileName', value: '  ' }]))).toBeNull();
+  });
+});
+
+describe('character_spawn body sprite override', () => {
+  const characters = [
+    character('enemies/blood-priest.character', [
+      { name: 'character', properties: { name: 'Blood Priest', bodySprite: 'entities/priest_body.png' } },
+    ]),
+  ];
+  const urls = { 'entities/priest_body.png': 'blob:priest' };
+  const spawn = entity('character_spawn', fileName);
+
+  it('replaces the sprite with bodySprite and renders only the first frame', () => {
+    const t = resolveEntityRenderTemplate(spawn, {}, { characters, templateImageUrls: urls });
+    expect(t?.spriteFile).toBe('entities/priest_body.png');
+    expect(t?.spriteCut).toEqual({ x: 1, y: 1 });
+    expect(t?.renderFirstFrameOnly).toBe(true);
+    expect(t?.scale).toEqual({ x: 1, y: 1 });
+  });
+
+  it('ignores the entity template scale for the body sprite', () => {
+    const scaled = { name: 'character_spawn', spriteFile: 'x.png', spriteCut: { x: 1, y: 1 }, type: 'horizontal', pivotAdjust: { x: 0, y: 0 }, scale: { x: 3, y: 3 }, parallaxIntensity: 1 } as const;
+    const e = { ...spawn, inlineEntityData: { FileName: 'character_spawn.ent' } };
+    const t = resolveEntityRenderTemplate(e, { 'character_spawn.ent': scaled, character_spawn: scaled }, { characters, templateImageUrls: urls });
+    expect(t?.scale).toEqual({ x: 1, y: 1 });  });
+
+  it('keeps the original template when bodySprite is absent or its image is missing', () => {
+    const noBody = [character('enemies/blood-priest.character', [{ name: 'character', properties: { name: 'X' } }])];
+    expect(resolveEntityRenderTemplate(spawn, {}, { characters: noBody, templateImageUrls: urls })).toBeNull();
+    expect(resolveEntityRenderTemplate(spawn, {}, { characters, templateImageUrls: { 'entities/other.png': 'blob:other' } })).toBeNull();
+    expect(resolveEntityRenderTemplate(spawn, {}, { characters: [], templateImageUrls: urls })).toBeNull();
+  });
+
+  it('does not override other entity names, including character_spawn.ent', () => {
+    const ctx = { characters, templateImageUrls: urls };
+    expect(resolveEntityRenderTemplate(entity('character_spawn.ent', fileName), {}, ctx)).toBeNull();
   });
 });
