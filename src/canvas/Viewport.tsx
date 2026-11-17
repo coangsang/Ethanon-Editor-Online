@@ -1,5 +1,6 @@
 import { useSceneStore } from '../store/sceneStore';
 import { useEntityMeshRenderer } from './useEntityMeshRenderer';
+import { useEntityCustomRenderer } from './useEntityCustomRenderer';
 import { usePixiStage } from './usePixiStage';
 import { usePlacePreviewRenderer } from './usePlacePreviewRenderer';
 import { useViewportInteractions } from './useViewportInteractions';
@@ -70,6 +71,14 @@ export function Viewport() {
     showParticles,
     viewportSize,
     onEntityPointerDown,
+  });
+
+  useEntityCustomRenderer({
+    refs,
+    camera,
+    scene,
+    textureRevision,
+    appReadyRevision,
   });
 
   useCollisionRenderer({

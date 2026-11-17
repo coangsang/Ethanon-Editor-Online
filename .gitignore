@@ -94,3 +94,6 @@ coverage/
 ehthumbs.db
 Thumbs.db
 desktop.ini
+
+# Temporary agent delegation briefs
+agy-brief.tmp.md
