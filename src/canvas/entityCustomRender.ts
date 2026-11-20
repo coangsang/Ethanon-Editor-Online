@@ -84,6 +84,45 @@ export function findItemSprite(itemName: string, items: readonly ProjectItemEntr
   return null;
 }
 
+const EQUIPPED_ITEM_TYPE_LABELS: Record<string, string> = {
+  armor: 'Armor',
+  artifact: 'Artifact',
+  weapon: 'Weapon',
+};
+
+export type CharacterEquippedItem = {
+  /** Block name in the `.character` file, e.g. `equippedItem0`. */
+  slot: string;
+  /** Display label of `type`: Armor, Artifact, or Weapon. */
+  typeLabel: string;
+  /** Item `name`, or null when missing. */
+  name: string | null;
+  /** Item `sprite`, or null when missing or `none`. */
+  sprite: string | null;
+};
+
+/** `equippedItem0`..`equippedItem2` blocks with an armor, artifact, or weapon `type`, in slot order. */
+export function getCharacterEquippedItems(
+  objects: readonly { name: string; properties: Record<string, unknown> }[] | null | undefined,
+): CharacterEquippedItem[] {
+  const result: CharacterEquippedItem[] = [];
+  for (let i = 0; i <= 2; i++) {
+    const slot = `equippedItem${i}`;
+    const properties = objects?.find(o => o.name === slot)?.properties;
+    const type = nonEmptyString(properties?.type)?.toLowerCase();
+    const typeLabel = type ? EQUIPPED_ITEM_TYPE_LABELS[type] : undefined;
+    if (!properties || !typeLabel) continue;
+    const sprite = nonEmptyString(properties.sprite);
+    result.push({
+      slot,
+      typeLabel,
+      name: nonEmptyString(properties.name),
+      sprite: sprite && sprite.toLowerCase() !== 'none' ? sprite : null,
+    });
+  }
+  return result;
+}
+
 export type CharacterEntityInfo = {
   /** customData `fileName` as written in the scene. */
   fileName: string;
@@ -95,6 +134,8 @@ export type CharacterEntityInfo = {
   hairName: string | null;
   /** `sprite` of the `.enml` item named by `hairName`, or null when not found. */
   hairSprite: string | null;
+  /** Armor, artifact, and weapon blocks `equippedItem0`..`equippedItem2`. */
+  equippedItems: CharacterEquippedItem[];
   /** Whether the `.character` file was found among the project's characters. */
   found: boolean;
 };
@@ -116,6 +157,7 @@ export function getCharacterEntityInfo(
     bodySprite: nonEmptyString(properties?.bodySprite),
     hairName,
     hairSprite: hairName ? findItemSprite(hairName, items) : null,
+    equippedItems: getCharacterEquippedItems(entry?.objects),
     found: entry !== null,
   };
 }

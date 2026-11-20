@@ -121,6 +121,31 @@ describe('Inspector custom mode', () => {
     expect(screen.queryByAltText('Alien hair sprite')).toBeNull();
   });
 
+  it('shows equipped item sprites only when their image is loaded', () => {
+    const knight: ProjectCharacterEntry = {
+      name: 'knight.character',
+      relativePath: 'enemies/knight.character',
+      handle: {} as ProjectCharacterEntry['handle'],
+      objects: [
+        { name: 'character', properties: { name: 'Knight', bodySprite: 'entity/knight.png' } },
+        { name: 'equippedItem0', properties: { name: 'Xmas Armor', type: 'armor', sprite: 'armor_christmas_2022_A.png' } },
+        { name: 'equippedItem1', properties: { name: 'Sword', type: 'weapon', sprite: 'sword.png' } },
+      ],
+    };
+    useSceneStore.setState({
+      projectCharacters: [knight],
+      templateImageUrls: { 'entity/knight.png': 'blob:knight', 'armor_christmas_2022_A.png': 'blob:armor' },
+    });
+    loadEntity('character_spawn', 'npcs/enemies/knight.character');
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    expect(screen.getByText('Armor')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'armor_christmas_2022_A.png' })).toBeTruthy();
+    expect(screen.getByAltText('Knight armor sprite').getAttribute('src')).toBe('blob:armor');
+    expect(screen.queryByText('Weapon')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'sword.png' })).toBeNull();
+  });
+
   it('reports a character entity without a fileName', () => {
     loadEntity('character_spawn');
     render(<Inspector />);

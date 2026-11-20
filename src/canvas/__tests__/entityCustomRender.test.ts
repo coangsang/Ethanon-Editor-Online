@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EntityInstance, ProjectCharacterEntry, ProjectItemEntry } from '../../types';
-import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, findItemSprite } from '../entityCustomRender';
+import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, findItemSprite, getCharacterEquippedItems } from '../entityCustomRender';
 
 function entity(entityName: string, customData: EntityInstance['customData'] = []): EntityInstance {
   return {
@@ -136,5 +136,27 @@ describe('findItemSprite', () => {
     expect(findItemSprite('alien0', items)).toBe('hair_6.png');
     expect(findItemSprite('missing', items)).toBeNull();
     expect(findItemSprite('alien0', [items[0]])).toBe('other.png');
+  });
+});
+
+describe('getCharacterEquippedItems', () => {
+  it('returns armor/artifact/weapon slots in slot order', () => {
+    const objects = [
+      { name: 'character', properties: { name: 'X' } },
+      { name: 'equippedItem1', properties: { name: 'Zombie Bite', type: 'weapon', sprite: 'none' } },
+      { name: 'equippedItem0', properties: { name: 'Zombie Set', type: 'armor', sprite: 'armor_leather_0b.png' } },
+      { name: 'equippedItem2', properties: { name: 'Ring', type: 'Artifact', sprite: 'ring.png' } },
+      { name: 'equippedItem3', properties: { type: 'armor', sprite: 'x.png' } },
+    ];
+    expect(getCharacterEquippedItems(objects)).toEqual([
+      { slot: 'equippedItem0', typeLabel: 'Armor', name: 'Zombie Set', sprite: 'armor_leather_0b.png' },
+      { slot: 'equippedItem1', typeLabel: 'Weapon', name: 'Zombie Bite', sprite: null },
+      { slot: 'equippedItem2', typeLabel: 'Artifact', name: 'Ring', sprite: 'ring.png' },
+    ]);
+  });
+
+  it('skips unsupported types and handles undefined input', () => {
+    expect(getCharacterEquippedItems([{ name: 'equippedItem0', properties: { name: 'Hat', type: 'head', sprite: 'h.png' } }])).toEqual([]);
+    expect(getCharacterEquippedItems(undefined)).toEqual([]);
   });
 });
