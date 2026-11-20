@@ -29,6 +29,8 @@ import { EntityPhysicsSection } from './inspector/EntityPhysicsSection';
 import { CollisionGeometrySection } from './inspector/CollisionGeometrySection';
 import { RevoluteJointsSection } from './inspector/RevoluteJointsSection';
 import { AxisNumberInput, CheckInput } from './inspector/InspectorControls';
+import { ENTITY_CUSTOM_INSPECTOR_LABELS, getEntityCustomInspectorKind } from './inspector/entityCustomInspectors';
+import { EntityCustomInspector } from './inspector/EntityCustomInspector';
 import { transformEventBus } from '../store/TransformEventBus';
 
 function isVectorValue(value: CustomDataValue): value is CustomDataVectorValue {
@@ -1556,6 +1558,8 @@ export function Inspector() {
   const [spritePickerEntityUid, setSpritePickerEntityUid] = useState<string | null>(null);
   const [exportPrefabModalOpen, setExportPrefabModalOpen] = useState(false);
   const [exportPrefabEntityUid, setExportPrefabEntityUid] = useState<string | null>(null);
+  // Editor-only view preference; kept while the Inspector is mounted, not saved to the scene.
+  const [customInspectorMode, setCustomInspectorMode] = useState(false);
 
   const selectedUID = selectedUIDs[0] ?? null;
   const entity = scene.entities.find(e => e.editorEntityUID === selectedUID);
@@ -1605,6 +1609,7 @@ export function Inspector() {
   };
 
   const hasFileName = entityHasFileNameTag(entity);
+  const customInspectorKind = getEntityCustomInspectorKind(rawEntityName);
   const currentScale = template?.scale ?? { x: 1, y: 1 };
   const currentSpriteCut = entity.inlineTemplate?.spriteCut ?? template?.spriteCut ?? { x: 1, y: 1 };
   const currentDiffuseColor = entity.diffuseColor ?? entity.color ?? template?.diffuseColor ?? { r: 1, g: 1, b: 1, a: 1 };
@@ -1906,6 +1911,21 @@ export function Inspector() {
           </div>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          {customInspectorKind && (
+            <button
+              type="button"
+              onClick={() => setCustomInspectorMode(mode => !mode)}
+              aria-pressed={customInspectorMode}
+              title={customInspectorMode ? 'Switch to default Inspector' : `Switch to ${ENTITY_CUSTOM_INSPECTOR_LABELS[customInspectorKind]} Inspector`}
+              className={`inspector-button rounded border px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                customInspectorMode
+                  ? 'border-gray-400/60 bg-gray-600 text-gray-100 hover:bg-gray-500'
+                  : 'border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-gray-100'
+              } flex items-center gap-1`}
+            >
+              <Icon name="custom" size={12} /> {ENTITY_CUSTOM_INSPECTOR_LABELS[customInspectorKind]}
+            </button>
+          )}
           <button
             onClick={() => {
               setExportPrefabEntityUid(entity.editorEntityUID);
@@ -1933,7 +1953,7 @@ export function Inspector() {
               title="Unpack entity template to create an inline entity and merge custom data"
               className="inspector-button rounded border border-purple-700/80 bg-purple-950/60 px-2 py-0.5 text-[10px] font-semibold text-purple-200 hover:bg-purple-900/80 hover:text-white transition-colors flex items-center gap-1 shadow-sm"
             >
-              Unpack
+              <Icon name="unpack" size={12} /> Unpack
             </button>
           )}
           <button
@@ -1944,13 +1964,16 @@ export function Inspector() {
               canPingTemplate
                 ? 'border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-gray-100'
                 : 'cursor-not-allowed border-gray-800 bg-gray-900 text-gray-600'
-            }`}
+            } flex items-center gap-1`}
           >
-            Ping
+            <Icon name="ping" size={12} /> Ping
           </button>
         </div>
       </div>
 
+      {customInspectorKind && customInspectorMode ? (
+        <EntityCustomInspector key={`${entity.editorEntityUID}:custom-inspector`} kind={customInspectorKind} entity={entity} />
+      ) : (<>
       {/* Identity Section */}
       <IdentitySection key={`${entity.editorEntityUID}:identity`} entity={entity} />
 
@@ -2046,6 +2069,7 @@ export function Inspector() {
         entity={entity}
         customData={customData}
       />
+      </>)}
 
       <SpritePickerModal
         isOpen={spritePickerOpen && spritePickerEntityUid === entity.editorEntityUID}

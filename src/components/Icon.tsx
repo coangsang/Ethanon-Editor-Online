@@ -4,15 +4,18 @@ import {
   ChevronRight,
   ChevronUp,
   Copy,
+  Crosshair,
   FolderOpen,
   Hand,
   Lock,
   MousePointer2,
   Maximize,
   Move,
+  PackageOpen,
   RotateCw,
   Save,
   Settings,
+  SlidersHorizontal,
   Trash2,
   Unlock,
   type LucideIcon,
@@ -23,17 +26,20 @@ export type IconName =
   | "chevron-right"
   | "chevron-up"
   | "copy"
+  | "custom"
   | "cursor"
   | "fit-view"
   | "hand"
   | "lock"
   | "move"
+  | "ping"
   | "prefab"
   | "project-open"
   | "rotate"
   | "save"
   | "settings"
   | "trash"
+  | "unpack"
   | "unlock";
 
 interface IconProps {
@@ -48,17 +54,20 @@ const ICONS: Record<IconName, LucideIcon> = {
   "chevron-right": ChevronRight,
   "chevron-up": ChevronUp,
   copy: Copy,
+  custom: SlidersHorizontal,
   cursor: MousePointer2,
   "fit-view": Maximize,
   hand: Hand,
   lock: Lock,
   move: Move,
+  ping: Crosshair,
   prefab: Boxes,
   "project-open": FolderOpen,
   rotate: RotateCw,
   save: Save,
   settings: Settings,
   trash: Trash2,
+  unpack: PackageOpen,
   unlock: Unlock,
 };
 

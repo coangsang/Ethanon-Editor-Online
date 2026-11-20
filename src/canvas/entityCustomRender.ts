@@ -66,17 +66,37 @@ function characterDisplayName(fileName: string, characters: readonly ProjectChar
   return base.replace(/\.character$/i, '');
 }
 
+export type CharacterEntityInfo = {
+  /** customData `fileName` as written in the scene. */
+  fileName: string;
+  /** Display name (see `characterDisplayName`). */
+  name: string;
+  /** `character.properties.bodySprite`, or null when missing. */
+  bodySprite: string | null;
+  /** Whether the `.character` file was found among the project's characters. */
+  found: boolean;
+};
+
+/** Character data for an entity whose customData `fileName` points to a `.character` file. */
+export function getCharacterEntityInfo(
+  entity: EntityInstance,
+  characters: readonly ProjectCharacterEntry[],
+): CharacterEntityInfo | null {
+  const fileName = customDataString(entity, 'fileName');
+  if (!fileName) return null;
+  const entry = findCharacterEntry(fileName, characters);
+  const bodySprite = entry?.objects?.find(o => o.name === 'character')?.properties.bodySprite;
+  return {
+    fileName,
+    name: characterDisplayName(fileName, characters),
+    bodySprite: typeof bodySprite === 'string' && bodySprite.trim() ? bodySprite.trim() : null,
+    found: entry !== null,
+  };
+}
+
 const characterRenderer: EntityCustomRenderer = {
-  getLabel: (entity, { characters }) => {
-    const fileName = customDataString(entity, 'fileName');
-    return fileName ? characterDisplayName(fileName, characters) : null;
-  },
-  getSpriteFile: (entity, { characters }) => {
-    const fileName = customDataString(entity, 'fileName');
-    if (!fileName) return null;
-    const bodySprite = getCharacterObject(fileName, characters)?.properties.bodySprite;
-    return typeof bodySprite === 'string' && bodySprite.trim() ? bodySprite.trim() : null;
-  },
+  getLabel: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.name ?? null,
+  getSpriteFile: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.bodySprite ?? null,
 };
 
 /** Entity names (exact match) drawn from a `.character` file via customData `fileName`. */
