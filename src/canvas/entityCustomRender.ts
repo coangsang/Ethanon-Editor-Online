@@ -1,4 +1,5 @@
-import type { EntityInstance, EntityTemplate, ProjectCharacterEntry } from '../types';
+import type { EntityInstance, EntityTemplate, ProjectCharacterEntry, SpriteAtlas } from '../types';
+import { getAtlasForTemplate } from './viewportMath';
 import { resolveEntityTemplate } from '../utils/entityTemplate';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 
@@ -14,6 +15,8 @@ export type EntityCustomRenderContext = {
   characters: readonly ProjectCharacterEntry[];
   /** Needed to check that a custom sprite image actually exists. */
   templateImageUrls?: Record<string, string>;
+  /** Atlases by sprite file; a custom sprite without one uses the template's grid cut. */
+  templateAtlases?: Record<string, SpriteAtlas>;
 };
 
 export type EntityCustomRenderer = {
@@ -63,20 +66,25 @@ function characterDisplayName(fileName: string, characters: readonly ProjectChar
   return base.replace(/\.character$/i, '');
 }
 
-export const ENTITY_CUSTOM_RENDERERS: Readonly<Record<string, EntityCustomRenderer>> = {
-  character_spawn: {
-    getLabel: (entity, { characters }) => {
-      const fileName = customDataString(entity, 'fileName');
-      return fileName ? characterDisplayName(fileName, characters) : null;
-    },
-    getSpriteFile: (entity, { characters }) => {
-      const fileName = customDataString(entity, 'fileName');
-      if (!fileName) return null;
-      const bodySprite = getCharacterObject(fileName, characters)?.properties.bodySprite;
-      return typeof bodySprite === 'string' && bodySprite.trim() ? bodySprite.trim() : null;
-    },
+const characterRenderer: EntityCustomRenderer = {
+  getLabel: (entity, { characters }) => {
+    const fileName = customDataString(entity, 'fileName');
+    return fileName ? characterDisplayName(fileName, characters) : null;
+  },
+  getSpriteFile: (entity, { characters }) => {
+    const fileName = customDataString(entity, 'fileName');
+    if (!fileName) return null;
+    const bodySprite = getCharacterObject(fileName, characters)?.properties.bodySprite;
+    return typeof bodySprite === 'string' && bodySprite.trim() ? bodySprite.trim() : null;
   },
 };
+
+/** Entity names (exact match) drawn from a `.character` file via customData `fileName`. */
+export const CHARACTER_RENDER_ENTITY_NAMES: readonly string[] = ['character_spawn', 'character_air_attack'];
+
+export const ENTITY_CUSTOM_RENDERERS: Readonly<Record<string, EntityCustomRenderer>> = Object.fromEntries(
+  CHARACTER_RENDER_ENTITY_NAMES.map(name => [name, characterRenderer]),
+);
 
 export function getEntityCustomRenderer(entityName: string): EntityCustomRenderer | null {
   return Object.prototype.hasOwnProperty.call(ENTITY_CUSTOM_RENDERERS, entityName)
@@ -117,9 +125,11 @@ export function resolveEntityRenderTemplate(
     spriteFile,
     // The entity template's scale belongs to its own sprite, not the body sprite.
     scale: { x: 1, y: 1 },
-    // The custom sprite is read through its texture atlas only; the original
-    // grid cut does not apply to it.
-    spriteCut: { x: 1, y: 1 },
+    // A custom sprite with a texture atlas is cut by that atlas. Without one,
+    // fall back to the entity template's own grid cut (when atlases are known).
+    spriteCut: context.templateAtlases && !getAtlasForTemplate({ spriteFile } as EntityTemplate, context.templateAtlases)
+      ? base?.spriteCut ?? { x: 1, y: 1 }
+      : { x: 1, y: 1 },
     renderFirstFrameOnly: true,
   };
 }

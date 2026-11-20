@@ -51,6 +51,12 @@ describe('entity custom render registry', () => {
     expect(getEntityCustomLabel(entity('character_spawn', fileName), { characters: noObject })).toBe('blood-priest');
   });
 
+  it('renders character_air_attack like character_spawn', () => {
+    expect(getEntityCustomLabel(entity('character_air_attack', fileName))).toBe('blood-priest');
+    expect(getEntityCustomRenderer('character_air_attack')).toBe(getEntityCustomRenderer('character_spawn'));
+    expect(getEntityCustomRenderer('character_air_attack.ent')).toBeNull();
+  });
+
   it('matches the entity name exactly, so the .ent variant is a different entity', () => {
     expect(getEntityCustomRenderer('character_spawn.ent')).toBeNull();
     expect(getEntityCustomLabel(entity('character_spawn.ent', fileName))).toBeNull();
@@ -82,6 +88,17 @@ describe('character_spawn body sprite override', () => {
     expect(t?.spriteCut).toEqual({ x: 1, y: 1 });
     expect(t?.renderFirstFrameOnly).toBe(true);
     expect(t?.scale).toEqual({ x: 1, y: 1 });
+  });
+
+  it('uses the entity template spriteCut when the body sprite has no atlas', () => {
+    const cut = { name: 'character_spawn', spriteFile: 'x.png', spriteCut: { x: 4, y: 2 }, type: 'horizontal', pivotAdjust: { x: 0, y: 0 }, scale: { x: 1, y: 1 }, parallaxIntensity: 1 } as const;
+    const e = { ...spawn, inlineEntityData: { FileName: 'character_spawn.ent' } };
+    const templates = { 'character_spawn.ent': cut, character_spawn: cut };
+    const noAtlas = resolveEntityRenderTemplate(e, templates, { characters, templateImageUrls: urls, templateAtlases: {} });
+    expect(noAtlas?.spriteCut).toEqual({ x: 4, y: 2 });
+    const atlas = { frames: [{ x: 0, y: 0, width: 1, height: 1 }] } as never;
+    const withAtlas = resolveEntityRenderTemplate(e, templates, { characters, templateImageUrls: urls, templateAtlases: { 'entities/priest_body.png': atlas } });
+    expect(withAtlas?.spriteCut).toEqual({ x: 1, y: 1 });
   });
 
   it('ignores the entity template scale for the body sprite', () => {

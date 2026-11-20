@@ -616,24 +616,24 @@ function SpriteFlagsSection({ entity, hasFileName, template, maxSpriteFrame, cla
             <span className="text-xs text-gray-400 w-14 shrink-0">Cut</span>
             <div className="grid grid-cols-2 gap-1 flex-1 min-w-0">
               <AxisNumberInput
-                axis="X"
+                axis="Row"
                 badgeClass="axis-badge-x"
                 value={localSpriteCut.x}
                 step={1}
                 min={1}
                 onChange={x => handleSpriteCutChange('x', x)}
-                ariaLabel="Sprite Cut X"
-                title="Frames X"
+                ariaLabel="Sprite Cut Row"
+                title="Row (x)"
               />
               <AxisNumberInput
-                axis="Y"
+                axis="Col"
                 badgeClass="axis-badge-y"
                 value={localSpriteCut.y}
                 step={1}
                 min={1}
                 onChange={y => handleSpriteCutChange('y', y)}
-                ariaLabel="Sprite Cut Y"
-                title="Frames Y"
+                ariaLabel="Sprite Cut Col"
+                title="Col (y)"
               />
             </div>
           </div>

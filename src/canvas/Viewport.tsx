@@ -42,8 +42,8 @@ export function Viewport() {
   const setParallaxOriginNormalized = useSceneStore(s => s.setParallaxOriginNormalized);
 
   const customRenderContext = useMemo(
-    () => ({ characters: projectCharacters, templateImageUrls }),
-    [projectCharacters, templateImageUrls],
+    () => ({ characters: projectCharacters, templateImageUrls, templateAtlases }),
+    [projectCharacters, templateImageUrls, templateAtlases],
   );
 
   const { viewportSize, appReadyRevision, runtimeState, retryViewport } = usePixiStage({ refs, camera, showGrid });
