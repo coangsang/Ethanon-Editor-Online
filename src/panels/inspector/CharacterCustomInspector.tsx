@@ -1,28 +1,7 @@
-import { useState } from 'react';
 import type { EntityInstance } from '../../types';
 import { useSceneStore } from '../../store/sceneStore';
 import { getCharacterEntityInfo } from '../../canvas/entityCustomRender';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
-
-function SpritePreview({ imageUrl, label }: { imageUrl: string | null; label: string }) {
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const showImage = imageUrl !== null && failedUrl !== imageUrl;
-  return (
-    <div className="flex h-24 items-center justify-center overflow-hidden rounded border border-gray-700 bg-checkerboard">
-      {showImage ? (
-        <img
-          src={imageUrl}
-          alt={`${label} sprite`}
-          onError={() => setFailedUrl(imageUrl)}
-          className="max-h-full max-w-full object-contain pointer-events-none"
-          style={{ imageRendering: 'pixelated' }}
-        />
-      ) : (
-        <span className="text-[11px] italic text-gray-500">No sprite image</span>
-      )}
-    </div>
-  );
-}
 
 /** Custom Inspector for entities drawn from a `.character` file (customData `fileName`). */
 export function CharacterCustomInspector({ entity }: { entity: EntityInstance }) {
@@ -31,7 +10,6 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
   const templateImageUrls = useSceneStore(s => s.templateImageUrls);
   const pingSprite = useSceneStore(s => s.pingSprite);
   const info = getCharacterEntityInfo(entity, characters, items);
-  const imageUrl = info?.bodySprite ? resolveImageUrl(templateImageUrls, info.bodySprite) : null;
   // Hair is shown only when its sprite image was loaded from the project.
   const hairImageUrl = info?.hairSprite ? resolveImageUrl(templateImageUrls, info.hairSprite) : null;
 
@@ -60,7 +38,7 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
             <div className="text-[11px] text-amber-400">Character file not found in project</div>
           )}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 w-14 shrink-0">Sprite</span>
+            <span className="text-xs text-gray-400 w-14 shrink-0">Body</span>
             <button
               type="button"
               disabled={!info.bodySprite}
@@ -71,22 +49,18 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
               {info.bodySprite || '(none)'}
             </button>
           </div>
-          {info.bodySprite && <SpritePreview key={imageUrl ?? ''} imageUrl={imageUrl} label={info.name} />}
           {info.hairSprite && hairImageUrl && (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400 w-14 shrink-0">Hair</span>
-                <button
-                  type="button"
-                  onClick={() => info.hairSprite && pingSprite(info.hairSprite)}
-                  title={`${info.hairName} — Ping Sprite in Project Panel`}
-                  className="inspector-button flex-1 editor-input w-0 font-mono text-[10px] text-left truncate px-2 py-1 bg-gray-800 cursor-pointer hover:bg-gray-700 transition-colors"
-                >
-                  {info.hairSprite}
-                </button>
-              </div>
-              <SpritePreview key={hairImageUrl} imageUrl={hairImageUrl} label={`${info.name} hair`} />
-            </>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 w-14 shrink-0">Hair</span>
+              <button
+                type="button"
+                onClick={() => info.hairSprite && pingSprite(info.hairSprite)}
+                title={`${info.hairName} — Ping Sprite in Project Panel`}
+                className="inspector-button flex-1 editor-input w-0 font-mono text-[10px] text-left truncate px-2 py-1 bg-gray-800 cursor-pointer hover:bg-gray-700 transition-colors"
+              >
+                {info.hairSprite}
+              </button>
+            </div>
           )}
           {info.equippedItems.map(item => {
             // Like hair, an item is shown only when its sprite image was loaded from the project.
@@ -94,19 +68,16 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
             if (!item.sprite || !itemImageUrl) return null;
             const sprite = item.sprite;
             return (
-              <div key={item.slot} className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-14 shrink-0">{item.typeLabel}</span>
-                  <button
-                    type="button"
-                    onClick={() => pingSprite(sprite)}
-                    title={`${item.name ?? item.slot} — Ping Sprite in Project Panel`}
-                    className="inspector-button flex-1 editor-input w-0 font-mono text-[10px] text-left truncate px-2 py-1 bg-gray-800 cursor-pointer hover:bg-gray-700 transition-colors"
-                  >
-                    {sprite}
-                  </button>
-                </div>
-                <SpritePreview key={itemImageUrl} imageUrl={itemImageUrl} label={`${info.name} ${item.typeLabel.toLowerCase()}`} />
+              <div key={item.slot} className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 w-14 shrink-0">{item.typeLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => pingSprite(sprite)}
+                  title={`${item.name ?? item.slot} — Ping Sprite in Project Panel`}
+                  className="inspector-button flex-1 editor-input w-0 font-mono text-[10px] text-left truncate px-2 py-1 bg-gray-800 cursor-pointer hover:bg-gray-700 transition-colors"
+                >
+                  {sprite}
+                </button>
               </div>
             );
           })}

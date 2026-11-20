@@ -70,7 +70,8 @@ describe('Inspector custom mode', () => {
     expect(screen.getByText('Blood Priest')).toBeTruthy();
     expect(screen.getByText('npcs/enemies/blood-priest.character')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'entity/blood_priest.png' })).toBeTruthy();
-    expect(screen.getByAltText('Blood Priest sprite').getAttribute('src')).toBe('blob:blood-priest');
+    expect(screen.getByText('Body')).toBeTruthy();
+    expect(document.querySelector('.inspector-section img')).toBeNull();
 
     fireEvent.click(toggle);
     expect(screen.getByText('Identity')).toBeTruthy();
@@ -108,7 +109,6 @@ describe('Inspector custom mode', () => {
     const { unmount } = render(<Inspector />);
     fireEvent.click(screen.getByRole('button', { name: 'Character' }));
     expect(screen.getByRole('button', { name: 'hair_6.png' })).toBeTruthy();
-    expect(screen.getByAltText('Alien hair sprite').getAttribute('src')).toBe('blob:hair');
     unmount();
 
     // Hidden when the hair image was not loaded from entities.
@@ -118,7 +118,6 @@ describe('Inspector custom mode', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Character' }));
     }
     expect(screen.queryByText('Hair')).toBeNull();
-    expect(screen.queryByAltText('Alien hair sprite')).toBeNull();
   });
 
   it('shows equipped item sprites only when their image is loaded', () => {
@@ -141,7 +140,6 @@ describe('Inspector custom mode', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Character' }));
     expect(screen.getByText('Armor')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'armor_christmas_2022_A.png' })).toBeTruthy();
-    expect(screen.getByAltText('Knight armor sprite').getAttribute('src')).toBe('blob:armor');
     expect(screen.queryByText('Weapon')).toBeNull();
     expect(screen.queryByRole('button', { name: 'sword.png' })).toBeNull();
   });
