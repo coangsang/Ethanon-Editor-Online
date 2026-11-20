@@ -17,6 +17,8 @@ export type EntityCustomRenderContext = {
   templateImageUrls?: Record<string, string>;
   /** Atlases by sprite file; a custom sprite without one uses the template's grid cut. */
   templateAtlases?: Record<string, SpriteAtlas>;
+  /** `.enml` item files, needed to resolve a character's hair sprite. */
+  items?: readonly ProjectItemEntry[];
 };
 
 export type EntityCustomRenderer = {
@@ -24,6 +26,8 @@ export type EntityCustomRenderer = {
   getLabel?: (entity: EntityInstance, context: EntityCustomRenderContext) => string | null;
   /** Replaces the entity's sprite image (first frame is drawn), or null to keep it. */
   getSpriteFile?: (entity: EntityInstance, context: EntityCustomRenderContext) => string | null;
+  /** Sprites drawn over the replaced sprite's first frame, bottom to top, aligned on their pivots. */
+  getOverlaySpriteFiles?: (entity: EntityInstance, context: EntityCustomRenderContext) => string[];
 };
 
 function customDataString(entity: EntityInstance, name: string): string | null {
@@ -162,9 +166,24 @@ export function getCharacterEntityInfo(
   };
 }
 
+/**
+ * Sprites drawn over a character's body, bottom to top: armor, hair, artifact.
+ * Weapons are not drawn yet. Missing sprites are skipped.
+ */
+export function getCharacterOverlaySprites(info: CharacterEntityInfo): string[] {
+  const equippedSprite = (typeLabel: string) =>
+    info.equippedItems.find(item => item.typeLabel === typeLabel && item.sprite)?.sprite ?? null;
+  return [equippedSprite('Armor'), info.hairSprite, equippedSprite('Artifact')]
+    .filter((sprite): sprite is string => sprite !== null);
+}
+
 const characterRenderer: EntityCustomRenderer = {
   getLabel: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.name ?? null,
   getSpriteFile: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.bodySprite ?? null,
+  getOverlaySpriteFiles: (entity, { characters, items }) => {
+    const info = getCharacterEntityInfo(entity, characters, items ?? []);
+    return info ? getCharacterOverlaySprites(info) : [];
+  },
 };
 
 /** Entity names (exact match) drawn from a `.character` file via customData `fileName`. */
@@ -200,9 +219,17 @@ export function resolveEntityRenderTemplate(
 ): EntityTemplate | null {
   const base = resolveEntityTemplate(entity, templates);
   if (!context) return base;
-  const spriteFile = getEntityCustomRenderer(entity.entityName)?.getSpriteFile?.(entity, context);
+  const renderer = getEntityCustomRenderer(entity.entityName);
+  const spriteFile = renderer?.getSpriteFile?.(entity, context);
   if (!spriteFile) return base;
-  if (context.templateImageUrls && !resolveImageUrl(context.templateImageUrls, spriteFile)) return base;
+  const imageExists = (file: string) => !context.templateImageUrls || resolveImageUrl(context.templateImageUrls, file) !== null;
+  if (!imageExists(spriteFile)) return base;
+  // Overlays are drawn only when their image was loaded from the project.
+  // A sprite without an atlas is cut by the entity template's own grid cut.
+  const gridCut = base?.spriteCut ?? { x: 1, y: 1 };
+  const compositeLayers = (renderer?.getOverlaySpriteFiles?.(entity, context) ?? [])
+    .filter(imageExists)
+    .map(file => ({ spriteFile: file, spriteCut: gridCut }));
   return {
     name: entity.entityName,
     type: 'horizontal',
@@ -219,5 +246,6 @@ export function resolveEntityRenderTemplate(
       ? base?.spriteCut ?? { x: 1, y: 1 }
       : { x: 1, y: 1 },
     renderFirstFrameOnly: true,
+    ...(compositeLayers.length > 0 ? { compositeLayers } : {}),
   };
 }

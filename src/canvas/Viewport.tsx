@@ -27,6 +27,7 @@ export function Viewport() {
   const placingTemplate = useSceneStore(s => s.placingTemplate);
   const templates = useSceneStore(s => s.templates);
   const projectCharacters = useSceneStore(s => s.projectCharacters);
+  const projectItems = useSceneStore(s => s.projectItems);
   const templateAtlases = useSceneStore(s => s.templateAtlases);
   const templateImageUrls = useSceneStore(s => s.templateImageUrls);
   const showGrid = useSceneStore(s => s.showGrid);
@@ -42,8 +43,8 @@ export function Viewport() {
   const setParallaxOriginNormalized = useSceneStore(s => s.setParallaxOriginNormalized);
 
   const customRenderContext = useMemo(
-    () => ({ characters: projectCharacters, templateImageUrls, templateAtlases }),
-    [projectCharacters, templateImageUrls, templateAtlases],
+    () => ({ characters: projectCharacters, items: projectItems, templateImageUrls, templateAtlases }),
+    [projectCharacters, projectItems, templateImageUrls, templateAtlases],
   );
 
   const { viewportSize, appReadyRevision, runtimeState, retryViewport } = usePixiStage({ refs, camera, showGrid });

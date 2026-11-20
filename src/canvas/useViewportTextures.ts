@@ -14,6 +14,7 @@ import {
   PLACEHOLDER_SIZE,
 } from './viewportMath';
 import type { RenderFrame, ViewportRefs } from './viewportTypes';
+import { computeCompositeLayout } from './compositeLayout';
 import { ViewportTextureAssetManager, type AssetLoadResult } from './ViewportTextureAssetManager';
 
 async function releaseLease(lease: AssetLoadResult<PIXI.Texture>, reason: string) {
@@ -34,9 +35,21 @@ function destroyFrameTextures(textures: Iterable<PIXI.Texture>) {
   }
 }
 
+/** Composite textures own their canvas source, so it is destroyed with them. */
+function destroyCompositeTextures(textures: Iterable<PIXI.Texture>) {
+  for (const texture of textures) {
+    try {
+      texture.destroy(true);
+    } catch {
+      // Continue disposing independent composites.
+    }
+  }
+}
+
 type DeferredTextureCleanup = {
   lease: AssetLoadResult<PIXI.Texture> | null;
   frameTextures: PIXI.Texture[];
+  compositeTextures: PIXI.Texture[];
 };
 
 type UseViewportTexturesParams = {
@@ -65,6 +78,8 @@ export function useViewportTextures({
   ));
   const activeLeaseRef = useRef<AssetLoadResult<PIXI.Texture> | null>(null);
   const deferredCleanupRef = useRef(new Map<number, DeferredTextureCleanup>());
+  // Composite render frames keyed by their layers' frame textures.
+  const compositeFrameMapRef = useRef(new Map<string, RenderFrame>());
   const committedSignatureRef = useRef<string | null>(null);
   const generationRef = useRef(0);
 
@@ -85,6 +100,12 @@ export function useViewportTextures({
       for (const entity of sceneEntities) {
         const template = resolveEntityRenderTemplate(entity, templates, customRenderContext);
         if (template?.spriteFile) templateValuesBySprite.set(template.spriteFile, template);
+        for (const layer of template?.compositeLayers ?? []) {
+          templateValuesBySprite.set(
+            layer.spriteFile,
+            { name: layer.spriteFile, spriteFile: layer.spriteFile } as EntityTemplate,
+          );
+        }
         for (const particleSystem of template?.particleSystems ?? []) {
           if (particleSystem.bitmap) {
             templateValuesBySprite.set(
@@ -140,12 +161,14 @@ export function useViewportTextures({
         console.error(`[Viewport] Failed to load Pixi texture "${url}":`, error);
       }
 
-      const { previousFrameTextures, previousLease } = measurePerformanceMetric(
+      const { previousFrameTextures, previousCompositeTextures, previousLease } = measurePerformanceMetric(
         'texture.commit',
         sceneEntities.length,
         () => {
           const previousFrames = [...refs.frameTextureMapRef.current.values()];
+          const previousComposites = [...compositeFrameMapRef.current.values()].map(frame => frame.texture);
           refs.frameTextureMapRef.current.clear();
+          compositeFrameMapRef.current.clear();
           refs.baseTextureMapRef.current.clear();
           refs.textureUrlMapRef.current.clear();
 
@@ -162,18 +185,24 @@ export function useViewportTextures({
           refs.boundsMapRef.current.clear();
           refs.drawSortSignatureRef.current = '';
           setTextureRevision(revision => revision + 1);
-          return { previousFrameTextures: previousFrames, previousLease: previous };
+          return {
+            previousFrameTextures: previousFrames,
+            previousCompositeTextures: previousComposites,
+            previousLease: previous,
+          };
         },
       );
 
       const cleanupFrame = requestAnimationFrame(() => {
         deferredCleanupRef.current.delete(cleanupFrame);
         destroyFrameTextures(previousFrameTextures);
+        destroyCompositeTextures(previousCompositeTextures);
         if (previousLease) void releaseLease(previousLease, 'cache swap');
       });
       deferredCleanupRef.current.set(cleanupFrame, {
         lease: previousLease,
         frameTextures: previousFrameTextures,
+        compositeTextures: previousCompositeTextures,
       });
     };
 
@@ -186,6 +215,7 @@ export function useViewportTextures({
     for (const [frameId, cleanup] of deferredCleanupRef.current) {
       cancelAnimationFrame(frameId);
       destroyFrameTextures(cleanup.frameTextures);
+      destroyCompositeTextures(cleanup.compositeTextures);
       if (cleanup.lease) void releaseLease(cleanup.lease, 'viewport cleanup');
     }
     deferredCleanupRef.current.clear();
@@ -197,11 +227,13 @@ export function useViewportTextures({
 
     destroyFrameTextures(refs.frameTextureMapRef.current.values());
     refs.frameTextureMapRef.current.clear();
+    destroyCompositeTextures([...compositeFrameMapRef.current.values()].map(frame => frame.texture));
+    compositeFrameMapRef.current.clear();
     refs.baseTextureMapRef.current.clear();
     refs.textureUrlMapRef.current.clear();
   }, [assetManager, refs]);
 
-  const getRenderFrame = useCallback((template: EntityTemplate, requestedFrame: number): RenderFrame => {
+  const getSingleRenderFrame = useCallback((template: EntityTemplate, requestedFrame: number): RenderFrame => {
     const spriteFrame = template.renderFirstFrameOnly ? 0 : requestedFrame;
     const key = template.spriteFile;
     const fullTexture = refs.baseTextureMapRef.current.get(key);
@@ -304,6 +336,65 @@ export function useViewportTextures({
       pivotY: template.type === 'vertical' ? 1 : 0.5,
     };
   }, [refs, templateAtlases]);
+
+  /**
+   * First frame of the template's sprite with its `compositeLayers` drawn on top,
+   * all pivots aligned, as one texture. Pivots of atlas-less sprites are centered.
+   * Null when the base sprite or every layer is not loaded yet.
+   */
+  const getCompositeRenderFrame = useCallback((template: EntityTemplate): RenderFrame | null => {
+    const layerTemplates = [
+      template,
+      ...(template.compositeLayers ?? []).map(layer => ({ ...template, ...layer })),
+    ]
+      .filter(layer => refs.baseTextureMapRef.current.has(layer.spriteFile))
+      .map(layer => ({ ...layer, type: 'horizontal' as const, compositeLayers: undefined }));
+    if (layerTemplates.length < 2 || layerTemplates[0].spriteFile !== template.spriteFile) return null;
+
+    const frames = layerTemplates.map(layer => getSingleRenderFrame(layer, 0));
+    const cacheKey = frames
+      .map(frame => `${frame.texture.uid}:${frame.offsetX},${frame.offsetY},${frame.pivotX},${frame.pivotY}`)
+      .join('|');
+    const cached = compositeFrameMapRef.current.get(cacheKey);
+    if (cached) return cached;
+
+    const layout = computeCompositeLayout(frames);
+    if (!layout) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = layout.width;
+    canvas.height = layout.height;
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    frames.forEach((frame, index) => {
+      const image = frame.texture.source.resource as CanvasImageSource | undefined;
+      if (!image) return;
+      const { x, y, width, height } = frame.texture.frame;
+      const placement = layout.placements[index];
+      context.drawImage(image, x, y, width, height, placement.x, placement.y, frame.frameWidth, frame.frameHeight);
+    });
+
+    const composite: RenderFrame = {
+      texture: PIXI.Texture.from(canvas),
+      layoutWidth: layout.width,
+      layoutHeight: layout.height,
+      frameWidth: layout.width,
+      frameHeight: layout.height,
+      offsetX: 0,
+      offsetY: 0,
+      pivotX: layout.pivotX,
+      pivotY: layout.pivotY,
+    };
+    compositeFrameMapRef.current.set(cacheKey, composite);
+    return composite;
+  }, [getSingleRenderFrame, refs]);
+
+  const getRenderFrame = useCallback((template: EntityTemplate, requestedFrame: number): RenderFrame => {
+    if (template.compositeLayers?.length) {
+      const composite = getCompositeRenderFrame(template);
+      if (composite) return composite;
+    }
+    return getSingleRenderFrame(template, requestedFrame);
+  }, [getCompositeRenderFrame, getSingleRenderFrame]);
 
   return { textureRevision, getRenderFrame };
 }

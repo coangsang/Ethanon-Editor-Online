@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EntityInstance, ProjectCharacterEntry, ProjectItemEntry } from '../../types';
-import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, findItemSprite, getCharacterEquippedItems } from '../entityCustomRender';
+import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, findItemSprite, getCharacterEquippedItems, getCharacterOverlaySprites, type CharacterEntityInfo } from '../entityCustomRender';
 
 function entity(entityName: string, customData: EntityInstance['customData'] = []): EntityInstance {
   return {
@@ -158,5 +158,77 @@ describe('getCharacterEquippedItems', () => {
   it('skips unsupported types and handles undefined input', () => {
     expect(getCharacterEquippedItems([{ name: 'equippedItem0', properties: { name: 'Hat', type: 'head', sprite: 'h.png' } }])).toEqual([]);
     expect(getCharacterEquippedItems(undefined)).toEqual([]);
+  });
+});
+
+describe('getCharacterOverlaySprites', () => {
+  const info = (overrides: Partial<CharacterEntityInfo>): CharacterEntityInfo => ({
+    fileName: PATH,
+    name: 'X',
+    bodySprite: 'body.png',
+    hairName: null,
+    hairSprite: null,
+    equippedItems: [],
+    found: true,
+    ...overrides,
+  });
+
+  it('orders armor, hair, artifact regardless of slot order and ignores weapons', () => {
+    const result = getCharacterOverlaySprites(info({
+      hairName: 'hair0',
+      hairSprite: 'hair.png',
+      equippedItems: [
+        { slot: 'equippedItem0', typeLabel: 'Weapon', name: 'W', sprite: 'w.png' },
+        { slot: 'equippedItem1', typeLabel: 'Artifact', name: 'A', sprite: 'artifact.png' },
+        { slot: 'equippedItem2', typeLabel: 'Armor', name: 'R', sprite: 'armor.png' },
+      ],
+    }));
+    expect(result).toEqual(['armor.png', 'hair.png', 'artifact.png']);
+  });
+
+  it('skips missing sprites', () => {
+    expect(getCharacterOverlaySprites(info({ hairName: 'hair0', hairSprite: 'hair.png' }))).toEqual(['hair.png']);
+  });
+});
+
+describe('character_spawn composite layers', () => {
+  const cut = { name: 'character_spawn', spriteFile: 'x.png', spriteCut: { x: 4, y: 2 }, type: 'horizontal', pivotAdjust: { x: 0, y: 0 }, scale: { x: 1, y: 1 }, parallaxIntensity: 1 } as const;
+  const templates = { 'character_spawn.ent': cut, character_spawn: cut };
+  const spawn = { ...entity('character_spawn', fileName), inlineEntityData: { FileName: 'character_spawn.ent' } };
+  const items: ProjectItemEntry[] = [{
+    name: 'npc-head.enml',
+    relativePath: 'npc-head.enml',
+    handle: {} as ProjectItemEntry['handle'],
+    objects: [{ name: 'hair0', properties: { sprite: 'hair.png' } }],
+  }];
+  const withOverlays = [
+    character('enemies/blood-priest.character', [
+      { name: 'character', properties: { name: 'Blood Priest', bodySprite: 'body.png', hairSprite: 'hair0' } },
+      { name: 'equippedItem0', properties: { name: 'Set', type: 'armor', sprite: 'armor.png' } },
+    ]),
+  ];
+  const urls = { 'body.png': 'blob:body', 'armor.png': 'blob:armor', 'hair.png': 'blob:hair' };
+
+  it('lists armor then hair with the entity template spriteCut', () => {
+    const t = resolveEntityRenderTemplate(spawn, templates, { characters: withOverlays, items, templateImageUrls: urls });
+    expect(t?.compositeLayers).toEqual([
+      { spriteFile: 'armor.png', spriteCut: { x: 4, y: 2 } },
+      { spriteFile: 'hair.png', spriteCut: { x: 4, y: 2 } },
+    ]);
+  });
+
+  it('drops overlays whose image is missing', () => {
+    const noArmor = { 'body.png': urls['body.png'], 'hair.png': urls['hair.png'] };
+    const t = resolveEntityRenderTemplate(spawn, templates, { characters: withOverlays, items, templateImageUrls: noArmor });
+    expect(t?.compositeLayers?.map(l => l.spriteFile)).toEqual(['hair.png']);
+  });
+
+  it('has no compositeLayers when there are no overlays', () => {
+    const bodyOnly = [character('enemies/blood-priest.character', [
+      { name: 'character', properties: { name: 'X', bodySprite: 'body.png' } },
+    ])];
+    const t = resolveEntityRenderTemplate(spawn, templates, { characters: bodyOnly, items, templateImageUrls: urls });
+    expect(t).not.toBeNull();
+    expect(t?.compositeLayers).toBeUndefined();
   });
 });

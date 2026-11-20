@@ -172,6 +172,12 @@ export interface EntityTemplate {
   rawEntityData?: Record<string, unknown>;
   /** Runtime-only (never serialized): viewport always draws the sprite's first frame. */
   renderFirstFrameOnly?: boolean;
+  /**
+   * Runtime-only (never serialized): sprites drawn over `spriteFile`'s first
+   * frame, bottom to top, all aligned on their pivots. `spriteCut` is the grid
+   * cut used when the sprite has no atlas.
+   */
+  compositeLayers?: { spriteFile: string; spriteCut: { x: number; y: number } }[];
 }
 
 export type InlineEntityTemplate = Partial<Omit<EntityTemplate, "name">> & {
