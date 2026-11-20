@@ -338,22 +338,37 @@ export function useViewportTextures({
   }, [refs, templateAtlases]);
 
   /**
-   * First frame of the template's sprite with its `compositeLayers` drawn on top,
-   * all pivots aligned, as one texture. Pivots of atlas-less sprites are centered.
+   * First frame of the template's sprite with its `compositeLayers` drawn over it
+   * (or under it, for `behind` layers),
+   * all pivots aligned (a layer's `offset` and `angle` move and rotate it around
+   * its pivot), as one texture. Pivots of atlas-less sprites are centered.
    * Null when the base sprite or every layer is not loaded yet.
    */
   const getCompositeRenderFrame = useCallback((template: EntityTemplate): RenderFrame | null => {
-    const layerTemplates = [
-      template,
-      ...(template.compositeLayers ?? []).map(layer => ({ ...template, ...layer })),
-    ]
-      .filter(layer => refs.baseTextureMapRef.current.has(layer.spriteFile))
-      .map(layer => ({ ...layer, type: 'horizontal' as const, compositeLayers: undefined }));
-    if (layerTemplates.length < 2 || layerTemplates[0].spriteFile !== template.spriteFile) return null;
+    const base = { spriteFile: template.spriteFile, spriteCut: template.spriteCut, offset: undefined, angle: undefined };
+    if (!refs.baseTextureMapRef.current.has(base.spriteFile)) return null;
+    const isLoaded = (layer: { spriteFile: string }) => refs.baseTextureMapRef.current.has(layer.spriteFile);
+    const overlays = template.compositeLayers ?? [];
+    // Bottom to top: layers behind the base sprite, the base sprite, layers over it.
+    const layers = [
+      ...overlays.filter(layer => layer.behind && isLoaded(layer)),
+      base,
+      ...overlays.filter(layer => !layer.behind && isLoaded(layer)),
+    ];
+    if (layers.length < 2) return null;
 
-    const frames = layerTemplates.map(layer => getSingleRenderFrame(layer, 0));
+    const frames = layers.map(layer => ({
+      ...getSingleRenderFrame(
+        { ...template, spriteFile: layer.spriteFile, spriteCut: layer.spriteCut, type: 'horizontal', compositeLayers: undefined },
+        0,
+      ),
+      position: layer.offset,
+      // A layer's angle has an entity angle's sign: counter-clockwise on screen.
+      rotation: -(layer.angle ?? 0) * (Math.PI / 180),
+    }));
     const cacheKey = frames
-      .map(frame => `${frame.texture.uid}:${frame.offsetX},${frame.offsetY},${frame.pivotX},${frame.pivotY}`)
+      .map(frame => `${frame.texture.uid}:${frame.offsetX},${frame.offsetY},${frame.pivotX},${frame.pivotY}`
+        + `:${frame.position?.x ?? 0},${frame.position?.y ?? 0},${frame.rotation}`)
       .join('|');
     const cached = compositeFrameMapRef.current.get(cacheKey);
     if (cached) return cached;
@@ -370,7 +385,11 @@ export function useViewportTextures({
       if (!image) return;
       const { x, y, width, height } = frame.texture.frame;
       const placement = layout.placements[index];
-      context.drawImage(image, x, y, width, height, placement.x, placement.y, frame.frameWidth, frame.frameHeight);
+      context.save();
+      context.translate(placement.x, placement.y);
+      if (placement.rotation !== 0) context.rotate(placement.rotation);
+      context.drawImage(image, x, y, width, height, placement.frameX, placement.frameY, frame.frameWidth, frame.frameHeight);
+      context.restore();
     });
 
     const composite: RenderFrame = {

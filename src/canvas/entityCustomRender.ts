@@ -27,7 +27,13 @@ export type EntityCustomRenderer = {
   /** Replaces the entity's sprite image (first frame is drawn), or null to keep it. */
   getSpriteFile?: (entity: EntityInstance, context: EntityCustomRenderContext) => string | null;
   /** Sprites drawn over the replaced sprite's first frame, bottom to top, aligned on their pivots. */
-  getOverlaySpriteFiles?: (entity: EntityInstance, context: EntityCustomRenderContext) => string[];
+  getOverlayLayers?: (entity: EntityInstance, context: EntityCustomRenderContext) => EntityOverlayLayer[];
+};
+
+/** A sprite drawn over an entity's custom sprite (see `EntityTemplate.compositeLayers`). */
+export type EntityOverlayLayer = Omit<NonNullable<EntityTemplate['compositeLayers']>[number], 'spriteCut'> & {
+  /** Grid cut used when the sprite has no atlas; defaults to the entity template's own cut. */
+  spriteCut?: { x: number; y: number };
 };
 
 function customDataString(entity: EntityInstance, name: string): string | null {
@@ -103,7 +109,41 @@ export type CharacterEquippedItem = {
   name: string | null;
   /** Item `sprite`, or null when missing or `none`. */
   sprite: string | null;
+  /** Item `headlessAlternativeSprite`, present only when set and not `none`. */
+  headlessAlternativeSprite?: string;
+  /** Weapons only: how the weapon is held relative to the body's pivot. */
+  equip?: CharacterWeaponEquip;
 };
+
+export type CharacterWeaponEquip = {
+  /** `equippedAngle` in degrees (default 0). */
+  angle: number;
+  /** `equipOffsetX` / `equipOffsetY` in pixels from the body's pivot (default -40, 0). */
+  offsetX: number;
+  offsetY: number;
+};
+
+export const DEFAULT_WEAPON_EQUIP: Readonly<CharacterWeaponEquip> = { angle: 0, offsetX: -40, offsetY: 0 };
+
+function isFalse(value: unknown): boolean {
+  return value === false || (typeof value === 'string' && value.trim().toLowerCase() === 'false');
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Weapon hold transform; each property missing or not a number uses its default. */
+function getWeaponEquip(properties: Record<string, unknown>): CharacterWeaponEquip {
+  return {
+    angle: finiteNumber(properties.equippedAngle) ?? DEFAULT_WEAPON_EQUIP.angle,
+    offsetX: finiteNumber(properties.equipOffsetX) ?? DEFAULT_WEAPON_EQUIP.offsetX,
+    offsetY: finiteNumber(properties.equipOffsetY) ?? DEFAULT_WEAPON_EQUIP.offsetY,
+  };
+}
 
 /** `equippedItem0`..`equippedItem2` blocks with an armor, artifact, or weapon `type`, in slot order. */
 export function getCharacterEquippedItems(
@@ -117,11 +157,14 @@ export function getCharacterEquippedItems(
     const typeLabel = type ? EQUIPPED_ITEM_TYPE_LABELS[type] : undefined;
     if (!properties || !typeLabel) continue;
     const sprite = nonEmptyString(properties.sprite);
+    const headless = nonEmptyString(properties.headlessAlternativeSprite);
     result.push({
       slot,
       typeLabel,
       name: nonEmptyString(properties.name),
       sprite: sprite && sprite.toLowerCase() !== 'none' ? sprite : null,
+      ...(headless && headless.toLowerCase() !== 'none' ? { headlessAlternativeSprite: headless } : {}),
+      ...(type === 'weapon' ? { equip: getWeaponEquip(properties) } : {}),
     });
   }
   return result;
@@ -142,6 +185,8 @@ export type CharacterEntityInfo = {
   equippedItems: CharacterEquippedItem[];
   /** Whether the `.character` file was found among the project's characters. */
   found: boolean;
+  /** `character.properties.keepClassHelm`; false only when explicitly `false`. */
+  keepClassHelm: boolean;
 };
 
 /** Character data for an entity whose customData `fileName` points to a `.character` file. */
@@ -163,26 +208,51 @@ export function getCharacterEntityInfo(
     hairSprite: hairName ? findItemSprite(hairName, items) : null,
     equippedItems: getCharacterEquippedItems(entry?.objects),
     found: entry !== null,
+    keepClassHelm: !isFalse(properties?.keepClassHelm),
   };
 }
 
 /**
- * Sprites drawn over a character's body, bottom to top: armor, hair, artifact.
- * Weapons are not drawn yet. Missing sprites are skipped.
+ * Layers of a character besides its body, bottom to top: weapon (under the
+ * body), then armor, hair, artifact over it. The weapon is placed by its `equip`
+ * offset and angle. Missing sprites are skipped.
  */
-export function getCharacterOverlaySprites(info: CharacterEntityInfo): string[] {
-  const equippedSprite = (typeLabel: string) =>
-    info.equippedItems.find(item => item.typeLabel === typeLabel && item.sprite)?.sprite ?? null;
-  return [equippedSprite('Armor'), info.hairSprite, equippedSprite('Artifact')]
-    .filter((sprite): sprite is string => sprite !== null);
+export function getCharacterOverlayLayers(info: CharacterEntityInfo): EntityOverlayLayer[] {
+  const equipped = (typeLabel: string) =>
+    info.equippedItems.find(item => item.typeLabel === typeLabel && item.sprite) ?? null;
+  const spriteLayer = (sprite: string | null | undefined): EntityOverlayLayer | null =>
+    sprite ? { spriteFile: sprite } : null;
+  const layers = [
+    // With the class helm kept, the hair shows and the armor's headless sprite
+    // (when it has one) replaces its own; otherwise there is no hair.
+    spriteLayer(info.keepClassHelm
+      ? equipped('Armor')?.headlessAlternativeSprite ?? equipped('Armor')?.sprite
+      : equipped('Armor')?.sprite),
+    spriteLayer(info.keepClassHelm ? info.hairSprite : null),
+    spriteLayer(equipped('Artifact')?.sprite),
+  ];
+  const weapon = equipped('Weapon');
+  if (weapon?.sprite) {
+    const equip = weapon.equip ?? DEFAULT_WEAPON_EQUIP;
+    // A weapon image is never cut by the entity's sprite cut: without an atlas it is drawn whole.
+    // It is drawn first, under the body.
+    layers.unshift({
+      spriteFile: weapon.sprite,
+      behind: true,
+      spriteCut: { x: 1, y: 1 },
+      offset: { x: equip.offsetX, y: equip.offsetY },
+      angle: equip.angle,
+    });
+  }
+  return layers.filter((layer): layer is EntityOverlayLayer => layer !== null);
 }
 
 const characterRenderer: EntityCustomRenderer = {
   getLabel: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.name ?? null,
   getSpriteFile: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.bodySprite ?? null,
-  getOverlaySpriteFiles: (entity, { characters, items }) => {
+  getOverlayLayers: (entity, { characters, items }) => {
     const info = getCharacterEntityInfo(entity, characters, items ?? []);
-    return info ? getCharacterOverlaySprites(info) : [];
+    return info ? getCharacterOverlayLayers(info) : [];
   },
 };
 
@@ -227,9 +297,9 @@ export function resolveEntityRenderTemplate(
   // Overlays are drawn only when their image was loaded from the project.
   // A sprite without an atlas is cut by the entity template's own grid cut.
   const gridCut = base?.spriteCut ?? { x: 1, y: 1 };
-  const compositeLayers = (renderer?.getOverlaySpriteFiles?.(entity, context) ?? [])
-    .filter(imageExists)
-    .map(file => ({ spriteFile: file, spriteCut: gridCut }));
+  const compositeLayers = (renderer?.getOverlayLayers?.(entity, context) ?? [])
+    .filter(layer => imageExists(layer.spriteFile))
+    .map(layer => ({ ...layer, spriteCut: layer.spriteCut ?? gridCut }));
   return {
     name: entity.entityName,
     type: 'horizontal',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EntityInstance, ProjectCharacterEntry, ProjectItemEntry } from '../../types';
-import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, findItemSprite, getCharacterEquippedItems, getCharacterOverlaySprites, type CharacterEntityInfo } from '../entityCustomRender';
+import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, findItemSprite, getCharacterEquippedItems, getCharacterOverlayLayers, getCharacterEntityInfo, type CharacterEntityInfo } from '../entityCustomRender';
 
 function entity(entityName: string, customData: EntityInstance['customData'] = []): EntityInstance {
   return {
@@ -150,7 +150,7 @@ describe('getCharacterEquippedItems', () => {
     ];
     expect(getCharacterEquippedItems(objects)).toEqual([
       { slot: 'equippedItem0', typeLabel: 'Armor', name: 'Zombie Set', sprite: 'armor_leather_0b.png' },
-      { slot: 'equippedItem1', typeLabel: 'Weapon', name: 'Zombie Bite', sprite: null },
+      { slot: 'equippedItem1', typeLabel: 'Weapon', name: 'Zombie Bite', sprite: null, equip: { angle: 0, offsetX: -40, offsetY: 0 } },
       { slot: 'equippedItem2', typeLabel: 'Artifact', name: 'Ring', sprite: 'ring.png' },
     ]);
   });
@@ -161,7 +161,69 @@ describe('getCharacterEquippedItems', () => {
   });
 });
 
-describe('getCharacterOverlaySprites', () => {
+describe('getCharacterEquippedItems weapon equip', () => {
+  const weapon = (properties: Record<string, unknown>) => getCharacterEquippedItems([
+    { name: 'equippedItem0', properties: { name: 'W', type: 'weapon', sprite: 'w.png', ...properties } },
+  ]);
+
+  it('parses equippedAngle, equipOffsetX and equipOffsetY', () => {
+    expect(weapon({ equippedAngle: -20, equipOffsetX: -36, equipOffsetY: -4 })[0].equip).toEqual({ angle: -20, offsetX: -36, offsetY: -4 });
+  });
+
+  it('parses numeric strings', () => {
+    expect(weapon({ equippedAngle: '-20.0', equipOffsetX: -36, equipOffsetY: -4 })[0].equip).toEqual({ angle: -20, offsetX: -36, offsetY: -4 });
+  });
+
+  it('falls back to defaults for missing values', () => {
+    expect(weapon({ equippedAngle: 15 })[0].equip).toEqual({ angle: 15, offsetX: -40, offsetY: 0 });
+  });
+
+  it('falls back to the default for non-numeric values', () => {
+    expect(weapon({ equipOffsetX: 'abc' })[0].equip?.offsetX).toBe(-40);
+  });
+
+  it('gives non-weapon items no equip', () => {
+    const [armor] = getCharacterEquippedItems([
+      { name: 'equippedItem0', properties: { name: 'A', type: 'armor', sprite: 'a.png', equippedAngle: 10 } },
+    ]);
+    expect(armor.equip).toBeUndefined();
+  });
+});
+
+describe('getCharacterEntityInfo keepClassHelm', () => {
+  const infoFor = (properties: Record<string, unknown>) => getCharacterEntityInfo(
+    entity('character_spawn', fileName),
+    [character('enemies/blood-priest.character', [{ name: 'character', properties: { name: 'X', ...properties } }])],
+  );
+
+  it('is false for boolean false and the string false', () => {
+    expect(infoFor({ keepClassHelm: false })?.keepClassHelm).toBe(false);
+    expect(infoFor({ keepClassHelm: 'false' })?.keepClassHelm).toBe(false);
+  });
+
+  it('is true when absent or true', () => {
+    expect(infoFor({})?.keepClassHelm).toBe(true);
+    expect(infoFor({ keepClassHelm: true })?.keepClassHelm).toBe(true);
+  });
+});
+
+describe('getCharacterEquippedItems headlessAlternativeSprite', () => {
+  const armor = (properties: Record<string, unknown>) => getCharacterEquippedItems([
+    { name: 'equippedItem0', properties: { name: 'Santa Claus', type: 'armor', sprite: 'armor_christmas_2022_A.png', ...properties } },
+  ])[0];
+
+  it('carries a headless alternative sprite', () => {
+    expect(armor({ headlessAlternativeSprite: 'armor_christmas_2022_B.png' }).headlessAlternativeSprite).toBe('armor_christmas_2022_B.png');
+  });
+
+  it('omits the key when the value is none', () => {
+    const item = armor({ headlessAlternativeSprite: 'none' });
+    expect(item.headlessAlternativeSprite).toBeUndefined();
+    expect(item).not.toHaveProperty('headlessAlternativeSprite');
+  });
+});
+
+describe('getCharacterOverlayLayers', () => {
   const info = (overrides: Partial<CharacterEntityInfo>): CharacterEntityInfo => ({
     fileName: PATH,
     name: 'X',
@@ -170,11 +232,12 @@ describe('getCharacterOverlaySprites', () => {
     hairSprite: null,
     equippedItems: [],
     found: true,
+    keepClassHelm: true,
     ...overrides,
   });
 
-  it('orders armor, hair, artifact regardless of slot order and ignores weapons', () => {
-    const result = getCharacterOverlaySprites(info({
+  it('orders weapon (behind), armor, hair, artifact regardless of slot order', () => {
+    const result = getCharacterOverlayLayers(info({
       hairName: 'hair0',
       hairSprite: 'hair.png',
       equippedItems: [
@@ -183,11 +246,46 @@ describe('getCharacterOverlaySprites', () => {
         { slot: 'equippedItem2', typeLabel: 'Armor', name: 'R', sprite: 'armor.png' },
       ],
     }));
-    expect(result).toEqual(['armor.png', 'hair.png', 'artifact.png']);
+    expect(result).toEqual([
+      { spriteFile: 'w.png', behind: true, spriteCut: { x: 1, y: 1 }, offset: { x: -40, y: 0 }, angle: 0 },
+      { spriteFile: 'armor.png' },
+      { spriteFile: 'hair.png' },
+      { spriteFile: 'artifact.png' },
+    ]);
+  });
+
+  it('uses the weapon equip offset and angle', () => {
+    const result = getCharacterOverlayLayers(info({
+      equippedItems: [
+        { slot: 'equippedItem0', typeLabel: 'Weapon', name: 'W', sprite: 'w.png', equip: { angle: -20, offsetX: -36, offsetY: -4 } },
+      ],
+    }));
+    expect(result[0]).toEqual({ spriteFile: 'w.png', behind: true, spriteCut: { x: 1, y: 1 }, offset: { x: -36, y: -4 }, angle: -20 });
   });
 
   it('skips missing sprites', () => {
-    expect(getCharacterOverlaySprites(info({ hairName: 'hair0', hairSprite: 'hair.png' }))).toEqual(['hair.png']);
+    expect(getCharacterOverlayLayers(info({ hairName: 'hair0', hairSprite: 'hair.png' }))).toEqual([{ spriteFile: 'hair.png' }]);
+  });
+
+  const santaArmor = { slot: 'equippedItem0', typeLabel: 'Armor', name: 'Santa Claus', sprite: 'armor_christmas_2022_A.png', headlessAlternativeSprite: 'armor_christmas_2022_B.png' };
+
+  it('uses the headless armor sprite and keeps hair when keepClassHelm is true', () => {
+    expect(getCharacterOverlayLayers(info({ keepClassHelm: true, hairName: 'hair0', hairSprite: 'hair.png', equippedItems: [santaArmor] })))
+      .toEqual([{ spriteFile: 'armor_christmas_2022_B.png' }, { spriteFile: 'hair.png' }]);
+  });
+
+  it('uses the normal armor sprite and drops hair when keepClassHelm is false', () => {
+    expect(getCharacterOverlayLayers(info({ keepClassHelm: false, hairName: 'hair0', hairSprite: 'hair.png', equippedItems: [santaArmor] })))
+      .toEqual([{ spriteFile: 'armor_christmas_2022_A.png' }]);
+  });
+
+  it('falls back to the armor sprite when it has no headless alternative', () => {
+    expect(getCharacterOverlayLayers(info({
+      keepClassHelm: true,
+      hairName: 'hair0',
+      hairSprite: 'hair.png',
+      equippedItems: [{ slot: 'equippedItem0', typeLabel: 'Armor', name: 'R', sprite: 'armor.png' }],
+    }))).toEqual([{ spriteFile: 'armor.png' }, { spriteFile: 'hair.png' }]);
   });
 });
 
@@ -217,10 +315,53 @@ describe('character_spawn composite layers', () => {
     ]);
   });
 
+  it('carries the weapon offset and angle on its composite layer', () => {
+    const withWeapon = [
+      character('enemies/blood-priest.character', [
+        { name: 'character', properties: { name: 'Blood Priest', bodySprite: 'body.png', hairSprite: 'hair0' } },
+        { name: 'equippedItem0', properties: { name: 'Set', type: 'armor', sprite: 'armor.png' } },
+        { name: 'equippedItem1', properties: { name: 'Sword', type: 'weapon', sprite: 'weapon.png', equippedAngle: -20, equipOffsetX: -36, equipOffsetY: -4 } },
+      ]),
+    ];
+    const t = resolveEntityRenderTemplate(spawn, templates, {
+      characters: withWeapon,
+      items,
+      templateImageUrls: { ...urls, 'weapon.png': 'blob:weapon' },
+    });
+    const layers = t?.compositeLayers ?? [];
+    expect(layers[0]).toEqual({ spriteFile: 'weapon.png', behind: true, spriteCut: { x: 1, y: 1 }, offset: { x: -36, y: -4 }, angle: -20 });
+  });
+
   it('drops overlays whose image is missing', () => {
     const noArmor = { 'body.png': urls['body.png'], 'hair.png': urls['hair.png'] };
     const t = resolveEntityRenderTemplate(spawn, templates, { characters: withOverlays, items, templateImageUrls: noArmor });
     expect(t?.compositeLayers?.map(l => l.spriteFile)).toEqual(['hair.png']);
+  });
+
+  it('uses the normal armor and no hair when keepClassHelm is false', () => {
+    const santaItems: ProjectItemEntry[] = [{
+      name: 'npc-head.enml',
+      relativePath: 'npc-head.enml',
+      handle: {} as ProjectItemEntry['handle'],
+      objects: [{ name: 'femaleCastleGuard0', properties: { sprite: 'hair_guard.png' } }],
+    }];
+    const santa = [
+      character('enemies/blood-priest.character', [
+        { name: 'character', properties: { name: 'Santas Minion', bodySprite: 'character_body.png', hairSprite: 'femaleCastleGuard0', keepClassHelm: false } },
+        { name: 'equippedItem0', properties: { name: 'Santa Claus', type: 'armor', sprite: 'armor_christmas_2022_A.png', headlessAlternativeSprite: 'armor_christmas_2022_B.png' } },
+      ]),
+    ];
+    const t = resolveEntityRenderTemplate(spawn, templates, {
+      characters: santa,
+      items: santaItems,
+      templateImageUrls: {
+        'character_body.png': 'blob:body',
+        'armor_christmas_2022_A.png': 'blob:a',
+        'armor_christmas_2022_B.png': 'blob:b',
+        'hair_guard.png': 'blob:hair',
+      },
+    });
+    expect(t?.compositeLayers?.map(l => l.spriteFile)).toEqual(['armor_christmas_2022_A.png']);
   });
 
   it('has no compositeLayers when there are no overlays', () => {

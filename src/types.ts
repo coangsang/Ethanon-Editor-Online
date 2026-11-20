@@ -175,9 +175,18 @@ export interface EntityTemplate {
   /**
    * Runtime-only (never serialized): sprites drawn over `spriteFile`'s first
    * frame, bottom to top, all aligned on their pivots. `spriteCut` is the grid
-   * cut used when the sprite has no atlas.
+   * cut used when the sprite has no atlas. `offset` (pixels) moves the layer's
+   * pivot away from the shared pivot; `angle` (degrees, same sign as an entity's
+   * angle) rotates the layer around its own pivot.
    */
-  compositeLayers?: { spriteFile: string; spriteCut: { x: number; y: number } }[];
+  compositeLayers?: {
+    spriteFile: string;
+    spriteCut: { x: number; y: number };
+    offset?: { x: number; y: number };
+    angle?: number;
+    /** Drawn under `spriteFile` instead of over it (layers keep their order). */
+    behind?: boolean;
+  }[];
 }
 
 export type InlineEntityTemplate = Partial<Omit<EntityTemplate, "name">> & {
