@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { EntityInstance, ProjectCharacterEntry } from '../../types';
-import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate } from '../entityCustomRender';
+import type { EntityInstance, ProjectCharacterEntry, ProjectItemEntry } from '../../types';
+import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, findItemSprite } from '../entityCustomRender';
 
 function entity(entityName: string, customData: EntityInstance['customData'] = []): EntityInstance {
   return {
@@ -117,5 +117,24 @@ describe('character_spawn body sprite override', () => {
   it('does not override other entity names, including character_spawn.ent', () => {
     const ctx = { characters, templateImageUrls: urls };
     expect(resolveEntityRenderTemplate(entity('character_spawn.ent', fileName), {}, ctx)).toBeNull();
+  });
+});
+
+describe('findItemSprite', () => {
+  const item = (name: string, objects: { name: string; properties: Record<string, string> }[]) => ({
+    name,
+    relativePath: name,
+    handle: {} as ProjectItemEntry['handle'],
+    objects,
+  });
+
+  it('prefers npc-head.enml and returns the item sprite', () => {
+    const items = [
+      item('a-other.enml', [{ name: 'alien0', properties: { sprite: 'other.png' } }]),
+      item('npc-head.enml', [{ name: 'alien0', properties: { sprite: 'hair_6.png' } }]),
+    ];
+    expect(findItemSprite('alien0', items)).toBe('hair_6.png');
+    expect(findItemSprite('missing', items)).toBeNull();
+    expect(findItemSprite('alien0', [items[0]])).toBe('other.png');
   });
 });

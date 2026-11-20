@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ProjectCharacterEntry } from '../../types';
+import type { ProjectCharacterEntry, ProjectItemEntry } from '../../types';
 import { useSceneStore } from '../../store/sceneStore';
 import { Inspector } from '../Inspector';
 
@@ -38,7 +38,7 @@ const BLOOD_PRIEST: ProjectCharacterEntry = {
 afterEach(() => {
   useSceneStore.getState().flushInspectorEdits();
   cleanup();
-  useSceneStore.setState({ projectCharacters: [], templateImageUrls: {} });
+  useSceneStore.setState({ projectCharacters: [], projectItems: [], templateImageUrls: {} });
 });
 
 describe('Inspector custom mode', () => {
@@ -84,6 +84,41 @@ describe('Inspector custom mode', () => {
     expect(screen.getByText('blood-priest')).toBeTruthy();
     expect(screen.getByText('Character file not found in project')).toBeTruthy();
     expect(screen.getByRole('button', { name: '(none)' })).toHaveProperty('disabled', true);
+  });
+
+  it('shows the hair sprite from items .enml when its image exists', () => {
+    const alien: ProjectCharacterEntry = {
+      name: 'alien.character',
+      relativePath: 'enemies/alien.character',
+      handle: {} as ProjectCharacterEntry['handle'],
+      objects: [{ name: 'character', properties: { name: 'Alien', bodySprite: 'entity/alien.png', hairSprite: 'alien0' } }],
+    };
+    const npcHead: ProjectItemEntry = {
+      name: 'npc-head.enml',
+      relativePath: 'npc-head.enml',
+      handle: {} as ProjectItemEntry['handle'],
+      objects: [{ name: 'alien0', properties: { name: 'alien0', type: 'head', secondaryType: 'hair', sprite: 'hair_6.png' } }],
+    };
+    useSceneStore.setState({
+      projectCharacters: [alien],
+      projectItems: [npcHead],
+      templateImageUrls: { 'entity/alien.png': 'blob:alien', 'hair_6.png': 'blob:hair' },
+    });
+    loadEntity('character_spawn', 'npcs/enemies/alien.character');
+    const { unmount } = render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    expect(screen.getByRole('button', { name: 'hair_6.png' })).toBeTruthy();
+    expect(screen.getByAltText('Alien hair sprite').getAttribute('src')).toBe('blob:hair');
+    unmount();
+
+    // Hidden when the hair image was not loaded from entities.
+    useSceneStore.setState({ templateImageUrls: { 'entity/alien.png': 'blob:alien' } });
+    render(<Inspector />);
+    if (screen.getByRole('button', { name: 'Character' }).getAttribute('aria-pressed') !== 'true') {
+      fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    }
+    expect(screen.queryByText('Hair')).toBeNull();
+    expect(screen.queryByAltText('Alien hair sprite')).toBeNull();
   });
 
   it('reports a character entity without a fileName', () => {

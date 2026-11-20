@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { SceneData, SceneProperties, EntityInstance, EntityTemplate, ProjectCharacterEntry, ProjectPrefabEntry, ProjectSpriteItem, SpriteAtlas, PrefabExportOptions } from '../types';
+import type { SceneData, SceneProperties, EntityInstance, EntityTemplate, ProjectCharacterEntry, ProjectItemEntry, ProjectPrefabEntry, ProjectSpriteItem, SpriteAtlas, PrefabExportOptions } from '../types';
 import { parseScene, parseEntityTemplate } from '../io/parseScene';
 import { parseTextureAtlas } from '../io/parseTextureAtlas';
 import { serializeScene } from '../io/serializeScene';
@@ -134,6 +134,8 @@ interface SceneStore {
   projectScenes: ProjectSceneEntry[];
   projectPrefabs: ProjectPrefabEntry[];
   projectCharacters: ProjectCharacterEntry[];
+  /** Parsed `.enml` files under the project's `items` folder. */
+  projectItems: ProjectItemEntry[];
   prefabThumbnailUrls: Record<string, string>;
   activeSceneName: string | null;
   activeSceneHandle: ProjectFileHandle | null;
@@ -273,6 +275,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   projectScenes: [],
   projectPrefabs: [],
   projectCharacters: [],
+  projectItems: [],
   prefabThumbnailUrls: {},
   projectSprites: [],
   activeSceneName: null,
@@ -439,6 +442,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
         projectScenes: project.scenes,
         projectPrefabs: project.prefabs,
         projectCharacters: project.characters,
+        projectItems: project.items,
         prefabThumbnailUrls: project.prefabThumbnailUrls,
         activeSceneName: firstScene?.name ?? null,
         activeSceneHandle: firstScene?.handle ?? null,
@@ -506,6 +510,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
         projectScenes: rescanned.scenes,
         projectPrefabs: rescanned.prefabs,
         projectCharacters: rescanned.characters,
+        projectItems: rescanned.items,
         prefabThumbnailUrls: rescanned.prefabThumbnailUrls,
         projectStatus: 'ready',
         projectError: null,

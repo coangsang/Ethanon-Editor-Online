@@ -27,10 +27,13 @@ function SpritePreview({ imageUrl, label }: { imageUrl: string | null; label: st
 /** Custom Inspector for entities drawn from a `.character` file (customData `fileName`). */
 export function CharacterCustomInspector({ entity }: { entity: EntityInstance }) {
   const characters = useSceneStore(s => s.projectCharacters);
+  const items = useSceneStore(s => s.projectItems);
   const templateImageUrls = useSceneStore(s => s.templateImageUrls);
   const pingSprite = useSceneStore(s => s.pingSprite);
-  const info = getCharacterEntityInfo(entity, characters);
+  const info = getCharacterEntityInfo(entity, characters, items);
   const imageUrl = info?.bodySprite ? resolveImageUrl(templateImageUrls, info.bodySprite) : null;
+  // Hair is shown only when its sprite image was loaded from the project.
+  const hairImageUrl = info?.hairSprite ? resolveImageUrl(templateImageUrls, info.hairSprite) : null;
 
   return (
     <div className="inspector-section px-3 py-2 flex flex-col gap-2 border-b border-gray-700">
@@ -69,6 +72,22 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
             </button>
           </div>
           {info.bodySprite && <SpritePreview key={imageUrl ?? ''} imageUrl={imageUrl} label={info.name} />}
+          {info.hairSprite && hairImageUrl && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 w-14 shrink-0">Hair</span>
+                <button
+                  type="button"
+                  onClick={() => info.hairSprite && pingSprite(info.hairSprite)}
+                  title={`${info.hairName} — Ping Sprite in Project Panel`}
+                  className="inspector-button flex-1 editor-input w-0 font-mono text-[10px] text-left truncate px-2 py-1 bg-gray-800 cursor-pointer hover:bg-gray-700 transition-colors"
+                >
+                  {info.hairSprite}
+                </button>
+              </div>
+              <SpritePreview key={hairImageUrl} imageUrl={hairImageUrl} label={`${info.name} hair`} />
+            </>
+          )}
         </>
       )}
     </div>

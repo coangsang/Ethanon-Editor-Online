@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { openProjectFolder, refreshProjectCharacters, rescanProject, type ProjectDirectoryHandle, type ProjectFileHandle } from '../projectFolder';
+import { openProjectFolder, refreshProjectCharacters, rescanProject, scanItems, type ProjectDirectoryHandle, type ProjectFileHandle } from '../projectFolder';
 
 function textFile(name: string, text: string): ProjectFileHandle {
   const bytes = new TextEncoder().encode(text);
@@ -303,5 +303,39 @@ describe('openProjectFolder', () => {
     const scanned = await rescanProject(root, scenes, entities);
     expect(scanned.npcsHandle).toBe(brokenNpcs);
     expect(scanned.characters).toEqual([]);
+  });
+
+  it('scans .enml files under items with the .character block parser', async () => {
+    const emptyDir = (name: string): ProjectDirectoryHandle => ({
+      kind: 'directory',
+      name,
+      getDirectoryHandle: async () => { throw new Error('Not found'); },
+      getFileHandle: async () => { throw new Error('Not found'); },
+      entries: async function* () {},
+    });
+    const enml = 'alien0\n{\n\tname = alien0;\n\ttype = head;\n\tsecondaryType = hair;\n\tsprite = hair_6.png;\n\tdepthOffset = 0.01;\n}\n';
+    const items: ProjectDirectoryHandle = {
+      ...emptyDir('items'),
+      entries: async function* () {
+        yield ['npc-head.enml', textFile('npc-head.enml', enml)] as [string, ProjectFileHandle];
+        yield ['readme.txt', textFile('readme.txt', '')] as [string, ProjectFileHandle];
+      },
+    };
+    const scenes = emptyDir('scenes');
+    const entities = emptyDir('entities');
+    const root: ProjectDirectoryHandle = {
+      ...emptyDir('project'),
+      getDirectoryHandle: async (name: string) => {
+        if (name === 'items') return items;
+        throw new Error('Not found');
+      },
+    };
+
+    expect(await scanItems(null)).toEqual([]);
+    const scanned = await rescanProject(root, scenes, entities);
+    expect(scanned.items.map(i => i.relativePath)).toEqual(['npc-head.enml']);
+    expect(scanned.items[0].objects).toEqual([
+      { name: 'alien0', properties: { name: 'alien0', type: 'head', secondaryType: 'hair', sprite: 'hair_6.png', depthOffset: 0.01 } },
+    ]);
   });
 });

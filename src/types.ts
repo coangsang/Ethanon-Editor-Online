@@ -225,6 +225,9 @@ export interface ProjectCharacterEntry {
   objects?: CharacterObject[]; //.character blocks data
 }
 
+/** A `.enml` file under the project's `items` folder; same block format as `.character`. */
+export type ProjectItemEntry = ProjectCharacterEntry;
+
 export interface ProjectPrefabEntry {
   name: string;
   handle: ProjectFileHandle;

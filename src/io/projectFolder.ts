@@ -1,6 +1,7 @@
 import type {
   EntityTemplate,
   ProjectCharacterEntry,
+  ProjectItemEntry,
   ProjectPrefabEntry,
   ProjectSpriteItem,
   SpriteAtlas,
@@ -69,6 +70,7 @@ export interface ProjectFolderData {
   scenes: ProjectSceneEntry[];
   prefabs: ProjectPrefabEntry[];
   characters: ProjectCharacterEntry[];
+  items: ProjectItemEntry[];
   templates: Record<string, EntityTemplate>;
   templateImageUrls: Record<string, string>;
   templateAtlases: Record<string, SpriteAtlas>;
@@ -186,29 +188,43 @@ async function scanPrefabs(
   return prefabs.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function scanCharacters(
-  npcsHandle: ProjectDirectoryHandle | null,
+async function scanBlockFiles(
+  dirHandle: ProjectDirectoryHandle | null,
+  extension: string,
+  label: string,
 ): Promise<ProjectCharacterEntry[]> {
-  if (!npcsHandle) return [];
+  if (!dirHandle) return [];
   try {
-    const fileEntries = await collectAllFiles(npcsHandle);
-    const characters: ProjectCharacterEntry[] = [];
+    const fileEntries = await collectAllFiles(dirHandle);
+    const entries: ProjectCharacterEntry[] = [];
     for (const [relativePath, handle] of fileEntries) {
-      if (relativePath.toLowerCase().endsWith(".character")) {
+      if (relativePath.toLowerCase().endsWith(extension)) {
         const name = relativePath.split("/").pop() ?? relativePath;
         const context = await readProjectText(handle);
         const parsedData = parseCharacter(context);
-        //console.log(parsedData);
-        characters.push({ name, relativePath, handle, objects: parsedData });
+        entries.push({ name, relativePath, handle, objects: parsedData });
       }
     }
-    return characters.sort((a, b) =>
+    return entries.sort((a, b) =>
       a.relativePath.localeCompare(b.relativePath),
     );
   } catch (error) {
-    console.warn("[ProjectFolder] Failed to scan characters directory:", error);
+    console.warn(`[ProjectFolder] Failed to scan ${label} directory:`, error);
     return [];
   }
+}
+
+export async function scanCharacters(
+  npcsHandle: ProjectDirectoryHandle | null,
+): Promise<ProjectCharacterEntry[]> {
+  return scanBlockFiles(npcsHandle, ".character", "characters");
+}
+
+/** `.enml` files under the project's `items` folder (same block format as `.character`). */
+export async function scanItems(
+  itemsHandle: ProjectDirectoryHandle | null,
+): Promise<ProjectItemEntry[]> {
+  return scanBlockFiles(itemsHandle, ".enml", "items");
 }
 
 async function collectAllFiles(
@@ -663,6 +679,7 @@ export async function rescanProject(
   scenes: ProjectSceneEntry[];
   prefabs: ProjectPrefabEntry[];
   characters: ProjectCharacterEntry[];
+  items: ProjectItemEntry[];
   templates: Record<string, EntityTemplate>;
   templateImageUrls: Record<string, string>;
   templateAtlases: Record<string, SpriteAtlas>;
@@ -675,6 +692,7 @@ export async function rescanProject(
   const scenes = await scanScenes(scenesHandle);
   const prefabs = await scanPrefabs(resolvedPrefabsHandle);
   const characters = await scanCharacters(resolvedNpcsHandle);
+  const items = await scanItems(await tryGetDirectory(rootHandle, "items"));
   const { templates, templateImageUrls, templateAtlases, sprites, scanIssues } =
     await scanEntities(entitiesHandle);
   let prefabThumbnailUrls: Record<string, string> = {};
@@ -697,6 +715,7 @@ export async function rescanProject(
       scenes,
       prefabs,
       characters,
+      items,
       npcsHandle: resolvedNpcsHandle,
       templates,
       templateImageUrls,

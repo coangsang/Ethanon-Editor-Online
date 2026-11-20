@@ -1,4 +1,4 @@
-import type { EntityInstance, EntityTemplate, ProjectCharacterEntry, SpriteAtlas } from '../types';
+import type { EntityInstance, EntityTemplate, ProjectCharacterEntry, ProjectItemEntry, SpriteAtlas } from '../types';
 import { getAtlasForTemplate } from './viewportMath';
 import { resolveEntityTemplate } from '../utils/entityTemplate';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
@@ -66,6 +66,24 @@ function characterDisplayName(fileName: string, characters: readonly ProjectChar
   return base.replace(/\.character$/i, '');
 }
 
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/**
+ * The `sprite` of the `.enml` item block named `itemName`. `npc-head.enml` is
+ * searched first, then the other item files in path order.
+ */
+export function findItemSprite(itemName: string, items: readonly ProjectItemEntry[]): string | null {
+  const isHeadFile = (entry: ProjectItemEntry) => entry.name.toLowerCase() === 'npc-head.enml';
+  const ordered = [...items.filter(isHeadFile), ...items.filter(entry => !isHeadFile(entry))];
+  for (const entry of ordered) {
+    const object = entry.objects?.find(o => o.name === itemName);
+    if (object) return nonEmptyString(object.properties.sprite);
+  }
+  return null;
+}
+
 export type CharacterEntityInfo = {
   /** customData `fileName` as written in the scene. */
   fileName: string;
@@ -73,6 +91,10 @@ export type CharacterEntityInfo = {
   name: string;
   /** `character.properties.bodySprite`, or null when missing. */
   bodySprite: string | null;
+  /** `character.properties.hairSprite` (an item name), or null when missing. */
+  hairName: string | null;
+  /** `sprite` of the `.enml` item named by `hairName`, or null when not found. */
+  hairSprite: string | null;
   /** Whether the `.character` file was found among the project's characters. */
   found: boolean;
 };
@@ -81,15 +103,19 @@ export type CharacterEntityInfo = {
 export function getCharacterEntityInfo(
   entity: EntityInstance,
   characters: readonly ProjectCharacterEntry[],
+  items: readonly ProjectItemEntry[] = [],
 ): CharacterEntityInfo | null {
   const fileName = customDataString(entity, 'fileName');
   if (!fileName) return null;
   const entry = findCharacterEntry(fileName, characters);
-  const bodySprite = entry?.objects?.find(o => o.name === 'character')?.properties.bodySprite;
+  const properties = entry?.objects?.find(o => o.name === 'character')?.properties;
+  const hairName = nonEmptyString(properties?.hairSprite);
   return {
     fileName,
     name: characterDisplayName(fileName, characters),
-    bodySprite: typeof bodySprite === 'string' && bodySprite.trim() ? bodySprite.trim() : null,
+    bodySprite: nonEmptyString(properties?.bodySprite),
+    hairName,
+    hairSprite: hairName ? findItemSprite(hairName, items) : null,
     found: entry !== null,
   };
 }
