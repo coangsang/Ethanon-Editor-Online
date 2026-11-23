@@ -186,6 +186,8 @@ export interface EntityTemplate {
     angle?: number;
     /** Drawn under `spriteFile` instead of over it (layers keep their order). */
     behind?: boolean;
+    /** Blend mode of this layer when composited (1 = screen); default normal. */
+    blendMode?: number;
   }[];
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EntityInstance, ProjectCharacterEntry, ProjectItemEntry } from '../../types';
+import type { EntityInstance, EntityTemplate, ProjectCharacterEntry, ProjectItemEntry } from '../../types';
 import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, findItemSprite, getCharacterEquippedItems, getCharacterOverlayLayers, getCharacterEntityInfo, type CharacterEntityInfo } from '../entityCustomRender';
 
 function entity(entityName: string, customData: EntityInstance['customData'] = []): EntityInstance {
@@ -139,6 +139,36 @@ describe('findItemSprite', () => {
   });
 });
 
+describe('getCharacterEntityInfo eyes', () => {
+  const eyes = (properties: Record<string, unknown>) => [{
+    name: 'body-eye.enml',
+    relativePath: 'body-eye.enml',
+    handle: {} as ProjectItemEntry['handle'],
+    objects: [{ name: 'kingsEyes', properties: { sprite: 'eyeKing.png', ...properties } }],
+  }];
+  const characters = [character(PATH, [{ name: 'character', properties: { eyeSprite: 'kingsEyes' } }])];
+  const target = entity('character_spawn', fileName);
+
+  const addTemplate = (blendMode: number) => ({
+    'character_body_part_add.ent': { name: 'character_body_part_add', blendMode } as EntityTemplate,
+  });
+
+  it('takes the eye blend mode from the equipEntity template', () => {
+    const items = eyes({ equipEntity: 'character_body_part_add.ent' });
+    const info = getCharacterEntityInfo(target, characters, items, addTemplate(1));
+    expect(info?.eyeSprite).toBe('eyeKing.png');
+    expect(info?.eyeBlendMode).toBe(1);
+    expect(getCharacterEntityInfo(target, characters, items, addTemplate(4))?.eyeBlendMode).toBe(4);
+  });
+
+  it('keeps normal blending when the template is normal, missing, or there is no equipEntity', () => {
+    const items = eyes({ equipEntity: 'character_body_part_add.ent' });
+    expect(getCharacterEntityInfo(target, characters, items, addTemplate(0))?.eyeBlendMode).toBeUndefined();
+    expect(getCharacterEntityInfo(target, characters, items, {})?.eyeBlendMode).toBeUndefined();
+    expect(getCharacterEntityInfo(target, characters, eyes({}), addTemplate(1))?.eyeBlendMode).toBeUndefined();
+  });
+});
+
 describe('getCharacterEquippedItems', () => {
   it('returns armor/artifact/weapon slots in slot order', () => {
     const objects = [
@@ -230,10 +260,31 @@ describe('getCharacterOverlayLayers', () => {
     bodySprite: 'body.png',
     hairName: null,
     hairSprite: null,
+    eyeName: null,
+    eyeSprite: null,
     equippedItems: [],
     found: true,
     keepClassHelm: true,
     ...overrides,
+  });
+
+  it('blends the eye layer (mode 1) only when eyeBlendMode is set', () => {
+    expect(getCharacterOverlayLayers(info({ eyeName: 'kingsEyes', eyeSprite: 'eyeKing.png', eyeBlendMode: 1 })))
+      .toEqual([{ spriteFile: 'eyeKing.png', blendMode: 1 }]);
+  });
+
+  it('draws eyes right after hair, before the artifact, and keeps them when the hair is hidden', () => {
+    const base = {
+      hairName: 'hair0',
+      hairSprite: 'hair.png',
+      eyeName: 'kingsEyes',
+      eyeSprite: 'eyeKing.png',
+      equippedItems: [{ slot: 'equippedItem0', typeLabel: 'Artifact', name: 'A', sprite: 'artifact.png' }],
+    };
+    expect(getCharacterOverlayLayers(info(base)))
+      .toEqual([{ spriteFile: 'hair.png' }, { spriteFile: 'eyeKing.png' }, { spriteFile: 'artifact.png' }]);
+    expect(getCharacterOverlayLayers(info({ ...base, keepClassHelm: false })))
+      .toEqual([{ spriteFile: 'eyeKing.png' }, { spriteFile: 'artifact.png' }]);
   });
 
   it('orders weapon (behind), armor, hair, artifact regardless of slot order', () => {

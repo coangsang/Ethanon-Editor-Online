@@ -1,6 +1,6 @@
 import type { EntityInstance, EntityTemplate, ProjectCharacterEntry, ProjectItemEntry, SpriteAtlas } from '../types';
 import { getAtlasForTemplate } from './viewportMath';
-import { resolveEntityTemplate } from '../utils/entityTemplate';
+import { resolveEntityTemplate, resolveExternalTemplate } from '../utils/entityTemplate';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 
 /**
@@ -19,6 +19,8 @@ export type EntityCustomRenderContext = {
   templateAtlases?: Record<string, SpriteAtlas>;
   /** `.enml` item files, needed to resolve a character's hair sprite. */
   items?: readonly ProjectItemEntry[];
+  /** Entity templates by name; an item's `equipEntity` template gives its blend mode. */
+  templates?: Record<string, EntityTemplate>;
 };
 
 export type EntityCustomRenderer = {
@@ -85,11 +87,18 @@ function nonEmptyString(value: unknown): string | null {
  * searched first, then the other item files in path order.
  */
 export function findItemSprite(itemName: string, items: readonly ProjectItemEntry[]): string | null {
+  return nonEmptyString(findItemProperties(itemName, items)?.sprite);
+}
+
+function findItemProperties(
+  itemName: string,
+  items: readonly ProjectItemEntry[],
+): Record<string, unknown> | null {
   const isHeadFile = (entry: ProjectItemEntry) => entry.name.toLowerCase() === 'npc-head.enml';
   const ordered = [...items.filter(isHeadFile), ...items.filter(entry => !isHeadFile(entry))];
   for (const entry of ordered) {
     const object = entry.objects?.find(o => o.name === itemName);
-    if (object) return nonEmptyString(object.properties.sprite);
+    if (object) return object.properties;
   }
   return null;
 }
@@ -181,6 +190,12 @@ export type CharacterEntityInfo = {
   hairName: string | null;
   /** `sprite` of the `.enml` item named by `hairName`, or null when not found. */
   hairSprite: string | null;
+  /** `character.properties.eyeSprite` (an item name), or null when missing. */
+  eyeName: string | null;
+  /** `sprite` of the `.enml` item named by `eyeName`, or null when not found. */
+  eyeSprite: string | null;
+  /** Blend mode of the eye layer: that of the item's `equipEntity` template; absent when normal or not found. */
+  eyeBlendMode?: number;
   /** Armor, artifact, and weapon blocks `equippedItem0`..`equippedItem2`. */
   equippedItems: CharacterEquippedItem[];
   /** Whether the `.character` file was found among the project's characters. */
@@ -194,18 +209,26 @@ export function getCharacterEntityInfo(
   entity: EntityInstance,
   characters: readonly ProjectCharacterEntry[],
   items: readonly ProjectItemEntry[] = [],
+  templates: Record<string, EntityTemplate> = {},
 ): CharacterEntityInfo | null {
   const fileName = customDataString(entity, 'fileName');
   if (!fileName) return null;
   const entry = findCharacterEntry(fileName, characters);
   const properties = entry?.objects?.find(o => o.name === 'character')?.properties;
   const hairName = nonEmptyString(properties?.hairSprite);
+  const eyeName = nonEmptyString(properties?.eyeSprite);
+  const eyeProperties = eyeName ? findItemProperties(eyeName, items) : null;
+  const eyeEquipEntity = nonEmptyString(eyeProperties?.equipEntity);
+  const eyeBlendMode = eyeEquipEntity ? resolveExternalTemplate(eyeEquipEntity, templates)?.blendMode : undefined;
   return {
     fileName,
     name: characterDisplayName(fileName, characters),
     bodySprite: nonEmptyString(properties?.bodySprite),
     hairName,
     hairSprite: hairName ? findItemSprite(hairName, items) : null,
+    eyeName,
+    eyeSprite: nonEmptyString(eyeProperties?.sprite),
+    ...(eyeBlendMode ? { eyeBlendMode } : {}),
     equippedItems: getCharacterEquippedItems(entry?.objects),
     found: entry !== null,
     keepClassHelm: !isFalse(properties?.keepClassHelm),
@@ -214,7 +237,7 @@ export function getCharacterEntityInfo(
 
 /**
  * Layers of a character besides its body, bottom to top: weapon (under the
- * body), then armor, hair, artifact over it. The weapon is placed by its `equip`
+ * body), then armor, hair, eyes, artifact over it. The weapon is placed by its `equip`
  * offset and angle. Missing sprites are skipped.
  */
 export function getCharacterOverlayLayers(info: CharacterEntityInfo): EntityOverlayLayer[] {
@@ -229,6 +252,10 @@ export function getCharacterOverlayLayers(info: CharacterEntityInfo): EntityOver
       ? equipped('Armor')?.headlessAlternativeSprite ?? equipped('Armor')?.sprite
       : equipped('Armor')?.sprite),
     spriteLayer(info.keepClassHelm ? info.hairSprite : null),
+    // Eyes are drawn right after the hair, whether or not the class helm is kept.
+    info.eyeSprite
+      ? { spriteFile: info.eyeSprite, ...(info.eyeBlendMode ? { blendMode: info.eyeBlendMode } : {}) }
+      : null,
     spriteLayer(equipped('Artifact')?.sprite),
   ];
   const weapon = equipped('Weapon');
@@ -250,8 +277,8 @@ export function getCharacterOverlayLayers(info: CharacterEntityInfo): EntityOver
 const characterRenderer: EntityCustomRenderer = {
   getLabel: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.name ?? null,
   getSpriteFile: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.bodySprite ?? null,
-  getOverlayLayers: (entity, { characters, items }) => {
-    const info = getCharacterEntityInfo(entity, characters, items ?? []);
+  getOverlayLayers: (entity, { characters, items, templates }) => {
+    const info = getCharacterEntityInfo(entity, characters, items ?? [], templates);
     return info ? getCharacterOverlayLayers(info) : [];
   },
 };

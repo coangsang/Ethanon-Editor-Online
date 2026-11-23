@@ -13,6 +13,8 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
   // Hair is shown only when its sprite image was loaded from the project.
   const hairImageUrl = info?.hairSprite ? resolveImageUrl(templateImageUrls, info.hairSprite) : null;
 
+  const eyeImageUrl = info?.eyeSprite ? resolveImageUrl(templateImageUrls, info.eyeSprite) : null;
+
   return (
     <div className="inspector-section px-3 py-2 flex flex-col gap-2 border-b border-gray-700">
       <div className="inspector-section-title text-xs text-gray-400 font-semibold uppercase tracking-wider">
@@ -59,6 +61,19 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
                 className="inspector-button flex-1 editor-input w-0 font-mono text-[10px] text-left truncate px-2 py-1 bg-gray-800 cursor-pointer hover:bg-gray-700 transition-colors"
               >
                 {info.hairSprite}
+              </button>
+            </div>
+          )}
+          {info.eyeSprite && eyeImageUrl && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 w-14 shrink-0">Eyes</span>
+              <button
+                type="button"
+                onClick={() => info.eyeSprite && pingSprite(info.eyeSprite)}
+                title={`${info.eyeName} — Ping Sprite in Project Panel`}
+                className="inspector-button flex-1 editor-input w-0 font-mono text-[10px] text-left truncate px-2 py-1 bg-gray-800 cursor-pointer hover:bg-gray-700 transition-colors"
+              >
+                {info.eyeSprite}
               </button>
             </div>
           )}

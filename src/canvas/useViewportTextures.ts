@@ -363,12 +363,13 @@ export function useViewportTextures({
         0,
       ),
       position: layer.offset,
+      blendMode: 'blendMode' in layer ? layer.blendMode : undefined,
       // A layer's angle has an entity angle's sign: counter-clockwise on screen.
       rotation: -(layer.angle ?? 0) * (Math.PI / 180),
     }));
     const cacheKey = frames
       .map(frame => `${frame.texture.uid}:${frame.offsetX},${frame.offsetY},${frame.pivotX},${frame.pivotY}`
-        + `:${frame.position?.x ?? 0},${frame.position?.y ?? 0},${frame.rotation}`)
+        + `:${frame.position?.x ?? 0},${frame.position?.y ?? 0},${frame.rotation},${frame.blendMode ?? 0}`)
       .join('|');
     const cached = compositeFrameMapRef.current.get(cacheKey);
     if (cached) return cached;
@@ -386,6 +387,9 @@ export function useViewportTextures({
       const { x, y, width, height } = frame.texture.frame;
       const placement = layout.placements[index];
       context.save();
+      // Same mapping as entity meshes: 1 is screen, 4 is multiply.
+      if (frame.blendMode === 1) context.globalCompositeOperation = 'screen';
+      else if (frame.blendMode === 4) context.globalCompositeOperation = 'multiply';
       context.translate(placement.x, placement.y);
       if (placement.rotation !== 0) context.rotate(placement.rotation);
       context.drawImage(image, x, y, width, height, placement.frameX, placement.frameY, frame.frameWidth, frame.frameHeight);
