@@ -220,6 +220,28 @@ describe('getCharacterEquippedItems weapon equip', () => {
   });
 });
 
+describe('getCharacterEntityInfo bodyColor', () => {
+  const colorOf = (bodyColor?: unknown) => getCharacterEntityInfo(
+    entity('character_spawn', fileName),
+    [character('enemies/blood-priest.character', [{ name: 'character', properties: { name: 'X', bodySprite: 'body.png', ...(bodyColor === undefined ? {} : { bodyColor }) } }])],
+  )?.bodyColor;
+
+  it('keeps the low 24 bits (RGB) and drops alpha', () => {
+    expect(colorOf(4284590503)).toBe(0x61a9a7);
+    expect(colorOf('4284590503')).toBe(0x61a9a7);
+    expect(colorOf(16774355)).toBe(0xfff4d3);
+  });
+
+  it('is null when absent, invalid, or white (no tint)', () => {
+    expect(colorOf()).toBeNull();
+    expect(colorOf('abc')).toBeNull();
+    expect(colorOf(0)).toBeNull();
+    expect(colorOf('0')).toBeNull();
+    expect(colorOf(16777215)).toBeNull();
+    expect(colorOf(4294967295)).toBeNull();
+  });
+});
+
 describe('getCharacterEntityInfo keepClassHelm', () => {
   const infoFor = (properties: Record<string, unknown>) => getCharacterEntityInfo(
     entity('character_spawn', fileName),

@@ -30,6 +30,8 @@ export type EntityCustomRenderer = {
   getSpriteFile?: (entity: EntityInstance, context: EntityCustomRenderContext) => string | null;
   /** Sprites drawn over the replaced sprite's first frame, bottom to top, aligned on their pivots. */
   getOverlayLayers?: (entity: EntityInstance, context: EntityCustomRenderContext) => EntityOverlayLayer[];
+  /** 0xRRGGBB multiplied into the replaced sprite (like a diffuse color), or null for none. */
+  getBaseColor?: (entity: EntityInstance, context: EntityCustomRenderContext) => number | null;
 };
 
 /** A sprite drawn over an entity's custom sprite (see `EntityTemplate.compositeLayers`). */
@@ -179,6 +181,16 @@ export function getCharacterEquippedItems(
   return result;
 }
 
+/** uint color (e.g. 4284590503): the low 24 bits are RGB, the alpha byte is ignored. White means no tint. */
+function parseBodyColor(value: unknown): number | null {
+  const parsed = finiteNumber(value);
+  if (parsed === null) return null;
+  // 0 is the unset value (not black); white multiplies to nothing.
+  if (parsed === 0) return null;
+  const rgb = Math.trunc(parsed) % 0x1000000;
+  return rgb === 0xffffff ? null : rgb;
+}
+
 export type CharacterEntityInfo = {
   /** customData `fileName` as written in the scene. */
   fileName: string;
@@ -186,6 +198,8 @@ export type CharacterEntityInfo = {
   name: string;
   /** `character.properties.bodySprite`, or null when missing. */
   bodySprite: string | null;
+  /** `character.properties.bodyColor` as 0xRRGGBB (alpha dropped); null when missing or white. */
+  bodyColor: number | null;
   /** `character.properties.hairSprite` (an item name), or null when missing. */
   hairName: string | null;
   /** `sprite` of the `.enml` item named by `hairName`, or null when not found. */
@@ -224,6 +238,7 @@ export function getCharacterEntityInfo(
     fileName,
     name: characterDisplayName(fileName, characters),
     bodySprite: nonEmptyString(properties?.bodySprite),
+    bodyColor: parseBodyColor(properties?.bodyColor),
     hairName,
     hairSprite: hairName ? findItemSprite(hairName, items) : null,
     eyeName,
@@ -277,6 +292,7 @@ export function getCharacterOverlayLayers(info: CharacterEntityInfo): EntityOver
 const characterRenderer: EntityCustomRenderer = {
   getLabel: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.name ?? null,
   getSpriteFile: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.bodySprite ?? null,
+  getBaseColor: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.bodyColor ?? null,
   getOverlayLayers: (entity, { characters, items, templates }) => {
     const info = getCharacterEntityInfo(entity, characters, items ?? [], templates);
     return info ? getCharacterOverlayLayers(info) : [];
@@ -327,6 +343,7 @@ export function resolveEntityRenderTemplate(
   const compositeLayers = (renderer?.getOverlayLayers?.(entity, context) ?? [])
     .filter(layer => imageExists(layer.spriteFile))
     .map(layer => ({ ...layer, spriteCut: layer.spriteCut ?? gridCut }));
+  const bodyColor = renderer?.getBaseColor?.(entity, context) ?? null;
   return {
     name: entity.entityName,
     type: 'horizontal',
@@ -344,5 +361,6 @@ export function resolveEntityRenderTemplate(
       : { x: 1, y: 1 },
     renderFirstFrameOnly: true,
     ...(compositeLayers.length > 0 ? { compositeLayers } : {}),
+    ...(bodyColor !== null ? { compositeBaseColor: bodyColor } : {}),
   };
 }

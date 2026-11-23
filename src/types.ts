@@ -179,6 +179,8 @@ export interface EntityTemplate {
    * pivot away from the shared pivot; `angle` (degrees, same sign as an entity's
    * angle) rotates the layer around its own pivot.
    */
+  /** Runtime-only (never serialized): RGB (0xRRGGBB) multiplied into the base sprite when compositing. */
+  compositeBaseColor?: number;
   compositeLayers?: {
     spriteFile: string;
     spriteCut: { x: number; y: number };

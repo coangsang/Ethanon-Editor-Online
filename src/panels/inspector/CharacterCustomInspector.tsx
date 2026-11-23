@@ -51,6 +51,19 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
               {info.bodySprite || '(none)'}
             </button>
           </div>
+          {info.bodyColor !== null && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 w-14 shrink-0">Color</span>
+              <span
+                className="inline-block w-4 h-4 shrink-0 border border-gray-600"
+                style={{ backgroundColor: `#${info.bodyColor.toString(16).padStart(6, '0')}` }}
+                aria-hidden="true"
+              />
+              <span className="flex-1 min-w-0 truncate text-[10px] text-gray-300 font-mono" title="bodyColor (multiplied into Body)">
+                #{info.bodyColor.toString(16).padStart(6, '0').toUpperCase()}
+              </span>
+            </div>
+          )}
           {info.hairSprite && hairImageUrl && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-400 w-14 shrink-0">Hair</span>

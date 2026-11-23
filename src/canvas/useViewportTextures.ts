@@ -355,7 +355,7 @@ export function useViewportTextures({
       base,
       ...overlays.filter(layer => !layer.behind && isLoaded(layer)),
     ];
-    if (layers.length < 2) return null;
+    if (layers.length < 2 && template.compositeBaseColor === undefined) return null;
 
     const frames = layers.map(layer => ({
       ...getSingleRenderFrame(
@@ -363,13 +363,14 @@ export function useViewportTextures({
         0,
       ),
       position: layer.offset,
+      color: layer === base ? template.compositeBaseColor : undefined,
       blendMode: 'blendMode' in layer ? layer.blendMode : undefined,
       // A layer's angle has an entity angle's sign: counter-clockwise on screen.
       rotation: -(layer.angle ?? 0) * (Math.PI / 180),
     }));
     const cacheKey = frames
       .map(frame => `${frame.texture.uid}:${frame.offsetX},${frame.offsetY},${frame.pivotX},${frame.pivotY}`
-        + `:${frame.position?.x ?? 0},${frame.position?.y ?? 0},${frame.rotation},${frame.blendMode ?? 0}`)
+        + `:${frame.position?.x ?? 0},${frame.position?.y ?? 0},${frame.rotation},${frame.blendMode ?? 0},${frame.color ?? ''}`)
       .join('|');
     const cached = compositeFrameMapRef.current.get(cacheKey);
     if (cached) return cached;
@@ -392,7 +393,24 @@ export function useViewportTextures({
       else if (frame.blendMode === 4) context.globalCompositeOperation = 'multiply';
       context.translate(placement.x, placement.y);
       if (placement.rotation !== 0) context.rotate(placement.rotation);
-      context.drawImage(image, x, y, width, height, placement.frameX, placement.frameY, frame.frameWidth, frame.frameHeight);
+      if (frame.color !== undefined) {
+        // Multiply the color into the sprite only (alpha kept), like a diffuse color.
+        const tinted = document.createElement('canvas');
+        tinted.width = Math.max(1, Math.round(frame.frameWidth));
+        tinted.height = Math.max(1, Math.round(frame.frameHeight));
+        const tintedContext = tinted.getContext('2d');
+        if (tintedContext) {
+          tintedContext.drawImage(image, x, y, width, height, 0, 0, tinted.width, tinted.height);
+          tintedContext.globalCompositeOperation = 'multiply';
+          tintedContext.fillStyle = `#${frame.color.toString(16).padStart(6, '0')}`;
+          tintedContext.fillRect(0, 0, tinted.width, tinted.height);
+          tintedContext.globalCompositeOperation = 'destination-in';
+          tintedContext.drawImage(image, x, y, width, height, 0, 0, tinted.width, tinted.height);
+          context.drawImage(tinted, placement.frameX, placement.frameY, frame.frameWidth, frame.frameHeight);
+        }
+      } else {
+        context.drawImage(image, x, y, width, height, placement.frameX, placement.frameY, frame.frameWidth, frame.frameHeight);
+      }
       context.restore();
     });
 
@@ -412,7 +430,7 @@ export function useViewportTextures({
   }, [getSingleRenderFrame, refs]);
 
   const getRenderFrame = useCallback((template: EntityTemplate, requestedFrame: number): RenderFrame => {
-    if (template.compositeLayers?.length) {
+    if (template.compositeLayers?.length || template.compositeBaseColor !== undefined) {
       const composite = getCompositeRenderFrame(template);
       if (composite) return composite;
     }
