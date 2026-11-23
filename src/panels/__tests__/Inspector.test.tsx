@@ -189,7 +189,7 @@ describe('Inspector pending edit interactions', () => {
     const historyLength = useSceneStore.getState().history.length;
 
     render(<Inspector />);
-    const cutX = screen.getByRole('spinbutton', { name: 'Sprite Cut Row' }) as HTMLInputElement;
+    const cutX = screen.getByRole('spinbutton', { name: 'Sprite Cut Col' }) as HTMLInputElement;
 
     fireEvent.wheel(cutX, { deltaY: -1 });
     fireEvent.wheel(cutX, { deltaY: -1 });
