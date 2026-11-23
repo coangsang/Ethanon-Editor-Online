@@ -156,14 +156,50 @@ function getWeaponEquip(properties: Record<string, unknown>): CharacterWeaponEqu
   };
 }
 
+/**
+ * The `.enml` item block whose `name` property is `itemName` (the target of an
+ * `equippedItem` block's `reference`). `npc-head.enml` is searched first.
+ */
+function findItemByName(
+  itemName: string,
+  items: readonly ProjectItemEntry[],
+): Record<string, unknown> | null {
+  const isHeadFile = (entry: ProjectItemEntry) => entry.name.toLowerCase() === 'npc-head.enml';
+  const ordered = [...items.filter(isHeadFile), ...items.filter(entry => !isHeadFile(entry))];
+  for (const entry of ordered) {
+    const object = entry.objects?.find(o => nonEmptyString(o.properties.name) === itemName);
+    if (object) return object.properties;
+  }
+  return null;
+}
+
+/**
+ * An `equippedItem` block's effective properties: with a `reference`, the
+ * referenced `.enml` item's properties, overridden by any set in the block itself.
+ */
+function resolveEquippedProperties(
+  properties: Record<string, unknown>,
+  items: readonly ProjectItemEntry[],
+): Record<string, unknown> {
+  const reference = nonEmptyString(properties.reference);
+  const referenced = reference ? findItemByName(reference, items) : null;
+  if (!referenced) return properties;
+  const merged = { ...referenced, ...properties };
+  delete merged.reference;
+  delete merged.stackSize;
+  return merged;
+}
+
 /** `equippedItem0`..`equippedItem2` blocks with an armor, artifact, or weapon `type`, in slot order. */
 export function getCharacterEquippedItems(
   objects: readonly { name: string; properties: Record<string, unknown> }[] | null | undefined,
+  items: readonly ProjectItemEntry[] = [],
 ): CharacterEquippedItem[] {
   const result: CharacterEquippedItem[] = [];
   for (let i = 0; i <= 2; i++) {
     const slot = `equippedItem${i}`;
-    const properties = objects?.find(o => o.name === slot)?.properties;
+    const block = objects?.find(o => o.name === slot)?.properties;
+    const properties = block ? resolveEquippedProperties(block, items) : undefined;
     const type = nonEmptyString(properties?.type)?.toLowerCase();
     const typeLabel = type ? EQUIPPED_ITEM_TYPE_LABELS[type] : undefined;
     if (!properties || !typeLabel) continue;
@@ -244,7 +280,7 @@ export function getCharacterEntityInfo(
     eyeName,
     eyeSprite: nonEmptyString(eyeProperties?.sprite),
     ...(eyeBlendMode ? { eyeBlendMode } : {}),
-    equippedItems: getCharacterEquippedItems(entry?.objects),
+    equippedItems: getCharacterEquippedItems(entry?.objects, items),
     found: entry !== null,
     keepClassHelm: !isFalse(properties?.keepClassHelm),
   };

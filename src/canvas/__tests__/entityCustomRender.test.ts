@@ -191,6 +191,35 @@ describe('getCharacterEquippedItems', () => {
   });
 });
 
+describe('getCharacterEquippedItems reference', () => {
+  const items = [{
+    name: 'weapon-staff-1.enml',
+    relativePath: 'weapon-staff-1.enml',
+    handle: {} as ProjectItemEntry['handle'],
+    objects: [
+      { name: 'item2', properties: { name: 'Nature Staff', type: 'weapon', sprite: 'staff_1.png', equippedAngle: -25, equipOffsetX: -28, equipOffsetY: 6 } },
+    ],
+  }];
+
+  it('resolves an equippedItem reference to the .enml item', () => {
+    const objects = [{ name: 'equippedItem0', properties: { reference: 'Nature Staff', stackSize: 1 } }];
+    expect(getCharacterEquippedItems(objects, items)).toEqual([
+      { slot: 'equippedItem0', typeLabel: 'Weapon', name: 'Nature Staff', sprite: 'staff_1.png', equip: { angle: -25, offsetX: -28, offsetY: 6 } },
+    ]);
+  });
+
+  it('lets properties written in the block override the referenced item', () => {
+    const objects = [{ name: 'equippedItem0', properties: { reference: 'Nature Staff', sprite: 'custom.png' } }];
+    expect(getCharacterEquippedItems(objects, items)[0].sprite).toBe('custom.png');
+  });
+
+  it('skips a reference that is not found', () => {
+    const objects = [{ name: 'equippedItem0', properties: { reference: 'Missing' } }];
+    expect(getCharacterEquippedItems(objects, items)).toEqual([]);
+    expect(getCharacterEquippedItems(objects)).toEqual([]);
+  });
+});
+
 describe('getCharacterEquippedItems weapon equip', () => {
   const weapon = (properties: Record<string, unknown>) => getCharacterEquippedItems([
     { name: 'equippedItem0', properties: { name: 'W', type: 'weapon', sprite: 'w.png', ...properties } },
