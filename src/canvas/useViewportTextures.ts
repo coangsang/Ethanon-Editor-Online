@@ -365,8 +365,8 @@ export function useViewportTextures({
       position: layer.offset,
       color: layer === base ? template.compositeBaseColor : undefined,
       blendMode: 'blendMode' in layer ? layer.blendMode : undefined,
-      // A layer's angle has an entity angle's sign: counter-clockwise on screen.
-      rotation: -(layer.angle ?? 0) * (Math.PI / 180),
+      // A layer's angle (the weapon's `equippedAngle`) is clockwise on screen, unlike an entity angle.
+      rotation: (layer.angle ?? 0) * (Math.PI / 180),
     }));
     const cacheKey = frames
       .map(frame => `${frame.texture.uid}:${frame.offsetX},${frame.offsetY},${frame.pivotX},${frame.pivotY}`
