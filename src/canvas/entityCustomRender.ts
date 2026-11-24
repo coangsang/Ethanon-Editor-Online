@@ -248,6 +248,10 @@ export type CharacterEntityInfo = {
   eyeBlendMode?: number;
   /** Armor, artifact, and weapon blocks `equippedItem0`..`equippedItem2`. */
   equippedItems: CharacterEquippedItem[];
+  /** Optional sound files (in the project's `soundfx` folder); null when absent. */
+  threatDetectedSound: string | null;
+  confusedSound: string | null;
+  damageSound: string | null;
   /** Whether the `.character` file was found among the project's characters. */
   found: boolean;
   /** `character.properties.keepClassHelm`; false only when explicitly `false`. */
@@ -281,6 +285,9 @@ export function getCharacterEntityInfo(
     eyeSprite: nonEmptyString(eyeProperties?.sprite),
     ...(eyeBlendMode ? { eyeBlendMode } : {}),
     equippedItems: getCharacterEquippedItems(entry?.objects, items),
+    threatDetectedSound: nonEmptyString(properties?.threatDetectedSound),
+    confusedSound: nonEmptyString(properties?.confusedSound),
+    damageSound: nonEmptyString(properties?.damageSound),
     found: entry !== null,
     keepClassHelm: !isFalse(properties?.keepClassHelm),
   };

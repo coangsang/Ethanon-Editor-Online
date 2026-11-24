@@ -24,7 +24,7 @@ function joinPath(parent: string, name: string): string {
 
 function mediaType(name: string): string {
   const extension = name.split('.').pop()?.toLowerCase();
-  return ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' } as Record<string, string>)[extension ?? ''] ?? '';
+  return ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4' } as Record<string, string>)[extension ?? ''] ?? '';
 }
 
 export async function openTauriProjectFolder(): Promise<NativeProjectDirectoryHandle> {

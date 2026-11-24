@@ -669,6 +669,22 @@ export async function openProjectFolder(): Promise<ProjectFolderData> {
   }
 }
 
+/** Reads `soundfx/<fileName>` (case-insensitive) from the project root; null when missing. */
+export async function readProjectSound(
+  rootHandle: ProjectDirectoryHandle,
+  fileName: string,
+): Promise<File | null> {
+  const dir = await tryGetDirectory(rootHandle, "soundfx");
+  if (!dir) return null;
+  const wanted = fileName.replace(/\\/g, "/").split("/").pop()!.toLowerCase();
+  for await (const [name, handle] of dir.entries()) {
+    if (handle.kind === "file" && name.toLowerCase() === wanted) {
+      return (handle as ProjectFileHandle).getFile();
+    }
+  }
+  return null;
+}
+
 export async function rescanProject(
   rootHandle: ProjectDirectoryHandle,
   scenesHandle: ProjectDirectoryHandle,

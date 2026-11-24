@@ -1,4 +1,67 @@
+import { useEffect, useRef, useState } from 'react';
+import { Play, Square } from 'lucide-react';
 import type { EntityInstance } from '../../types';
+import { readProjectSound } from '../../io/projectFolder';
+import type { ProjectDirectoryHandle } from '../../io/projectFolder';
+
+/** One sound row: file name plus a Play/Stop button. */
+function SoundRow({ label, fileName, rootHandle }: { label: string; fileName: string; rootHandle: ProjectDirectoryHandle | null }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const urlRef = useRef<string | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const stop = () => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+    urlRef.current = null;
+    setPlaying(false);
+  };
+
+  // Stop when the row unmounts or points at another file.
+  useEffect(() => stop, [fileName, rootHandle]);
+
+  const toggle = async () => {
+    if (playing) { stop(); return; }
+    setError(null);
+    if (!rootHandle) { setError('No project folder open'); return; }
+    try {
+      const file = await readProjectSound(rootHandle, fileName);
+      if (!file) { setError('Not found in soundfx'); return; }
+      const url = URL.createObjectURL(file);
+      const audio = new Audio(url);
+      audio.onended = stop;
+      audio.onerror = () => { setError('Cannot play file'); stop(); };
+      audioRef.current = audio;
+      urlRef.current = url;
+      setPlaying(true);
+      await audio.play();
+    } catch {
+      setError('Cannot play file');
+      stop();
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-400 w-14 shrink-0">{label}</span>
+      <span className="flex-1 min-w-0 truncate text-[10px] text-gray-300 font-mono" title={error ?? fileName}>
+        {fileName}
+      </span>
+      {error && <span className="text-[10px] text-amber-400 shrink-0">{error}</span>}
+      <button
+        type="button"
+        onClick={toggle}
+        title={playing ? 'Stop' : 'Play'}
+        aria-label={`${playing ? 'Stop' : 'Play'} ${label} sound`}
+        className="inspector-button editor-input shrink-0 text-[10px] px-2 py-1 bg-gray-800 cursor-pointer hover:bg-gray-700 transition-colors"
+      >
+        {playing ? <Square size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
+      </button>
+    </div>
+  );
+}
 import { useSceneStore } from '../../store/sceneStore';
 import { getCharacterEntityInfo } from '../../canvas/entityCustomRender';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
@@ -9,6 +72,7 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
   const items = useSceneStore(s => s.projectItems);
   const templateImageUrls = useSceneStore(s => s.templateImageUrls);
   const pingSprite = useSceneStore(s => s.pingSprite);
+  const rootHandle = useSceneStore(s => s.rootHandle);
   const info = getCharacterEntityInfo(entity, characters, items);
   // Hair is shown only when its sprite image was loaded from the project.
   const hairImageUrl = info?.hairSprite ? resolveImageUrl(templateImageUrls, info.hairSprite) : null;
@@ -109,6 +173,9 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
               </div>
             );
           })}
+          {info.threatDetectedSound && <SoundRow label="Threat" fileName={info.threatDetectedSound} rootHandle={rootHandle} />}
+          {info.confusedSound && <SoundRow label="Confused" fileName={info.confusedSound} rootHandle={rootHandle} />}
+          {info.damageSound && <SoundRow label="Damage" fileName={info.damageSound} rootHandle={rootHandle} />}
         </>
       )}
     </div>
