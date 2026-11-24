@@ -1,7 +1,16 @@
-import type { EntityInstance, EntityTemplate, ProjectCharacterEntry, ProjectItemEntry, SpriteAtlas } from '../types';
-import { getAtlasForTemplate } from './viewportMath';
-import { resolveEntityTemplate, resolveExternalTemplate } from '../utils/entityTemplate';
-import { resolveImageUrl } from '../utils/resolveImageUrl';
+import type {
+  EntityInstance,
+  EntityTemplate,
+  ProjectCharacterEntry,
+  ProjectItemEntry,
+  SpriteAtlas,
+} from "../types";
+import { getAtlasForTemplate } from "./viewportMath";
+import {
+  resolveEntityTemplate,
+  resolveExternalTemplate,
+} from "../utils/entityTemplate";
+import { resolveImageUrl } from "../utils/resolveImageUrl";
 
 /**
  * Custom render hooks keyed by the scene entity's `EntityName`.
@@ -25,30 +34,49 @@ export type EntityCustomRenderContext = {
 
 export type EntityCustomRenderer = {
   /** Text drawn above the entity's sprite, or null/empty for no label. */
-  getLabel?: (entity: EntityInstance, context: EntityCustomRenderContext) => string | null;
+  getLabel?: (
+    entity: EntityInstance,
+    context: EntityCustomRenderContext,
+  ) => string | null;
   /** Replaces the entity's sprite image (first frame is drawn), or null to keep it. */
-  getSpriteFile?: (entity: EntityInstance, context: EntityCustomRenderContext) => string | null;
+  getSpriteFile?: (
+    entity: EntityInstance,
+    context: EntityCustomRenderContext,
+  ) => string | null;
   /** Sprites drawn over the replaced sprite's first frame, bottom to top, aligned on their pivots. */
-  getOverlayLayers?: (entity: EntityInstance, context: EntityCustomRenderContext) => EntityOverlayLayer[];
+  getOverlayLayers?: (
+    entity: EntityInstance,
+    context: EntityCustomRenderContext,
+  ) => EntityOverlayLayer[];
   /** 0xRRGGBB multiplied into the replaced sprite (like a diffuse color), or null for none. */
-  getBaseColor?: (entity: EntityInstance, context: EntityCustomRenderContext) => number | null;
+  getBaseColor?: (
+    entity: EntityInstance,
+    context: EntityCustomRenderContext,
+  ) => number | null;
 };
 
 /** A sprite drawn over an entity's custom sprite (see `EntityTemplate.compositeLayers`). */
-export type EntityOverlayLayer = Omit<NonNullable<EntityTemplate['compositeLayers']>[number], 'spriteCut'> & {
+export type EntityOverlayLayer = Omit<
+  NonNullable<EntityTemplate["compositeLayers"]>[number],
+  "spriteCut"
+> & {
   /** Grid cut used when the sprite has no atlas; defaults to the entity template's own cut. */
   spriteCut?: { x: number; y: number };
 };
 
 function customDataString(entity: EntityInstance, name: string): string | null {
-  const variable = entity.customData?.find(v => v.name === name);
-  if (!variable || typeof variable.value !== 'string') return null;
+  const variable = entity.customData?.find((v) => v.name === name);
+  if (!variable || typeof variable.value !== "string") return null;
   const value = variable.value.trim();
   return value.length > 0 ? value : null;
 }
 
 function normalizeCharacterPath(path: string): string {
-  return path.trim().replace(/\\/g, '/').replace(/^\.?\//, '').toLowerCase();
+  return path
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.?\//, "")
+    .toLowerCase();
 }
 
 function findCharacterEntry(
@@ -58,37 +86,52 @@ function findCharacterEntry(
   const wanted = normalizeCharacterPath(fileName);
   // Character entries are relative to the project's npcs folder, while the
   // scene's fileName is relative to the project root ("npcs/...").
-  const wantedInNpcs = wanted.replace(/^npcs\//, '');
-  return characters.find(c => {
-    const rel = normalizeCharacterPath(c.relativePath);
-    return rel === wanted || rel === wantedInNpcs;
-  }) ?? null;
+  const wantedInNpcs = wanted.replace(/^npcs\//, "");
+  return (
+    characters.find((c) => {
+      const rel = normalizeCharacterPath(c.relativePath);
+      return rel === wanted || rel === wantedInNpcs;
+    }) ?? null
+  );
 }
 
-function getCharacterObject(fileName: string, characters: readonly ProjectCharacterEntry[]) {
-  return findCharacterEntry(fileName, characters)?.objects?.find(o => o.name === 'character') ?? null;
+function getCharacterObject(
+  fileName: string,
+  characters: readonly ProjectCharacterEntry[],
+) {
+  return (
+    findCharacterEntry(fileName, characters)?.objects?.find(
+      (o) => o.name === "character",
+    ) ?? null
+  );
 }
 
 /**
  * `character.properties.name` from the .character file when it exists,
  * otherwise the file's base name without extension (e.g. "blood-priest").
  */
-function characterDisplayName(fileName: string, characters: readonly ProjectCharacterEntry[]): string {
+function characterDisplayName(
+  fileName: string,
+  characters: readonly ProjectCharacterEntry[],
+): string {
   const name = getCharacterObject(fileName, characters)?.properties.name;
-  if (typeof name === 'string' && name.trim().length > 0) return name.trim();
-  const base = fileName.trim().replace(/\\/g, '/').split('/').pop() ?? fileName;
-  return base.replace(/\.character$/i, '');
+  if (typeof name === "string" && name.trim().length > 0) return name.trim();
+  const base = fileName.trim().replace(/\\/g, "/").split("/").pop() ?? fileName;
+  return base.replace(/\.character$/i, "");
 }
 
 function nonEmptyString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 /**
  * The `sprite` of the `.enml` item block named `itemName`. `npc-head.enml` is
  * searched first, then the other item files in path order.
  */
-export function findItemSprite(itemName: string, items: readonly ProjectItemEntry[]): string | null {
+export function findItemSprite(
+  itemName: string,
+  items: readonly ProjectItemEntry[],
+): string | null {
   return nonEmptyString(findItemProperties(itemName, items)?.sprite);
 }
 
@@ -96,19 +139,23 @@ function findItemProperties(
   itemName: string,
   items: readonly ProjectItemEntry[],
 ): Record<string, unknown> | null {
-  const isHeadFile = (entry: ProjectItemEntry) => entry.name.toLowerCase() === 'npc-head.enml';
-  const ordered = [...items.filter(isHeadFile), ...items.filter(entry => !isHeadFile(entry))];
+  const isHeadFile = (entry: ProjectItemEntry) =>
+    entry.name.toLowerCase() === "npc-head.enml";
+  const ordered = [
+    ...items.filter(isHeadFile),
+    ...items.filter((entry) => !isHeadFile(entry)),
+  ];
   for (const entry of ordered) {
-    const object = entry.objects?.find(o => o.name === itemName);
+    const object = entry.objects?.find((o) => o.name === itemName);
     if (object) return object.properties;
   }
   return null;
 }
 
 const EQUIPPED_ITEM_TYPE_LABELS: Record<string, string> = {
-  armor: 'Armor',
-  artifact: 'Artifact',
-  weapon: 'Weapon',
+  armor: "Armor",
+  artifact: "Artifact",
+  weapon: "Weapon",
 };
 
 export type CharacterEquippedItem = {
@@ -134,25 +181,36 @@ export type CharacterWeaponEquip = {
   offsetY: number;
 };
 
-export const DEFAULT_WEAPON_EQUIP: Readonly<CharacterWeaponEquip> = { angle: 0, offsetX: -40, offsetY: 0 };
+export const DEFAULT_WEAPON_EQUIP: Readonly<CharacterWeaponEquip> = {
+  angle: 0,
+  offsetX: -40,
+  offsetY: 0,
+};
 
 function isFalse(value: unknown): boolean {
-  return value === false || (typeof value === 'string' && value.trim().toLowerCase() === 'false');
+  return (
+    value === false ||
+    (typeof value === "string" && value.trim().toLowerCase() === "false")
+  );
 }
 
 function finiteNumber(value: unknown): number | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value !== 'string' || !value.trim()) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || !value.trim()) return null;
   const parsed = Number(value.trim());
   return Number.isFinite(parsed) ? parsed : null;
 }
 
 /** Weapon hold transform; each property missing or not a number uses its default. */
-function getWeaponEquip(properties: Record<string, unknown>): CharacterWeaponEquip {
+function getWeaponEquip(
+  properties: Record<string, unknown>,
+): CharacterWeaponEquip {
   return {
     angle: finiteNumber(properties.equippedAngle) ?? DEFAULT_WEAPON_EQUIP.angle,
-    offsetX: finiteNumber(properties.equipOffsetX) ?? DEFAULT_WEAPON_EQUIP.offsetX,
-    offsetY: finiteNumber(properties.equipOffsetY) ?? DEFAULT_WEAPON_EQUIP.offsetY,
+    offsetX:
+      finiteNumber(properties.equipOffsetX) ?? DEFAULT_WEAPON_EQUIP.offsetX,
+    offsetY:
+      finiteNumber(properties.equipOffsetY) ?? DEFAULT_WEAPON_EQUIP.offsetY,
   };
 }
 
@@ -164,10 +222,16 @@ function findItemByName(
   itemName: string,
   items: readonly ProjectItemEntry[],
 ): Record<string, unknown> | null {
-  const isHeadFile = (entry: ProjectItemEntry) => entry.name.toLowerCase() === 'npc-head.enml';
-  const ordered = [...items.filter(isHeadFile), ...items.filter(entry => !isHeadFile(entry))];
+  const isHeadFile = (entry: ProjectItemEntry) =>
+    entry.name.toLowerCase() === "npc-head.enml";
+  const ordered = [
+    ...items.filter(isHeadFile),
+    ...items.filter((entry) => !isHeadFile(entry)),
+  ];
   for (const entry of ordered) {
-    const object = entry.objects?.find(o => nonEmptyString(o.properties.name) === itemName);
+    const object = entry.objects?.find(
+      (o) => nonEmptyString(o.properties.name) === itemName,
+    );
     if (object) return object.properties;
   }
   return null;
@@ -192,14 +256,19 @@ function resolveEquippedProperties(
 
 /** `equippedItem0`..`equippedItem2` blocks with an armor, artifact, or weapon `type`, in slot order. */
 export function getCharacterEquippedItems(
-  objects: readonly { name: string; properties: Record<string, unknown> }[] | null | undefined,
+  objects:
+    | readonly { name: string; properties: Record<string, unknown> }[]
+    | null
+    | undefined,
   items: readonly ProjectItemEntry[] = [],
 ): CharacterEquippedItem[] {
   const result: CharacterEquippedItem[] = [];
   for (let i = 0; i <= 2; i++) {
     const slot = `equippedItem${i}`;
-    const block = objects?.find(o => o.name === slot)?.properties;
-    const properties = block ? resolveEquippedProperties(block, items) : undefined;
+    const block = objects?.find((o) => o.name === slot)?.properties;
+    const properties = block
+      ? resolveEquippedProperties(block, items)
+      : undefined;
     const type = nonEmptyString(properties?.type)?.toLowerCase();
     const typeLabel = type ? EQUIPPED_ITEM_TYPE_LABELS[type] : undefined;
     if (!properties || !typeLabel) continue;
@@ -209,9 +278,11 @@ export function getCharacterEquippedItems(
       slot,
       typeLabel,
       name: nonEmptyString(properties.name),
-      sprite: sprite && sprite.toLowerCase() !== 'none' ? sprite : null,
-      ...(headless && headless.toLowerCase() !== 'none' ? { headlessAlternativeSprite: headless } : {}),
-      ...(type === 'weapon' ? { equip: getWeaponEquip(properties) } : {}),
+      sprite: sprite && sprite.toLowerCase() !== "none" ? sprite : null,
+      ...(headless && headless.toLowerCase() !== "none"
+        ? { headlessAlternativeSprite: headless }
+        : {}),
+      ...(type === "weapon" ? { equip: getWeaponEquip(properties) } : {}),
     });
   }
   return result;
@@ -265,15 +336,19 @@ export function getCharacterEntityInfo(
   items: readonly ProjectItemEntry[] = [],
   templates: Record<string, EntityTemplate> = {},
 ): CharacterEntityInfo | null {
-  const fileName = customDataString(entity, 'fileName');
+  const fileName = customDataString(entity, "fileName");
   if (!fileName) return null;
   const entry = findCharacterEntry(fileName, characters);
-  const properties = entry?.objects?.find(o => o.name === 'character')?.properties;
+  const properties = entry?.objects?.find(
+    (o) => o.name === "character",
+  )?.properties;
   const hairName = nonEmptyString(properties?.hairSprite);
   const eyeName = nonEmptyString(properties?.eyeSprite);
   const eyeProperties = eyeName ? findItemProperties(eyeName, items) : null;
   const eyeEquipEntity = nonEmptyString(eyeProperties?.equipEntity);
-  const eyeBlendMode = eyeEquipEntity ? resolveExternalTemplate(eyeEquipEntity, templates)?.blendMode : undefined;
+  const eyeBlendMode = eyeEquipEntity
+    ? resolveExternalTemplate(eyeEquipEntity, templates)?.blendMode
+    : undefined;
   return {
     fileName,
     name: characterDisplayName(fileName, characters),
@@ -298,25 +373,36 @@ export function getCharacterEntityInfo(
  * body), then armor, hair, eyes, artifact over it. The weapon is placed by its `equip`
  * offset and angle. Missing sprites are skipped.
  */
-export function getCharacterOverlayLayers(info: CharacterEntityInfo): EntityOverlayLayer[] {
+export function getCharacterOverlayLayers(
+  info: CharacterEntityInfo,
+): EntityOverlayLayer[] {
   const equipped = (typeLabel: string) =>
-    info.equippedItems.find(item => item.typeLabel === typeLabel && item.sprite) ?? null;
-  const spriteLayer = (sprite: string | null | undefined): EntityOverlayLayer | null =>
-    sprite ? { spriteFile: sprite } : null;
+    info.equippedItems.find(
+      (item) => item.typeLabel === typeLabel && item.sprite,
+    ) ?? null;
+  const spriteLayer = (
+    sprite: string | null | undefined,
+  ): EntityOverlayLayer | null => (sprite ? { spriteFile: sprite } : null);
   const layers = [
     // With the class helm kept, the hair shows and the armor's headless sprite
     // (when it has one) replaces its own; otherwise there is no hair.
-    spriteLayer(info.keepClassHelm
-      ? equipped('Armor')?.headlessAlternativeSprite ?? equipped('Armor')?.sprite
-      : equipped('Armor')?.sprite),
+    spriteLayer(
+      info.keepClassHelm
+        ? (equipped("Armor")?.headlessAlternativeSprite ??
+            equipped("Armor")?.sprite)
+        : equipped("Armor")?.sprite,
+    ),
     spriteLayer(info.keepClassHelm ? info.hairSprite : null),
     // Eyes are drawn right after the hair, whether or not the class helm is kept.
     info.eyeSprite
-      ? { spriteFile: info.eyeSprite, ...(info.eyeBlendMode ? { blendMode: info.eyeBlendMode } : {}) }
+      ? {
+          spriteFile: info.eyeSprite,
+          ...(info.eyeBlendMode ? { blendMode: info.eyeBlendMode } : {}),
+        }
       : null,
-    spriteLayer(equipped('Artifact')?.sprite),
+    spriteLayer(equipped("Artifact")?.sprite),
   ];
-  const weapon = equipped('Weapon');
+  const weapon = equipped("Weapon");
   if (weapon?.sprite) {
     const equip = weapon.equip ?? DEFAULT_WEAPON_EQUIP;
     // A weapon image is never cut by the entity's sprite cut: without an atlas it is drawn whole.
@@ -333,24 +419,44 @@ export function getCharacterOverlayLayers(info: CharacterEntityInfo): EntityOver
 }
 
 const characterRenderer: EntityCustomRenderer = {
-  getLabel: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.name ?? null,
-  getSpriteFile: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.bodySprite ?? null,
-  getBaseColor: (entity, { characters }) => getCharacterEntityInfo(entity, characters)?.bodyColor ?? null,
+  getLabel: (entity, { characters }) =>
+    getCharacterEntityInfo(entity, characters)?.name ?? null,
+  getSpriteFile: (entity, { characters }) =>
+    getCharacterEntityInfo(entity, characters)?.bodySprite ?? null,
+  getBaseColor: (entity, { characters }) =>
+    getCharacterEntityInfo(entity, characters)?.bodyColor ?? null,
   getOverlayLayers: (entity, { characters, items, templates }) => {
-    const info = getCharacterEntityInfo(entity, characters, items ?? [], templates);
+    const info = getCharacterEntityInfo(
+      entity,
+      characters,
+      items ?? [],
+      templates,
+    );
     return info ? getCharacterOverlayLayers(info) : [];
   },
 };
 
 /** Entity names (exact match) drawn from a `.character` file via customData `fileName`. */
-export const CHARACTER_RENDER_ENTITY_NAMES: readonly string[] = ['character_spawn', 'character_air_attack'];
+export const CHARACTER_RENDER_ENTITY_NAMES: readonly string[] = [
+  "character_spawn",
+  "character_air_attack",
+  "copycat_spawn",
+  "spider_egg",
+];
 
-export const ENTITY_CUSTOM_RENDERERS: Readonly<Record<string, EntityCustomRenderer>> = Object.fromEntries(
-  CHARACTER_RENDER_ENTITY_NAMES.map(name => [name, characterRenderer]),
+export const ENTITY_CUSTOM_RENDERERS: Readonly<
+  Record<string, EntityCustomRenderer>
+> = Object.fromEntries(
+  CHARACTER_RENDER_ENTITY_NAMES.map((name) => [name, characterRenderer]),
 );
 
-export function getEntityCustomRenderer(entityName: string): EntityCustomRenderer | null {
-  return Object.prototype.hasOwnProperty.call(ENTITY_CUSTOM_RENDERERS, entityName)
+export function getEntityCustomRenderer(
+  entityName: string,
+): EntityCustomRenderer | null {
+  return Object.prototype.hasOwnProperty.call(
+    ENTITY_CUSTOM_RENDERERS,
+    entityName,
+  )
     ? ENTITY_CUSTOM_RENDERERS[entityName]
     : null;
 }
@@ -359,7 +465,10 @@ export function getEntityCustomLabel(
   entity: EntityInstance,
   context: EntityCustomRenderContext = { characters: [] },
 ): string | null {
-  return getEntityCustomRenderer(entity.entityName)?.getLabel?.(entity, context) ?? null;
+  return (
+    getEntityCustomRenderer(entity.entityName)?.getLabel?.(entity, context) ??
+    null
+  );
 }
 
 /**
@@ -378,18 +487,20 @@ export function resolveEntityRenderTemplate(
   const renderer = getEntityCustomRenderer(entity.entityName);
   const spriteFile = renderer?.getSpriteFile?.(entity, context);
   if (!spriteFile) return base;
-  const imageExists = (file: string) => !context.templateImageUrls || resolveImageUrl(context.templateImageUrls, file) !== null;
+  const imageExists = (file: string) =>
+    !context.templateImageUrls ||
+    resolveImageUrl(context.templateImageUrls, file) !== null;
   if (!imageExists(spriteFile)) return base;
   // Overlays are drawn only when their image was loaded from the project.
   // A sprite without an atlas is cut by the entity template's own grid cut.
   const gridCut = base?.spriteCut ?? { x: 1, y: 1 };
   const compositeLayers = (renderer?.getOverlayLayers?.(entity, context) ?? [])
-    .filter(layer => imageExists(layer.spriteFile))
-    .map(layer => ({ ...layer, spriteCut: layer.spriteCut ?? gridCut }));
+    .filter((layer) => imageExists(layer.spriteFile))
+    .map((layer) => ({ ...layer, spriteCut: layer.spriteCut ?? gridCut }));
   const bodyColor = renderer?.getBaseColor?.(entity, context) ?? null;
   return {
     name: entity.entityName,
-    type: 'horizontal',
+    type: "horizontal",
     pivotAdjust: { x: 0, y: 0 },
     parallaxIntensity: 1,
     blendMode: 0,
@@ -399,9 +510,14 @@ export function resolveEntityRenderTemplate(
     scale: { x: 1, y: 1 },
     // A custom sprite with a texture atlas is cut by that atlas. Without one,
     // fall back to the entity template's own grid cut (when atlases are known).
-    spriteCut: context.templateAtlases && !getAtlasForTemplate({ spriteFile } as EntityTemplate, context.templateAtlases)
-      ? base?.spriteCut ?? { x: 1, y: 1 }
-      : { x: 1, y: 1 },
+    spriteCut:
+      context.templateAtlases &&
+      !getAtlasForTemplate(
+        { spriteFile } as EntityTemplate,
+        context.templateAtlases,
+      )
+        ? (base?.spriteCut ?? { x: 1, y: 1 })
+        : { x: 1, y: 1 },
     renderFirstFrameOnly: true,
     ...(compositeLayers.length > 0 ? { compositeLayers } : {}),
     ...(bodyColor !== null ? { compositeBaseColor: bodyColor } : {}),
