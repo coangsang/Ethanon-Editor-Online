@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EntityInstance, EntityTemplate, ProjectCharacterEntry, ProjectItemEntry } from '../../types';
+import { resolveEntityTemplate } from '../../utils/entityTemplate';
 import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, findItemSprite, getCharacterEquippedItems, getCharacterOverlayLayers, getCharacterEntityInfo, type CharacterEntityInfo } from '../entityCustomRender';
 
 function entity(entityName: string, customData: EntityInstance['customData'] = []): EntityInstance {
@@ -473,5 +474,75 @@ describe('character_spawn composite layers', () => {
     const t = resolveEntityRenderTemplate(spawn, templates, { characters: bodyOnly, items, templateImageUrls: urls });
     expect(t).not.toBeNull();
     expect(t?.compositeLayers).toBeUndefined();
+  });
+});
+
+describe('resolveEntityRenderTemplate caching', () => {
+  const spawn = entity('character_spawn', fileName);
+  const templates: Record<string, EntityTemplate> = {
+    character_spawn: {
+      name: 'character_spawn',
+      spriteFile: 'x.png',
+      spriteCut: { x: 1, y: 1 },
+      type: 'horizontal',
+      pivotAdjust: { x: 0, y: 0 },
+      scale: { x: 1, y: 1 },
+      parallaxIntensity: 1,
+    },
+  };
+  const charactersA = [
+    character('enemies/blood-priest.character', [
+      { name: 'character', properties: { name: 'Blood Priest', bodySprite: 'body_a.png' } },
+    ]),
+  ];
+  const charactersB = [
+    character('enemies/blood-priest.character', [
+      { name: 'character', properties: { name: 'Blood Priest', bodySprite: 'body_b.png' } },
+    ]),
+  ];
+  const urls = { 'body_a.png': 'blob:a', 'body_b.png': 'blob:b' };
+
+  it('returns the same object for the same context, entity, and templates', () => {
+    const ctx = { characters: charactersA, templateImageUrls: urls };
+    const first = resolveEntityRenderTemplate(spawn, templates, ctx);
+    const second = resolveEntityRenderTemplate(spawn, templates, ctx);
+    expect(first).not.toBeNull();
+    expect(second).toBe(first);
+  });
+
+  it('recomputes when a new context has different characters', () => {
+    const ctxA = { characters: charactersA, templateImageUrls: urls };
+    const ctxB = { characters: charactersB, templateImageUrls: urls };
+    const first = resolveEntityRenderTemplate(spawn, templates, ctxA);
+    const second = resolveEntityRenderTemplate(spawn, templates, ctxB);
+    expect(first?.spriteFile).toBe('body_a.png');
+    expect(second?.spriteFile).toBe('body_b.png');
+  });
+
+  it('recomputes when templates is a different object', () => {
+    const ctx = { characters: charactersA, templateImageUrls: urls };
+    const templatesCopy = { ...templates };
+    const first = resolveEntityRenderTemplate(spawn, templates, ctx);
+    const second = resolveEntityRenderTemplate(spawn, templatesCopy, ctx);
+    expect(second).not.toBe(first);
+  });
+
+  it('keeps entities with no custom renderer equal to resolveEntityTemplate', () => {
+    const plain = entity('other_entity');
+    const plainTemplates: Record<string, EntityTemplate> = {
+      other_entity: {
+        name: 'other_entity',
+        spriteFile: 'plain.png',
+        spriteCut: { x: 1, y: 1 },
+        type: 'horizontal',
+        pivotAdjust: { x: 0, y: 0 },
+        scale: { x: 1, y: 1 },
+        parallaxIntensity: 1,
+      },
+    };
+    const ctx = { characters: charactersA, templateImageUrls: urls };
+    expect(resolveEntityRenderTemplate(plain, plainTemplates, ctx)).toEqual(
+      resolveEntityTemplate(plain, plainTemplates),
+    );
   });
 });

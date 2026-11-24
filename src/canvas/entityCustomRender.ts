@@ -418,20 +418,44 @@ export function getCharacterOverlayLayers(
   return layers.filter((layer): layer is EntityOverlayLayer => layer !== null);
 }
 
+const characterInfoCache = new WeakMap<
+  EntityCustomRenderContext,
+  Map<string, CharacterEntityInfo | null>
+>();
+
+function getContextCharacterInfo(
+  entity: EntityInstance,
+  context: EntityCustomRenderContext,
+): CharacterEntityInfo | null {
+  const fileName = customDataString(entity, "fileName");
+  if (!fileName) return null;
+  let byFile = characterInfoCache.get(context);
+  if (!byFile) {
+    byFile = new Map();
+    characterInfoCache.set(context, byFile);
+  }
+  if (byFile.has(fileName)) {
+    return byFile.get(fileName) ?? null;
+  }
+  const info = getCharacterEntityInfo(
+    entity,
+    context.characters,
+    context.items ?? [],
+    context.templates,
+  );
+  byFile.set(fileName, info);
+  return info;
+}
+
 const characterRenderer: EntityCustomRenderer = {
-  getLabel: (entity, { characters }) =>
-    getCharacterEntityInfo(entity, characters)?.name ?? null,
-  getSpriteFile: (entity, { characters }) =>
-    getCharacterEntityInfo(entity, characters)?.bodySprite ?? null,
-  getBaseColor: (entity, { characters }) =>
-    getCharacterEntityInfo(entity, characters)?.bodyColor ?? null,
-  getOverlayLayers: (entity, { characters, items, templates }) => {
-    const info = getCharacterEntityInfo(
-      entity,
-      characters,
-      items ?? [],
-      templates,
-    );
+  getLabel: (entity, context) =>
+    getContextCharacterInfo(entity, context)?.name ?? null,
+  getSpriteFile: (entity, context) =>
+    getContextCharacterInfo(entity, context)?.bodySprite ?? null,
+  getBaseColor: (entity, context) =>
+    getContextCharacterInfo(entity, context)?.bodyColor ?? null,
+  getOverlayLayers: (entity, context) => {
+    const info = getContextCharacterInfo(entity, context);
     return info ? getCharacterOverlayLayers(info) : [];
   },
 };
@@ -471,6 +495,14 @@ export function getEntityCustomLabel(
   );
 }
 
+const renderTemplateCache = new WeakMap<
+  EntityCustomRenderContext,
+  WeakMap<
+    EntityInstance,
+    { templates: Record<string, EntityTemplate>; result: EntityTemplate | null }
+  >
+>();
+
 /**
  * Template used by the viewport to draw an entity: the normal resolved template,
  * with its sprite replaced when the entity's custom renderer supplies one and the
@@ -485,7 +517,35 @@ export function resolveEntityRenderTemplate(
   const base = resolveEntityTemplate(entity, templates);
   if (!context) return base;
   const renderer = getEntityCustomRenderer(entity.entityName);
-  const spriteFile = renderer?.getSpriteFile?.(entity, context);
+  if (!renderer) return base;
+
+  let byEntity = renderTemplateCache.get(context);
+  const cached = byEntity?.get(entity);
+  if (cached && cached.templates === templates) {
+    return cached.result;
+  }
+
+  const result = computeCustomRenderTemplate(
+    entity,
+    base,
+    renderer,
+    context,
+  );
+  if (!byEntity) {
+    byEntity = new WeakMap();
+    renderTemplateCache.set(context, byEntity);
+  }
+  byEntity.set(entity, { templates, result });
+  return result;
+}
+
+function computeCustomRenderTemplate(
+  entity: EntityInstance,
+  base: EntityTemplate | null,
+  renderer: EntityCustomRenderer,
+  context: EntityCustomRenderContext,
+): EntityTemplate | null {
+  const spriteFile = renderer.getSpriteFile?.(entity, context);
   if (!spriteFile) return base;
   const imageExists = (file: string) =>
     !context.templateImageUrls ||
@@ -494,10 +554,10 @@ export function resolveEntityRenderTemplate(
   // Overlays are drawn only when their image was loaded from the project.
   // A sprite without an atlas is cut by the entity template's own grid cut.
   const gridCut = base?.spriteCut ?? { x: 1, y: 1 };
-  const compositeLayers = (renderer?.getOverlayLayers?.(entity, context) ?? [])
+  const compositeLayers = (renderer.getOverlayLayers?.(entity, context) ?? [])
     .filter((layer) => imageExists(layer.spriteFile))
     .map((layer) => ({ ...layer, spriteCut: layer.spriteCut ?? gridCut }));
-  const bodyColor = renderer?.getBaseColor?.(entity, context) ?? null;
+  const bodyColor = renderer.getBaseColor?.(entity, context) ?? null;
   return {
     name: entity.entityName,
     type: "horizontal",

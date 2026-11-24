@@ -196,15 +196,17 @@ async function scanBlockFiles(
   if (!dirHandle) return [];
   try {
     const fileEntries = await collectAllFiles(dirHandle);
-    const entries: ProjectCharacterEntry[] = [];
-    for (const [relativePath, handle] of fileEntries) {
-      if (relativePath.toLowerCase().endsWith(extension)) {
+    const matching = fileEntries.filter(([relativePath]) =>
+      relativePath.toLowerCase().endsWith(extension),
+    );
+    const entries = await Promise.all(
+      matching.map(async ([relativePath, handle]) => {
         const name = relativePath.split("/").pop() ?? relativePath;
         const context = await readProjectText(handle);
         const parsedData = parseCharacter(context);
-        entries.push({ name, relativePath, handle, objects: parsedData });
-      }
-    }
+        return { name, relativePath, handle, objects: parsedData };
+      }),
+    );
     return entries.sort((a, b) =>
       a.relativePath.localeCompare(b.relativePath),
     );
@@ -703,14 +705,58 @@ export async function rescanProject(
   prefabThumbnailUrls: Record<string, string>;
   scanIssues: ProjectScanIssue[];
 }> {
-  const resolvedPrefabsHandle = await tryGetDirectory(rootHandle, "prefabs");
-  const resolvedNpcsHandle = await tryGetDirectory(rootHandle, "npcs");
-  const scenes = await scanScenes(scenesHandle);
-  const prefabs = await scanPrefabs(resolvedPrefabsHandle);
-  const characters = await scanCharacters(resolvedNpcsHandle);
-  const items = await scanItems(await tryGetDirectory(rootHandle, "items"));
+  const [resolvedPrefabsHandle, resolvedNpcsHandle, resolvedItemsHandle] =
+    await Promise.all([
+      tryGetDirectory(rootHandle, "prefabs"),
+      tryGetDirectory(rootHandle, "npcs"),
+      tryGetDirectory(rootHandle, "items"),
+    ]);
+
+  const [
+    scenesResult,
+    prefabsResult,
+    charactersResult,
+    itemsResult,
+    entitiesResult,
+  ] = await Promise.allSettled([
+    scanScenes(scenesHandle),
+    scanPrefabs(resolvedPrefabsHandle),
+    scanCharacters(resolvedNpcsHandle),
+    scanItems(resolvedItemsHandle),
+    scanEntities(entitiesHandle),
+  ]);
+
+  if (
+    scenesResult.status === "rejected" ||
+    prefabsResult.status === "rejected" ||
+    charactersResult.status === "rejected" ||
+    itemsResult.status === "rejected" ||
+    entitiesResult.status === "rejected"
+  ) {
+    if (entitiesResult.status === "fulfilled") {
+      revokeObjectUrls(
+        entitiesResult.value.templateImageUrls,
+        entitiesResult.value.sprites.map((sprite) => sprite.url),
+      );
+    }
+    const firstRejected = [
+      scenesResult,
+      prefabsResult,
+      charactersResult,
+      itemsResult,
+      entitiesResult,
+    ].find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    )!;
+    throw firstRejected.reason;
+  }
+
+  const scenes = scenesResult.value;
+  const prefabs = prefabsResult.value;
+  const characters = charactersResult.value;
+  const items = itemsResult.value;
   const { templates, templateImageUrls, templateAtlases, sprites, scanIssues } =
-    await scanEntities(entitiesHandle);
+    entitiesResult.value;
   let prefabThumbnailUrls: Record<string, string> = {};
   try {
     const particlesHandle = await tryGetDirectory(rootHandle, "particles");

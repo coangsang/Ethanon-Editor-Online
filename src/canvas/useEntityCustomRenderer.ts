@@ -1,5 +1,5 @@
 /* eslint react-hooks/immutability: off */
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import * as PIXI from 'pixi.js';
 import type { ProjectCharacterEntry, SceneData } from '../types';
 import { transformEventBus } from '../store/TransformEventBus';
@@ -31,6 +31,25 @@ export function useEntityCustomRenderer({
   textureRevision,
   appReadyRevision,
 }: UseEntityCustomRendererParams) {
+  const cameraRef = useRef(camera);
+  const layerRef = useRef<PIXI.Container | null>(null);
+  const labelsRef = useRef(new Map<string, PIXI.Text>());
+
+  const place = useCallback((uid: string) => {
+    const label = labelsRef.current.get(uid);
+    if (!label) return;
+    const mesh = refs.spriteMapRef.current.get(uid);
+    const bounds = refs.boundsMapRef.current.get(uid);
+    if (!mesh || !bounds || !mesh.visible || !mesh.renderable) {
+      label.visible = false;
+      return;
+    }
+    const screen = transformBounds(bounds, cameraRef.current);
+    label.position.set(screen.x + screen.width / 2, screen.y - LABEL_GAP_PX);
+    label.visible = true;
+  }, [refs]);
+
+  // Effect L: own the PIXI layer and transformEventBus subscription
   useEffect(() => {
     const app = refs.appRef.current;
     if (!app) return;
@@ -38,47 +57,12 @@ export function useEntityCustomRenderer({
     const layer = new PIXI.Container();
     layer.eventMode = 'none';
     app.stage.addChild(layer);
+    layerRef.current = layer;
 
-    const labels = new Map<string, PIXI.Text>();
-    const entityByUid = new Map(scene.entities.map(e => [e.editorEntityUID, e]));
-
-    const place = (uid: string) => {
-      const label = labels.get(uid);
-      if (!label) return;
-      const mesh = refs.spriteMapRef.current.get(uid);
-      const bounds = refs.boundsMapRef.current.get(uid);
-      if (!mesh || !bounds || !mesh.visible || !mesh.renderable) {
-        label.visible = false;
-        return;
-      }
-      const screen = transformBounds(bounds, camera);
-      label.position.set(screen.x + screen.width / 2, screen.y - LABEL_GAP_PX);
-      label.visible = true;
-    };
-
-    for (const entity of scene.entities) {
-      if (entity.hide) continue;
-      const text = getEntityCustomLabel(entity, { characters });
-      if (!text) continue;
-      const label = new PIXI.Text({
-        text,
-        style: {
-          fontFamily: 'sans-serif',
-          fontSize: 11,
-          fill: 0xffffff,
-          stroke: { color: 0x000000, width: 3 },
-        },
-      });
-      label.anchor.set(0.5, 1);
-      label.eventMode = 'none';
-      layer.addChild(label);
-      labels.set(entity.editorEntityUID, label);
-      place(entity.editorEntityUID);
-    }
-
+    const labels = labelsRef.current;
     const unsubscribe = transformEventBus.subscribe(updates => {
       for (const update of updates) {
-        if (labels.has(update.uid) && entityByUid.has(update.uid)) place(update.uid);
+        if (labels.has(update.uid)) place(update.uid);
       }
     });
 
@@ -86,6 +70,66 @@ export function useEntityCustomRenderer({
       unsubscribe();
       app.stage.removeChild(layer);
       layer.destroy({ children: true });
+      labels.clear();
+      layerRef.current = null;
     };
-  }, [refs, camera, scene.entities, characters, textureRevision, appReadyRevision]);
+  }, [refs, appReadyRevision, place]);
+
+  // Effect S: reconcile labels with scene entities and characters
+  useEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) return;
+
+    cameraRef.current = camera;
+    const labels = labelsRef.current;
+    const wanted = new Map<string, string>();
+    for (const entity of scene.entities) {
+      if (entity.hide) continue;
+      const text = getEntityCustomLabel(entity, { characters });
+      if (!text) continue;
+      wanted.set(entity.editorEntityUID, text);
+    }
+
+    for (const [uid, label] of labels) {
+      if (!wanted.has(uid)) {
+        label.destroy();
+        labels.delete(uid);
+      }
+    }
+
+    for (const [uid, text] of wanted) {
+      let label = labels.get(uid);
+      if (label) {
+        if (label.text !== text) label.text = text;
+      } else {
+        label = new PIXI.Text({
+          text,
+          style: {
+            fontFamily: 'sans-serif',
+            fontSize: 11,
+            fill: 0xffffff,
+            stroke: { color: 0x000000, width: 3 },
+          },
+        });
+        label.anchor.set(0.5, 1);
+        label.eventMode = 'none';
+        layer.addChild(label);
+        labels.set(uid, label);
+      }
+    }
+
+    for (const uid of labels.keys()) {
+      place(uid);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refs, scene.entities, characters, textureRevision, appReadyRevision]);
+
+  // Effect C: reposition labels on camera change without recreating them
+  useEffect(() => {
+    cameraRef.current = camera;
+    for (const uid of labelsRef.current.keys()) {
+      place(uid);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [camera]);
 }

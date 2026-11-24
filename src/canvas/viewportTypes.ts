@@ -1,5 +1,6 @@
 import type * as PIXI from 'pixi.js';
 import type { EntityInstance, EntityTemplate, ParticleSystemConfig, SceneData, SpriteAtlas } from '../types';
+import type { EntityCustomRenderContext } from './entityCustomRender';
 import type { ParticleSystemRuntime } from './particleSystem';
 
 export type Bounds = { x: number; y: number; width: number; height: number };
@@ -32,7 +33,7 @@ export type MeshSyncRefs = {
   textureRevision: number;
   parallaxOrigin: { x: number; y: number } | null;
   parallaxActive: boolean;
-  customRenderContext: unknown;
+  customRenderContext: EntityCustomRenderContext | null;
 };
 
 export type AxisConstraint = 'x' | 'y' | 'free';

@@ -119,7 +119,8 @@ export function useEntityMeshRenderer({
     if (
       lastSync.entities !== scene.entities ||
       lastSync.templates !== templates ||
-      lastSync.customRenderContext !== customRenderContext ||
+      lastSync.customRenderContext?.characters !== customRenderContext?.characters ||
+      lastSync.customRenderContext?.items !== customRenderContext?.items ||
       lastSync.zAxisDirection !== scene.properties.zAxisDirection
     ) {
       bucketManager.clear();
@@ -358,7 +359,7 @@ export function useEntityMeshRenderer({
         templates,
         templateAtlases,
         textureRevision,
-        customRenderContext,
+        customRenderContext: customRenderContext ?? null,
         parallaxOrigin: parallaxOriginNormalized,
         parallaxActive: parallaxPreviewActive,
       };
