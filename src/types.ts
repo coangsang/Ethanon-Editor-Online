@@ -190,6 +190,8 @@ export interface EntityTemplate {
     behind?: boolean;
     /** Blend mode of this layer when composited (1 = screen); default normal. */
     blendMode?: number;
+    /** Runtime-only RGB (0xRRGGBB) multiplied into this sprite before compositing. */
+    color?: number;
   }[];
 }
 

@@ -289,6 +289,47 @@ describe('getCharacterEntityInfo keepClassHelm', () => {
   });
 });
 
+describe('getCharacterEntityInfo eyeColor', () => {
+  const colorOf = (eyeColor: unknown) => getCharacterEntityInfo(
+    entity('character_spawn', fileName),
+    [character(PATH, [
+      { name: 'other', properties: { eyeColor: 4278255360 } },
+      { name: 'character', properties: { eyeColor } },
+    ])],
+  )?.eyeColor;
+
+  it('reads RGB from the character object and drops alpha, like bodyColor', () => {
+    expect(colorOf(4294901760)).toBe(0xff0000);
+    expect(colorOf('4294901760')).toBe(0xff0000);
+    expect(colorOf(4278190080)).toBe(0x000000);
+  });
+
+  it.each([undefined, null, '', 'invalid', Infinity, 0, '0', 4294967295, 0xffffff])(
+    'uses no eye tint for unset, invalid, or white values (%s)',
+    value => expect(colorOf(value)).toBeNull(),
+  );
+
+  it('carries eye tint and blend mode into the render template independently of bodyColor', () => {
+    const rendered = resolveEntityRenderTemplate(entity('character_spawn', fileName), {}, {
+      characters: [character(PATH, [{ name: 'character', properties: {
+        bodySprite: 'body.png', bodyColor: 4284590503,
+        eyeSprite: 'eyes', eyeColor: 4294901760,
+      } }])],
+      items: [{
+        name: 'body-eye.enml', relativePath: 'body-eye.enml',
+        handle: {} as ProjectItemEntry['handle'],
+        objects: [{ name: 'eyes', properties: { sprite: 'eyes.png', equipEntity: 'eye.ent' } }],
+      }],
+      templates: { 'eye.ent': { blendMode: 1 } as EntityTemplate },
+      templateImageUrls: { 'body.png': 'blob:body', 'eyes.png': 'blob:eyes' },
+    });
+    expect(rendered?.compositeBaseColor).toBe(0x61a9a7);
+    expect(rendered?.compositeLayers).toEqual([
+      { spriteFile: 'eyes.png', spriteCut: { x: 1, y: 1 }, color: 0xff0000, blendMode: 1 },
+    ]);
+  });
+});
+
 describe('getCharacterEquippedItems headlessAlternativeSprite', () => {
   const armor = (properties: Record<string, unknown>) => getCharacterEquippedItems([
     { name: 'equippedItem0', properties: { name: 'Santa Claus', type: 'armor', sprite: 'armor_christmas_2022_A.png', ...properties } },
@@ -310,10 +351,15 @@ describe('getCharacterOverlayLayers', () => {
     fileName: PATH,
     name: 'X',
     bodySprite: 'body.png',
+    bodyColor: null,
     hairName: null,
     hairSprite: null,
     eyeName: null,
     eyeSprite: null,
+    eyeColor: null,
+    threatDetectedSound: null,
+    confusedSound: null,
+    damageSound: null,
     equippedItems: [],
     found: true,
     keepClassHelm: true,

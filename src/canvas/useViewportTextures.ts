@@ -52,6 +52,33 @@ type DeferredTextureCleanup = {
   compositeTextures: PIXI.Texture[];
 };
 
+/** A cache swap can finish before meshes (including particle frames) stop using it. */
+function stageUsesRetiredTextures(
+  stage: PIXI.Container | undefined,
+  cleanup: DeferredTextureCleanup,
+  activeLease: AssetLoadResult<PIXI.Texture> | null,
+): boolean {
+  if (!stage) return false;
+  const retiredTextures = new Set([...cleanup.frameTextures, ...cleanup.compositeTextures]);
+  const activeTextures = new Set(activeLease?.assets.values());
+  const activeSources = new Set([...activeTextures].map(texture => texture.source));
+  const retiredSources = new Set<PIXI.TextureSource>();
+  for (const texture of cleanup.lease?.assets.values() ?? []) {
+    // Shared assets remain retained by the current lease and can be released safely.
+    if (activeTextures.has(texture)) continue;
+    retiredTextures.add(texture);
+    if (texture.source && !activeSources.has(texture.source)) retiredSources.add(texture.source);
+  }
+  const pending: PIXI.Container[] = [stage];
+  while (pending.length > 0) {
+    const object = pending.pop()!;
+    const texture = 'texture' in object ? object.texture as PIXI.Texture | null : null;
+    if (texture && (retiredTextures.has(texture) || retiredSources.has(texture.source))) return true;
+    pending.push(...object.children);
+  }
+  return false;
+}
+
 type UseViewportTexturesParams = {
   refs: ViewportRefs;
   sceneEntities: ReturnType<typeof import('../store/sceneStore').useSceneStore.getState>['scene']['entities'];
@@ -193,17 +220,24 @@ export function useViewportTextures({
         },
       );
 
-      const cleanupFrame = requestAnimationFrame(() => {
-        deferredCleanupRef.current.delete(cleanupFrame);
-        destroyFrameTextures(previousFrameTextures);
-        destroyCompositeTextures(previousCompositeTextures);
-        if (previousLease) void releaseLease(previousLease, 'cache swap');
-      });
-      deferredCleanupRef.current.set(cleanupFrame, {
+      const cleanup: DeferredTextureCleanup = {
         lease: previousLease,
         frameTextures: previousFrameTextures,
         compositeTextures: previousCompositeTextures,
-      });
+      };
+      const disposeWhenUnused = () => {
+        deferredCleanupRef.current.delete(cleanupFrame);
+        if (stageUsesRetiredTextures(refs.appRef?.current?.stage, cleanup, activeLeaseRef.current)) {
+          cleanupFrame = requestAnimationFrame(disposeWhenUnused);
+          deferredCleanupRef.current.set(cleanupFrame, cleanup);
+          return;
+        }
+        destroyFrameTextures(previousFrameTextures);
+        destroyCompositeTextures(previousCompositeTextures);
+        if (previousLease) void releaseLease(previousLease, 'cache swap');
+      };
+      let cleanupFrame = requestAnimationFrame(disposeWhenUnused);
+      deferredCleanupRef.current.set(cleanupFrame, cleanup);
     };
 
     void load();
@@ -363,7 +397,7 @@ export function useViewportTextures({
         0,
       ),
       position: layer.offset,
-      color: layer === base ? template.compositeBaseColor : undefined,
+      color: layer === base ? template.compositeBaseColor : ('color' in layer ? layer.color : undefined),
       blendMode: 'blendMode' in layer ? layer.blendMode : undefined,
       // A layer's angle (the weapon's `equippedAngle`) is clockwise on screen, unlike an entity angle.
       rotation: (layer.angle ?? 0) * (Math.PI / 180),

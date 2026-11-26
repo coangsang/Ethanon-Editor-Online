@@ -150,4 +150,27 @@ describe('Inspector custom mode', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Character' }));
     expect(screen.getByText('No fileName in custom data')).toBeTruthy();
   });
+
+  it('shows eyeColor as a swatch and RGB value, and hides it when unset', () => {
+    useSceneStore.setState({
+      projectCharacters: [{ ...BLOOD_PRIEST, objects: [{
+        name: 'character', properties: { eyeColor: 4294901760 },
+      }] }],
+    });
+    loadEntity('character_spawn', 'npcs/enemies/blood-priest.character');
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    expect(screen.getByText('Eye Color')).toBeTruthy();
+    const value = screen.getByTitle('eyeColor (multiplied into Eyes)');
+    expect(value.textContent).toBe('#FF0000');
+    expect((value.previousElementSibling as HTMLElement).style.backgroundColor).toBe('rgb(255, 0, 0)');
+
+    cleanup();
+    useSceneStore.setState({ projectCharacters: [BLOOD_PRIEST] });
+    render(<Inspector />);
+    if (screen.getByRole('button', { name: 'Character' }).getAttribute('aria-pressed') !== 'true') {
+      fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    }
+    expect(screen.queryByText('Eye Color')).toBeNull();
+  });
 });

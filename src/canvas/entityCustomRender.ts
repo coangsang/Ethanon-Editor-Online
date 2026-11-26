@@ -289,7 +289,7 @@ export function getCharacterEquippedItems(
 }
 
 /** uint color (e.g. 4284590503): the low 24 bits are RGB, the alpha byte is ignored. White means no tint. */
-function parseBodyColor(value: unknown): number | null {
+function parseCharacterColor(value: unknown): number | null {
   const parsed = finiteNumber(value);
   if (parsed === null) return null;
   // 0 is the unset value (not black); white multiplies to nothing.
@@ -315,6 +315,8 @@ export type CharacterEntityInfo = {
   eyeName: string | null;
   /** `sprite` of the `.enml` item named by `eyeName`, or null when not found. */
   eyeSprite: string | null;
+  /** `character.properties.eyeColor` as 0xRRGGBB (alpha dropped); null when unset or white. */
+  eyeColor: number | null;
   /** Blend mode of the eye layer: that of the item's `equipEntity` template; absent when normal or not found. */
   eyeBlendMode?: number;
   /** Armor, artifact, and weapon blocks `equippedItem0`..`equippedItem2`. */
@@ -353,11 +355,12 @@ export function getCharacterEntityInfo(
     fileName,
     name: characterDisplayName(fileName, characters),
     bodySprite: nonEmptyString(properties?.bodySprite),
-    bodyColor: parseBodyColor(properties?.bodyColor),
+    bodyColor: parseCharacterColor(properties?.bodyColor),
     hairName,
     hairSprite: hairName ? findItemSprite(hairName, items) : null,
     eyeName,
     eyeSprite: nonEmptyString(eyeProperties?.sprite),
+    eyeColor: parseCharacterColor(properties?.eyeColor),
     ...(eyeBlendMode ? { eyeBlendMode } : {}),
     equippedItems: getCharacterEquippedItems(entry?.objects, items),
     threatDetectedSound: nonEmptyString(properties?.threatDetectedSound),
@@ -397,6 +400,7 @@ export function getCharacterOverlayLayers(
     info.eyeSprite
       ? {
           spriteFile: info.eyeSprite,
+          ...(info.eyeColor !== null ? { color: info.eyeColor } : {}),
           ...(info.eyeBlendMode ? { blendMode: info.eyeBlendMode } : {}),
         }
       : null,

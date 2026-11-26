@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntityTemplate } from '../../types';
 import type { ViewportRefs } from '../viewportTypes';
@@ -60,9 +60,62 @@ beforeEach(() => {
   pixiAssets.unload.mockReset().mockResolvedValue(undefined);
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('useViewportTextures transactional commits', () => {
+  it.each(['frame', 'particle', 'independent frame'])(
+    'keeps retired textures alive while a %s on stage still uses them',
+    async kind => {
+      let nextId = 0;
+      const callbacks = new Map<number, FrameRequestCallback>();
+      vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        callbacks.set(++nextId, callback);
+        return nextId;
+      });
+      vi.stubGlobal('cancelAnimationFrame', (id: number) => callbacks.delete(id));
+      const flushFrames = () => act(() => {
+        const pending = [...callbacks.values()];
+        callbacks.clear();
+        pending.forEach(callback => callback(performance.now()));
+      });
+      const oldSource = {};
+      const oldTexture = { source: oldSource };
+      const newTexture = { source: {} };
+      pixiAssets.load.mockImplementation(({ src }: { src: string }) =>
+        Promise.resolve(src === 'old-url' ? oldTexture : newTexture));
+      const refs = createTextureRefs();
+      const frame = { source: kind === 'independent frame' ? {} : oldSource, destroy: vi.fn() };
+      const child = { texture: frame, children: [], visible: false };
+      const stage = { children: [child] };
+      refs.appRef = { current: { stage } } as unknown as ViewportRefs['appRef'];
+      const { rerender } = renderHook(props => useViewportTextures(props), {
+        initialProps: hookProps(refs, 'old-url'),
+      });
+      await waitFor(() => expect(refs.baseTextureMapRef.current.get('hero.png')).toBe(oldTexture));
+      // Particle subtextures have the old source but are owned by their runtime.
+      if (kind !== 'particle') {
+        refs.frameTextureMapRef.current.set('old-frame', frame as never);
+      }
+      flushFrames();
+      rerender(hookProps(refs, 'new-url'));
+      await waitFor(() => expect(refs.baseTextureMapRef.current.get('hero.png')).toBe(newTexture));
+
+      flushFrames();
+      flushFrames();
+      expect(frame.destroy).not.toHaveBeenCalled();
+      expect(pixiAssets.unload).not.toHaveBeenCalledWith('old-url');
+
+      child.texture = { source: newTexture.source, destroy: vi.fn() };
+      flushFrames();
+      if (kind !== 'particle') expect(frame.destroy).toHaveBeenCalledWith(false);
+      else expect(frame.destroy).not.toHaveBeenCalled();
+      await waitFor(() => expect(pixiAssets.unload).toHaveBeenCalledWith('old-url'));
+    },
+  );
+
   it('does not let an older generation overwrite a newer cache', async () => {
     const oldLoad = deferred<object>();
     const newLoad = deferred<object>();

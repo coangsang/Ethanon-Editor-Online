@@ -154,6 +154,19 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
               </button>
             </div>
           )}
+          {info.eyeColor !== null && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 w-14 shrink-0">Eye Color</span>
+              <span
+                className="inline-block w-4 h-4 shrink-0 border border-gray-600"
+                style={{ backgroundColor: `#${info.eyeColor.toString(16).padStart(6, '0')}` }}
+                aria-hidden="true"
+              />
+              <span className="flex-1 min-w-0 truncate text-[10px] text-gray-300 font-mono" title="eyeColor (multiplied into Eyes)">
+                #{info.eyeColor.toString(16).padStart(6, '0').toUpperCase()}
+              </span>
+            </div>
+          )}
           {info.equippedItems.map(item => {
             // Like hair, an item is shown only when its sprite image was loaded from the project.
             const itemImageUrl = item.sprite ? resolveImageUrl(templateImageUrls, item.sprite) : null;
