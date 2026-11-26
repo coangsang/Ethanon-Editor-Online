@@ -30,6 +30,23 @@ function character(relativePath: string, objects: ProjectCharacterEntry['objects
   };
 }
 
+describe('character resistance', () => {
+  it.each([undefined, true, '40', 2.5, NaN, Infinity])('ignores absent or non-integer resistance %s', resistance => {
+    const characters = [character('enemies/blood-priest.character', [
+      { name: 'character', properties: { resistance: resistance as number } },
+    ])];
+    expect(getCharacterEntityInfo(entity('character_spawn', fileName), characters)?.resistance).toBeNull();
+  });
+
+  it.each([0, 40, 50, 41])('reads integer resistance %s from the character block', resistance => {
+    const characters = [character('enemies/blood-priest.character', [
+      { name: 'other', properties: { resistance: 999 } },
+      { name: 'character', properties: { resistance } },
+    ])];
+    expect(getCharacterEntityInfo(entity('character_spawn', fileName), characters)?.resistance).toBe(resistance);
+  });
+});
+
 describe('entity custom render registry', () => {
   it('uses character.properties.name from the existing character file', () => {
     const characters = [
@@ -363,6 +380,7 @@ describe('getCharacterOverlayLayers', () => {
     equippedItems: [],
     found: true,
     keepClassHelm: true,
+    resistance: null,
     ...overrides,
   });
 

@@ -1,9 +1,11 @@
 /* eslint react-hooks/immutability: off */
-import { useCallback, useEffect, useRef } from 'react';
+import { createElement, useCallback, useEffect, useRef } from 'react';
 import * as PIXI from 'pixi.js';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { Heart } from 'lucide-react';
 import type { ProjectCharacterEntry, SceneData } from '../types';
 import { transformEventBus } from '../store/TransformEventBus';
-import { getEntityCustomLabel } from './entityCustomRender';
+import { getCharacterEntityInfo, getEntityCustomLabel } from './entityCustomRender';
 import { transformBounds } from './viewportMath';
 import type { ViewportRefs } from './viewportTypes';
 
@@ -17,6 +19,8 @@ type UseEntityCustomRendererParams = {
 };
 
 const LABEL_GAP_PX = 2;
+const HEART_SIZE_PX = 12;
+const HEART_SVG = renderToStaticMarkup(createElement(Heart, { color: '#ffffff', fill: '#ffffff' }));
 
 /**
  * Draws entity-name based custom visuals (currently text labels) in screen
@@ -34,19 +38,28 @@ export function useEntityCustomRenderer({
   const cameraRef = useRef(camera);
   const layerRef = useRef<PIXI.Container | null>(null);
   const labelsRef = useRef(new Map<string, PIXI.Text>());
+  const heartsRef = useRef(new Map<string, PIXI.Graphics>());
 
   const place = useCallback((uid: string) => {
     const label = labelsRef.current.get(uid);
     if (!label) return;
+    const heart = heartsRef.current.get(uid);
     const mesh = refs.spriteMapRef.current.get(uid);
     const bounds = refs.boundsMapRef.current.get(uid);
     if (!mesh || !bounds || !mesh.visible || !mesh.renderable) {
       label.visible = false;
+      if (heart) heart.visible = false;
       return;
     }
     const screen = transformBounds(bounds, cameraRef.current);
-    label.position.set(screen.x + screen.width / 2, screen.y - LABEL_GAP_PX);
+    const centerX = screen.x + screen.width / 2;
+    const bottomY = screen.y - LABEL_GAP_PX;
+    label.position.set(centerX - (heart ? (HEART_SIZE_PX + 2) / 2 : 0), bottomY);
     label.visible = true;
+    if (heart) {
+      heart.position.set(centerX + label.width / 2 - HEART_SIZE_PX / 2 + 1, bottomY - HEART_SIZE_PX);
+      heart.visible = true;
+    }
   }, [refs]);
 
   // Effect L: own the PIXI layer and transformEventBus subscription
@@ -60,6 +73,7 @@ export function useEntityCustomRenderer({
     layerRef.current = layer;
 
     const labels = labelsRef.current;
+    const hearts = heartsRef.current;
     const unsubscribe = transformEventBus.subscribe(updates => {
       for (const update of updates) {
         if (labels.has(update.uid)) place(update.uid);
@@ -71,6 +85,7 @@ export function useEntityCustomRenderer({
       app.stage.removeChild(layer);
       layer.destroy({ children: true });
       labels.clear();
+      hearts.clear();
       layerRef.current = null;
     };
   }, [refs, appReadyRevision, place]);
@@ -82,12 +97,23 @@ export function useEntityCustomRenderer({
 
     cameraRef.current = camera;
     const labels = labelsRef.current;
+    const hearts = heartsRef.current;
     const wanted = new Map<string, string>();
+    const withHearts = new Set<string>();
     for (const entity of scene.entities) {
       if (entity.hide) continue;
       const text = getEntityCustomLabel(entity, { characters });
       if (!text) continue;
-      wanted.set(entity.editorEntityUID, text);
+      const resistance = getCharacterEntityInfo(entity, characters)?.resistance;
+      wanted.set(entity.editorEntityUID, resistance != null ? `${text} x${resistance / 20}` : text);
+      if (resistance != null) withHearts.add(entity.editorEntityUID);
+    }
+
+    for (const [uid, heart] of hearts) {
+      if (!withHearts.has(uid)) {
+        heart.destroy();
+        hearts.delete(uid);
+      }
     }
 
     for (const [uid, label] of labels) {
@@ -98,6 +124,13 @@ export function useEntityCustomRenderer({
     }
 
     for (const [uid, text] of wanted) {
+      if (withHearts.has(uid) && !hearts.has(uid)) {
+        const heart = new PIXI.Graphics().svg(HEART_SVG);
+        heart.scale.set(HEART_SIZE_PX / 24);
+        heart.eventMode = 'none';
+        layer.addChild(heart);
+        hearts.set(uid, heart);
+      }
       let label = labels.get(uid);
       if (label) {
         if (label.text !== text) label.text = text;

@@ -42,6 +42,19 @@ afterEach(() => {
 });
 
 describe('Inspector custom mode', () => {
+  it.each([[40, '2'], [50, '2.5'], [0, '0'], [41, '2.05']])('shows %s res with x%s hearts', (resistance, hearts) => {
+    useSceneStore.setState({ projectCharacters: [{
+      ...BLOOD_PRIEST,
+      objects: [{ name: 'character', properties: { name: 'Blood Priest', resistance } }],
+    }] });
+    loadEntity('character_spawn', 'npcs/enemies/blood-priest.character');
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    const value = screen.getByLabelText(`${resistance} resistance, ${hearts} hearts`);
+    expect(value.textContent).toContain(`x${hearts}`);
+    expect(value.querySelector('svg.lucide-heart')).toBeTruthy();
+  });
+
   it('does not offer custom mode for entities without a custom inspector', () => {
     loadEntity('character_spawn.ent', 'npcs/enemies/blood-priest.character');
     render(<Inspector />);
@@ -68,6 +81,7 @@ describe('Inspector custom mode', () => {
     expect(screen.queryByText('Identity')).toBeNull();
     expect(screen.getByText('Character', { selector: '.inspector-section-title' })).toBeTruthy();
     expect(screen.getByText('Blood Priest')).toBeTruthy();
+    expect(screen.queryByText('Resistance')).toBeNull();
     expect(screen.getByText('npcs/enemies/blood-priest.character')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'entity/blood_priest.png' })).toBeTruthy();
     expect(screen.getByText('Body')).toBeTruthy();

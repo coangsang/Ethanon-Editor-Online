@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Play, Square } from 'lucide-react';
+import { Heart, Play, Square } from 'lucide-react';
 import type { EntityInstance } from '../../types';
 import { readProjectSound } from '../../io/projectFolder';
 import type { ProjectDirectoryHandle } from '../../io/projectFolder';
@@ -94,6 +94,15 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
               {info.name}
             </span>
           </div>
+          {info.resistance !== null && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 min-w-14 shrink-0">Resistance</span>
+              <span className="inline-flex items-center gap-1 text-xs text-gray-200" aria-label={`${info.resistance} resistance, ${info.resistance / 20} hearts`}>
+                {info.resistance} · x{info.resistance / 20}
+                <Heart size={12} fill="currentColor" aria-hidden="true" />
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-400 w-14 shrink-0">File</span>
             <span className="flex-1 min-w-0 truncate text-[10px] text-gray-300 font-mono" title={info.fileName}>

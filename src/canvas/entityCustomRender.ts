@@ -303,6 +303,8 @@ export type CharacterEntityInfo = {
   fileName: string;
   /** Display name (see `characterDisplayName`). */
   name: string;
+  /** Optional integer resistance from the character block; 20 equals one heart. */
+  resistance: number | null;
   /** `character.properties.bodySprite`, or null when missing. */
   bodySprite: string | null;
   /** `character.properties.bodyColor` as 0xRRGGBB (alpha dropped); null when missing or white. */
@@ -354,6 +356,8 @@ export function getCharacterEntityInfo(
   return {
     fileName,
     name: characterDisplayName(fileName, characters),
+    resistance: typeof properties?.resistance === "number" && Number.isInteger(properties.resistance)
+      ? properties.resistance : null,
     bodySprite: nonEmptyString(properties?.bodySprite),
     bodyColor: parseCharacterColor(properties?.bodyColor),
     hairName,
