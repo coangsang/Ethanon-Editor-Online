@@ -63,7 +63,7 @@ function SoundRow({ label, fileName, rootHandle }: { label: string; fileName: st
   );
 }
 import { useSceneStore } from '../../store/sceneStore';
-import { getCharacterEntityInfo } from '../../canvas/entityCustomRender';
+import { ATTACK_MINIMUM_DISTANCE_COLOR, FIELD_OF_VIEW_COLOR, getCharacterEntityInfo } from '../../canvas/entityCustomRender';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
 
 /** Custom Inspector for entities drawn from a `.character` file (customData `fileName`). */
@@ -100,6 +100,39 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
               <span className="inline-flex items-center gap-1 text-xs text-gray-200" aria-label={`${info.resistance} resistance, ${info.resistance / 20} hearts`}>
                 {info.resistance} · x{info.resistance / 20}
                 <Heart size={12} fill="currentColor" aria-hidden="true" />
+              </span>
+            </div>
+          )}
+          {([
+            ['Level', info.level],
+            ['Speed', info.speed],
+            ['Jump Impulse', info.jumpImpulse],
+            ['Scale', info.scale],
+          ] as const).map(([label, value]) => value !== null && (
+            <div key={label} className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 min-w-14 shrink-0">{label}</span>
+              <span className="text-xs text-gray-200" aria-label={`${label}: ${value}`}>{value}</span>
+            </div>
+          ))}
+          {info.attackMinimumDistance !== null && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 shrink-0">Attack Minimum Distance</span>
+              <span className="inline-flex items-center gap-1 text-xs text-gray-200" aria-label={`Attack Minimum Distance: ${info.attackMinimumDistance}`}>
+                {info.attackMinimumDistance}
+                <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: `#${ATTACK_MINIMUM_DISTANCE_COLOR.toString(16)}` }} aria-hidden="true" />
+              </span>
+            </div>
+          )}
+          {info.fieldOfView !== null && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 shrink-0">Field of View</span>
+              <span
+                className="inline-flex items-center gap-1 text-xs text-gray-200"
+                aria-label={`Field of View: ${info.fieldOfView} degrees, ${info.fieldOfView * 2} degrees total`}
+                title="Projected angle is twice fieldOfView. The guide has an illustrative radius of 80 scene units and scales with camera zoom; it shows the angle, not sight range. Angles of 360° or more are drawn as a full circle."
+              >
+                {info.fieldOfView}° ({info.fieldOfView * 2}° total)
+                <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: `#${FIELD_OF_VIEW_COLOR.toString(16)}` }} aria-hidden="true" />
               </span>
             </div>
           )}

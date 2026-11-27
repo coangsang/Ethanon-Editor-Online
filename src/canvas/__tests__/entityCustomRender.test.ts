@@ -381,6 +381,12 @@ describe('getCharacterOverlayLayers', () => {
     found: true,
     keepClassHelm: true,
     resistance: null,
+    level: null,
+    speed: null,
+    jumpImpulse: null,
+    scale: null,
+    attackMinimumDistance: null,
+    fieldOfView: null,
     ...overrides,
   });
 

@@ -42,6 +42,98 @@ afterEach(() => {
 });
 
 describe('Inspector custom mode', () => {
+  it.each([[45, 90], [90, 180], [190, 380], [270, 540], [0, 0], ['45', 90]])(
+    'shows fieldOfView %s and doubled angle %s with a blue marker', (fieldOfView, total) => {
+      useSceneStore.setState({ projectCharacters: [{ ...BLOOD_PRIEST, objects: [
+        { name: 'other', properties: { fieldOfView: 999 } },
+        { name: 'character', properties: { fieldOfView } },
+      ] }] });
+      loadEntity('character_spawn', 'npcs/enemies/blood-priest.character');
+      render(<Inspector />);
+      fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+      const value = screen.getByLabelText(`Field of View: ${fieldOfView} degrees, ${total} degrees total`);
+      expect(value.textContent).toBe(`${fieldOfView}° (${total}° total)`);
+      expect((value.firstElementChild as HTMLElement).style.backgroundColor).toBe('rgb(56, 189, 248)');
+      expect(value.title).toContain('not sight range');
+    },
+  );
+
+  it.each([{}, { fieldOfView: 'invalid' }, { fieldOfView: Infinity }, { fieldOfView: -1 }, { fieldOfView: '-45' }])('hides missing or invalid fieldOfView: %o', properties => {
+    useSceneStore.setState({ projectCharacters: [{ ...BLOOD_PRIEST, objects: [
+      { name: 'other', properties: { fieldOfView: 45 } }, { name: 'character', properties },
+    ] }] });
+    loadEntity('character_spawn', 'npcs/enemies/blood-priest.character');
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    expect(screen.queryByText('Field of View')).toBeNull();
+  });
+
+  it.each([300, 0, '300'])('shows attack minimum distance %s with an orange marker', attackMinimumDistance => {
+    useSceneStore.setState({ projectCharacters: [{ ...BLOOD_PRIEST, objects: [
+      { name: 'other', properties: { attackMinimumDistance: 999 } },
+      { name: 'character', properties: { attackMinimumDistance } },
+    ] }] });
+    loadEntity('character_spawn', 'npcs/enemies/blood-priest.character');
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    const value = screen.getByLabelText(`Attack Minimum Distance: ${attackMinimumDistance}`);
+    expect(value.textContent).toBe(String(attackMinimumDistance));
+    expect((value.firstElementChild as HTMLElement).style.backgroundColor).toBe('rgb(249, 115, 22)');
+  });
+
+  it.each([{}, { attackMinimumDistance: -1 }, { attackMinimumDistance: '-300' }, { attackMinimumDistance: 'invalid' }])(
+    'hides missing, negative, or invalid attack minimum distance: %o', properties => {
+      useSceneStore.setState({ projectCharacters: [{ ...BLOOD_PRIEST, objects: [
+        { name: 'other', properties: { attackMinimumDistance: 300 } }, { name: 'character', properties },
+      ] }] });
+      loadEntity('character_spawn', 'npcs/enemies/blood-priest.character');
+      render(<Inspector />);
+      fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+      expect(screen.queryByText('Attack Minimum Distance')).toBeNull();
+    },
+  );
+
+  it.each([
+    { level: 1, speed: 7.0, jumpImpulse: 35, scale: 1.1 },
+    { level: 0, speed: 0, jumpImpulse: 0, scale: 0 },
+    { level: '1', speed: '7.0', jumpImpulse: '35', scale: '1.1' },
+  ])('shows numeric stats from the character block: %o', properties => {
+    useSceneStore.setState({ projectCharacters: [{
+      ...BLOOD_PRIEST,
+      objects: [
+        { name: 'other', properties: { level: 99, speed: 99, jumpImpulse: 99, scale: 99 } },
+        { name: 'character', properties },
+      ],
+    }] });
+    loadEntity('character_spawn', 'npcs/enemies/blood-priest.character');
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    for (const [label, value] of [
+      ['Level', properties.level], ['Speed', properties.speed],
+      ['Jump Impulse', properties.jumpImpulse], ['Scale', properties.scale],
+    ]) {
+      expect(screen.getByLabelText(`${label}: ${Number(value)}`).textContent).toBe(String(Number(value)));
+    }
+  });
+
+  it.each([{}, { level: '', speed: 'invalid', jumpImpulse: Infinity, scale: true }])(
+    'hides absent or invalid character stats: %o', properties => {
+      useSceneStore.setState({ projectCharacters: [{
+        ...BLOOD_PRIEST,
+        objects: [
+          { name: 'other', properties: { level: 99, speed: 99, jumpImpulse: 99, scale: 99 } },
+          { name: 'character', properties },
+        ],
+      }] });
+      loadEntity('character_spawn', 'npcs/enemies/blood-priest.character');
+      render(<Inspector />);
+      fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+      for (const label of ['Level', 'Speed', 'Jump Impulse', 'Scale']) {
+        expect(screen.queryByText(label)).toBeNull();
+      }
+    },
+  );
+
   it.each([[40, '2'], [50, '2.5'], [0, '0'], [41, '2.05']])('shows %s res with x%s hearts', (resistance, hearts) => {
     useSceneStore.setState({ projectCharacters: [{
       ...BLOOD_PRIEST,

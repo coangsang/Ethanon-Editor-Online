@@ -12,6 +12,9 @@ import {
 } from "../utils/entityTemplate";
 import { resolveImageUrl } from "../utils/resolveImageUrl";
 
+export const ATTACK_MINIMUM_DISTANCE_COLOR = 0xf97316;
+export const FIELD_OF_VIEW_COLOR = 0x38bdf8;
+
 /**
  * Custom render hooks keyed by the scene entity's `EntityName`.
  *
@@ -201,6 +204,11 @@ function finiteNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function nonNegativeNumber(value: unknown): number | null {
+  const parsed = finiteNumber(value);
+  return parsed !== null && parsed >= 0 ? parsed : null;
+}
+
 /** Weapon hold transform; each property missing or not a number uses its default. */
 function getWeaponEquip(
   properties: Record<string, unknown>,
@@ -305,6 +313,14 @@ export type CharacterEntityInfo = {
   name: string;
   /** Optional integer resistance from the character block; 20 equals one heart. */
   resistance: number | null;
+  /** Optional numeric stats from the character block. */
+  level: number | null;
+  speed: number | null;
+  jumpImpulse: number | null;
+  scale: number | null;
+  attackMinimumDistance: number | null;
+  /** Half-angle in degrees (null when negative); the game's projected angle is twice this value. */
+  fieldOfView: number | null;
   /** `character.properties.bodySprite`, or null when missing. */
   bodySprite: string | null;
   /** `character.properties.bodyColor` as 0xRRGGBB (alpha dropped); null when missing or white. */
@@ -358,6 +374,12 @@ export function getCharacterEntityInfo(
     name: characterDisplayName(fileName, characters),
     resistance: typeof properties?.resistance === "number" && Number.isInteger(properties.resistance)
       ? properties.resistance : null,
+    level: finiteNumber(properties?.level),
+    speed: finiteNumber(properties?.speed),
+    jumpImpulse: finiteNumber(properties?.jumpImpulse),
+    scale: finiteNumber(properties?.scale),
+    attackMinimumDistance: nonNegativeNumber(properties?.attackMinimumDistance),
+    fieldOfView: nonNegativeNumber(properties?.fieldOfView),
     bodySprite: nonEmptyString(properties?.bodySprite),
     bodyColor: parseCharacterColor(properties?.bodyColor),
     hairName,

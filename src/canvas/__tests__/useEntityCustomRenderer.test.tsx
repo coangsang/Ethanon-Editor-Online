@@ -5,6 +5,7 @@ import type { EntityInstance, ProjectCharacterEntry, SceneData } from '../../typ
 import { transformEventBus } from '../../store/TransformEventBus';
 import type { ViewportRefs } from '../viewportTypes';
 import { useEntityCustomRenderer } from '../useEntityCustomRenderer';
+import { ATTACK_MINIMUM_DISTANCE_COLOR, FIELD_OF_VIEW_COLOR } from '../entityCustomRender';
 
 const { createdTexts, createdContainers, createdHearts, MockGraphics, MockContainer, MockText } = vi.hoisted(() => {
   class Graphics {
@@ -14,6 +15,13 @@ const { createdTexts, createdContainers, createdHearts, MockGraphics, MockContai
     position = { set: vi.fn() };
     destroy = vi.fn();
     svg = vi.fn(() => this);
+    clear = vi.fn(() => this);
+    moveTo = vi.fn(() => this);
+    lineTo = vi.fn(() => this);
+    stroke = vi.fn(() => this);
+    circle = vi.fn(() => this);
+    arc = vi.fn(() => this);
+    fill = vi.fn(() => this);
     constructor() { hearts.push(this); }
   }
   const hearts: Graphics[] = [];
@@ -122,6 +130,135 @@ afterEach(() => {
 });
 
 describe('useEntityCustomRenderer', () => {
+  const characterWithFov = (fieldOfView: number | string | boolean): ProjectCharacterEntry => ({
+    name: 'blood-priest.character', relativePath: 'blood-priest.character',
+    handle: {} as ProjectCharacterEntry['handle'],
+    objects: [{ name: 'character', properties: { fieldOfView } }],
+  });
+
+  it('draws a 90 degree guide for fieldOfView 45 and follows position, flip, and camera', () => {
+    const { refs, spriteMap } = makeRefs();
+    const entity = { ...makeEntity(), position: { x: 100, y: 50, z: 0 }, angle: 90 };
+    const initialProps = {
+      refs, camera: { x: 5, y: 7, zoom: 2 }, scene: makeScene([entity]),
+      characters: [characterWithFov(45)], textureRevision: 0, appReadyRevision: 1,
+    };
+    const { rerender, unmount } = renderHook(props => useEntityCustomRenderer(props), { initialProps });
+    const guide = createdHearts[0];
+    expect(guide.position.set).toHaveBeenLastCalledWith(205, 107);
+    expect(guide.arc).toHaveBeenLastCalledWith(0, 0, 160, -Math.PI / 4, Math.PI / 4);
+    expect(guide.fill).toHaveBeenCalledWith({ color: FIELD_OF_VIEW_COLOR, alpha: 0.08 });
+    expect(guide.lineTo).toHaveBeenLastCalledWith(160, 0);
+    expect(guide.eventMode).toBe('none');
+
+    act(() => transformEventBus.emit([{ uid: 'uid-1', x: 200, flipX: true }]));
+    act(() => transformEventBus.emit([{ uid: 'uid-1', y: 80, angle: 30, flipY: true }]));
+    expect(guide.position.set).toHaveBeenLastCalledWith(405, 167);
+    expect(guide.arc).toHaveBeenLastCalledWith(0, 0, 160, 3 * Math.PI / 4, 5 * Math.PI / 4);
+    expect(guide.lineTo).toHaveBeenLastCalledWith(-160, 0);
+    rerender({ ...initialProps, camera: { x: 10, y: 20, zoom: 0.5 } });
+    expect(createdHearts).toHaveLength(1);
+    expect(guide.position.set).toHaveBeenLastCalledWith(110, 60);
+    expect(guide.arc).toHaveBeenLastCalledWith(0, 0, 40, 3 * Math.PI / 4, 5 * Math.PI / 4);
+    expect(guide.lineTo).toHaveBeenLastCalledWith(-40, 0);
+
+    spriteMap.get('uid-1')!.visible = false;
+    act(() => transformEventBus.emit([{ uid: 'uid-1', hide: true }]));
+    expect(guide.visible).toBe(false);
+    spriteMap.get('uid-1')!.visible = true;
+    rerender({ ...initialProps, characters: [characterWithFov(90)] });
+    expect(guide.visible).toBe(true);
+    expect(guide.arc).toHaveBeenLastCalledWith(0, 0, 160, -Math.PI / 2, Math.PI / 2);
+    rerender({ ...initialProps, characters: [] });
+    expect(guide.destroy).toHaveBeenCalledOnce();
+    unmount();
+    expect(createdContainers[1].destroy).toHaveBeenCalledWith({ children: true });
+  });
+
+  it.each([180, 190, 270])('draws a full circle for fieldOfView %s without wrapping', fieldOfView => {
+    const { refs } = makeRefs();
+    renderHook(() => useEntityCustomRenderer({
+      refs, camera: { x: 0, y: 0, zoom: 1 }, scene: makeScene([{ ...makeEntity(), flipX: true }]),
+      characters: [characterWithFov(fieldOfView)], textureRevision: 0, appReadyRevision: 1,
+    }));
+    expect(createdHearts[0].circle).toHaveBeenCalledWith(0, 0, 80);
+    expect(createdHearts[0].arc).not.toHaveBeenCalled();
+    expect(createdHearts[0].lineTo).toHaveBeenLastCalledWith(-80, 0);
+  });
+
+  it.each([-1, Infinity, NaN, 'invalid', true])('does not draw invalid fieldOfView %s', fieldOfView => {
+    const { refs } = makeRefs();
+    renderHook(() => useEntityCustomRenderer({
+      refs, camera: { x: 0, y: 0, zoom: 1 }, scene: makeScene([makeEntity()]),
+      characters: [characterWithFov(fieldOfView)], textureRevision: 0, appReadyRevision: 1,
+    }));
+    expect(createdHearts).toHaveLength(0);
+  });
+
+  it('draws only the direction for zero fieldOfView', () => {
+    const { refs } = makeRefs();
+    renderHook(() => useEntityCustomRenderer({
+      refs, camera: { x: 0, y: 0, zoom: 1 }, scene: makeScene([makeEntity()]),
+      characters: [characterWithFov(0)], textureRevision: 0, appReadyRevision: 1,
+    }));
+    expect(createdHearts[0].arc).not.toHaveBeenCalled();
+    expect(createdHearts[0].lineTo).toHaveBeenLastCalledWith(80, 0);
+  });
+
+  it('draws the attack distance around entity position and follows camera and live moves', () => {
+    const { refs, spriteMap } = makeRefs();
+    const entity = { ...makeEntity(), position: { x: 100, y: 50, z: 0 }, angle: 90, flipX: true };
+    const characters: ProjectCharacterEntry[] = [{
+      name: 'blood-priest.character', relativePath: 'blood-priest.character',
+      handle: {} as ProjectCharacterEntry['handle'],
+      objects: [{ name: 'character', properties: { attackMinimumDistance: 300 } }],
+    }];
+    const initialProps = {
+      refs, camera: { x: 5, y: 7, zoom: 2 }, scene: makeScene([entity]),
+      characters, textureRevision: 0, appReadyRevision: 1,
+    };
+    const { rerender, unmount } = renderHook(props => useEntityCustomRenderer(props), { initialProps });
+    const line = createdHearts[0];
+    expect(line.position.set).toHaveBeenLastCalledWith(205, 107);
+    expect(line.moveTo).toHaveBeenLastCalledWith(-600, 0);
+    expect(line.lineTo).toHaveBeenLastCalledWith(600, 0);
+    expect(line.circle).toHaveBeenCalledWith(-600, 0, 3);
+    expect(line.circle).toHaveBeenCalledWith(0, 0, 3);
+    expect(line.circle).toHaveBeenCalledWith(600, 0, 3);
+    expect(line.stroke).toHaveBeenCalledWith({ color: ATTACK_MINIMUM_DISTANCE_COLOR, width: 1.5 });
+    expect(line.fill).toHaveBeenCalledWith(ATTACK_MINIMUM_DISTANCE_COLOR);
+    expect(line.eventMode).toBe('none');
+
+    act(() => transformEventBus.emit([{ uid: 'uid-1', x: 200 }]));
+    act(() => transformEventBus.emit([{ uid: 'uid-1', y: 80, angle: 45, scaleX: 2 }]));
+    expect(line.position.set).toHaveBeenLastCalledWith(405, 167);
+    rerender({ ...initialProps, camera: { x: 10, y: 20, zoom: 0.5 } });
+    expect(createdHearts).toHaveLength(1);
+    expect(line.position.set).toHaveBeenLastCalledWith(110, 60);
+    expect(line.moveTo).toHaveBeenLastCalledWith(-150, 0);
+    expect(line.lineTo).toHaveBeenLastCalledWith(150, 0);
+
+    spriteMap.get('uid-1')!.visible = false;
+    act(() => transformEventBus.emit([{ uid: 'uid-1', hide: true }]));
+    expect(line.visible).toBe(false);
+    rerender({ ...initialProps, scene: makeScene([]) });
+    expect(line.destroy).toHaveBeenCalledOnce();
+    unmount();
+    expect(createdContainers[1].destroy).toHaveBeenCalledWith({ children: true });
+  });
+
+  it.each([undefined, -1, Infinity, 'invalid', true])('does not draw invalid attack distance %s', attackMinimumDistance => {
+    const { refs } = makeRefs();
+    renderHook(() => useEntityCustomRenderer({
+      refs, camera: { x: 0, y: 0, zoom: 1 }, scene: makeScene([makeEntity()]),
+      characters: [{ name: 'blood-priest.character', relativePath: 'blood-priest.character',
+        handle: {} as ProjectCharacterEntry['handle'],
+        objects: [{ name: 'character', properties: attackMinimumDistance === undefined ? {} : { attackMinimumDistance } }],
+      }], textureRevision: 0, appReadyRevision: 1,
+    }));
+    expect(createdHearts).toHaveLength(0);
+  });
+
   it('updates the resistance suffix and Lucide heart when character data changes', () => {
     const { refs } = makeRefs();
     const character = (resistance?: number): ProjectCharacterEntry => ({
