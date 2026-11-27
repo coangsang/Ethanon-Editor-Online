@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { EntityInstance, EntityTemplate, ProjectCharacterEntry, ProjectItemEntry } from '../../types';
 import { resolveEntityTemplate } from '../../utils/entityTemplate';
+import type { CharacterRenderField } from '../../utils/entityCustomRenderSettings';
 import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, findItemSprite, getCharacterEquippedItems, getCharacterOverlayLayers, getCharacterEntityInfo, type CharacterEntityInfo } from '../entityCustomRender';
 
 function entity(entityName: string, customData: EntityInstance['customData'] = []): EntityInstance {
@@ -479,6 +480,69 @@ describe('character_spawn composite layers', () => {
     ]),
   ];
   const urls = { 'body.png': 'blob:body', 'armor.png': 'blob:armor', 'hair.png': 'blob:hair' };
+
+  it('hides the body without restoring the entity sprite or removing overlays', () => {
+    const context = { characters: withOverlays, items, templateImageUrls: urls };
+    const rendered = resolveEntityRenderTemplate(spawn, templates, {
+      ...context, settings: { 'uid-1': { fields: { body: false } } },
+    });
+    expect(rendered?.spriteFile).toBe('body.png');
+    expect(rendered?.compositeBaseHidden).toBe(true);
+    expect(rendered?.compositeLayers?.map(layer => layer.spriteFile)).toEqual(['armor.png', 'hair.png']);
+    expect(rendered?.scale).toEqual({ x: 1, y: 1 });
+    expect(resolveEntityRenderTemplate(spawn, templates, context)?.compositeBaseHidden).toBe(false);
+  });
+
+  it.each<[CharacterRenderField, string[]]>([
+    ['hair', ['armor.png']],
+    ['item:equippedItem0', ['hair.png']],
+  ])('hides %s independently without restoring the original sprite', (field, expected) => {
+    const rendered = resolveEntityRenderTemplate(spawn, templates, {
+      characters: withOverlays, items, templateImageUrls: urls,
+      settings: { 'uid-1': { fields: { [field]: false } } },
+    });
+    expect(rendered?.spriteFile).toBe('body.png');
+    expect(rendered?.compositeLayers?.map(layer => layer.spriteFile)).toEqual(expected);
+    expect(rendered?.compositeBaseHidden).toBe(false);
+  });
+
+  it('turns off the entire custom renderer per entity', () => {
+    const context = {
+      characters: withOverlays, items, templateImageUrls: urls,
+      settings: { 'uid-1': { enabled: false } },
+    };
+    expect(resolveEntityRenderTemplate(spawn, templates, context)).toEqual(resolveEntityTemplate(spawn, templates));
+    expect(getEntityCustomLabel(spawn, context)).toBeNull();
+    const another = { ...spawn, editorEntityUID: 'uid-2' };
+    expect(resolveEntityRenderTemplate(another, templates, context)?.spriteFile).toBe('body.png');
+    expect(getEntityCustomLabel(another, context)).toBe('Blood Priest');
+  });
+
+  it('removes custom tints and eye pixels independently', () => {
+    const characters = [character('enemies/blood-priest.character', [{
+      name: 'character', properties: {
+        bodySprite: 'body.png', bodyColor: 0xff0000, eyeSprite: 'eye0', eyeColor: 0x00ff00,
+      },
+    }])];
+    const context = {
+      characters,
+      items: [{ ...items[0], objects: [{ name: 'eye0', properties: { sprite: 'eyes.png' } }] }],
+      templateImageUrls: { ...urls, 'eyes.png': 'blob:eyes' },
+    };
+    const untinted = resolveEntityRenderTemplate(spawn, templates, {
+      ...context, settings: { 'uid-1': { fields: { bodyColor: false, eyeColor: false } } },
+    });
+    expect(untinted?.compositeBaseColor).toBeUndefined();
+    expect(untinted?.compositeLayers).toEqual([{ spriteFile: 'eyes.png', spriteCut: { x: 4, y: 2 } }]);
+    const noEyes = resolveEntityRenderTemplate(spawn, templates, {
+      ...context, settings: { 'uid-1': { fields: { eyes: false } } },
+    });
+    expect(noEyes?.compositeLayers).toBeUndefined();
+    expect(noEyes?.compositeBaseColor).toBe(0xff0000);
+    const defaults = resolveEntityRenderTemplate(spawn, templates, context);
+    expect(defaults?.compositeLayers?.[0].color).toBe(0x00ff00);
+    expect(defaults?.compositeBaseColor).toBe(0xff0000);
+  });
 
   it('lists armor then hair with the entity template spriteCut', () => {
     const t = resolveEntityRenderTemplate(spawn, templates, { characters: withOverlays, items, templateImageUrls: urls });

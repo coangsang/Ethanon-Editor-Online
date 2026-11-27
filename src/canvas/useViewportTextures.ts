@@ -389,7 +389,7 @@ export function useViewportTextures({
       base,
       ...overlays.filter(layer => !layer.behind && isLoaded(layer)),
     ];
-    if (layers.length < 2 && template.compositeBaseColor === undefined) return null;
+    if (layers.length < 2 && template.compositeBaseColor === undefined && !template.compositeBaseHidden) return null;
 
     const frames = layers.map(layer => ({
       ...getSingleRenderFrame(
@@ -397,6 +397,7 @@ export function useViewportTextures({
         0,
       ),
       position: layer.offset,
+      hidden: layer === base && template.compositeBaseHidden === true,
       color: layer === base ? template.compositeBaseColor : ('color' in layer ? layer.color : undefined),
       blendMode: 'blendMode' in layer ? layer.blendMode : undefined,
       // A layer's angle (the weapon's `equippedAngle`) is clockwise on screen, unlike an entity angle.
@@ -404,7 +405,7 @@ export function useViewportTextures({
     }));
     const cacheKey = frames
       .map(frame => `${frame.texture.uid}:${frame.offsetX},${frame.offsetY},${frame.pivotX},${frame.pivotY}`
-        + `:${frame.position?.x ?? 0},${frame.position?.y ?? 0},${frame.rotation},${frame.blendMode ?? 0},${frame.color ?? ''}`)
+        + `:${frame.position?.x ?? 0},${frame.position?.y ?? 0},${frame.rotation},${frame.blendMode ?? 0},${frame.color ?? ''},${frame.hidden}`)
       .join('|');
     const cached = compositeFrameMapRef.current.get(cacheKey);
     if (cached) return cached;
@@ -417,6 +418,7 @@ export function useViewportTextures({
     const context = canvas.getContext('2d');
     if (!context) return null;
     frames.forEach((frame, index) => {
+      if (frame.hidden) return;
       const image = frame.texture.source.resource as CanvasImageSource | undefined;
       if (!image) return;
       const { x, y, width, height } = frame.texture.frame;
@@ -464,9 +466,12 @@ export function useViewportTextures({
   }, [getSingleRenderFrame, refs]);
 
   const getRenderFrame = useCallback((template: EntityTemplate, requestedFrame: number): RenderFrame => {
-    if (template.compositeLayers?.length || template.compositeBaseColor !== undefined) {
+    if (template.compositeLayers?.length || template.compositeBaseColor !== undefined || template.compositeBaseHidden) {
       const composite = getCompositeRenderFrame(template);
       if (composite) return composite;
+    }
+    if (template.compositeBaseHidden) {
+      return { ...getSingleRenderFrame(template, requestedFrame), texture: PIXI.Texture.EMPTY };
     }
     return getSingleRenderFrame(template, requestedFrame);
   }, [getCompositeRenderFrame, getSingleRenderFrame]);

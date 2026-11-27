@@ -5,7 +5,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Heart } from 'lucide-react';
 import type { ProjectCharacterEntry, SceneData } from '../types';
 import { transformEventBus } from '../store/TransformEventBus';
-import { ATTACK_MINIMUM_DISTANCE_COLOR, FIELD_OF_VIEW_COLOR, getCharacterEntityInfo, getEntityCustomLabel } from './entityCustomRender';
+import { ATTACK_MINIMUM_DISTANCE_COLOR, FIELD_OF_VIEW_COLOR, getCharacterRenderInfo } from './entityCustomRender';
+import type { EntityCustomRenderSettingsMap } from '../utils/entityCustomRenderSettings';
 import { transformBounds } from './viewportMath';
 import type { ViewportRefs } from './viewportTypes';
 
@@ -14,6 +15,7 @@ type UseEntityCustomRendererParams = {
   camera: { x: number; y: number; zoom: number };
   scene: SceneData;
   characters: readonly ProjectCharacterEntry[];
+  settings?: EntityCustomRenderSettingsMap;
   textureRevision: number;
   appReadyRevision?: number;
 };
@@ -34,6 +36,7 @@ export function useEntityCustomRenderer({
   camera,
   scene,
   characters,
+  settings,
   textureRevision,
   appReadyRevision,
 }: UseEntityCustomRendererParams) {
@@ -135,7 +138,7 @@ export function useEntityCustomRenderer({
           if (update.y !== undefined) fieldOfView.y = update.y;
           if (update.flipX !== undefined) fieldOfView.flipX = update.flipX;
         }
-        if (labels.has(update.uid)) place(update.uid);
+        if (labels.has(update.uid) || distances.has(update.uid) || fieldsOfView.has(update.uid)) place(update.uid);
       }
     });
 
@@ -165,11 +168,12 @@ export function useEntityCustomRenderer({
     const withDistances = new Set<string>();
     const fieldsOfView = fieldsOfViewRef.current;
     const withFieldsOfView = new Set<string>();
+    const context = { characters, settings };
     for (const entity of scene.entities) {
       if (entity.hide) continue;
-      const text = getEntityCustomLabel(entity, { characters });
-      if (!text) continue;
-      const info = getCharacterEntityInfo(entity, characters);
+      const info = getCharacterRenderInfo(entity, context);
+      if (!info) continue;
+      const text = info.name;
       const resistance = info?.resistance;
       const halfAngle = info?.fieldOfView;
       if (halfAngle != null && halfAngle >= 0) {
@@ -204,7 +208,7 @@ export function useEntityCustomRenderer({
         entry.x = entity.position.x;
         entry.y = entity.position.y;
       }
-      wanted.set(entity.editorEntityUID, resistance != null ? `${text} x${resistance / 20}` : text);
+      if (text || resistance != null) wanted.set(entity.editorEntityUID, [text, resistance != null ? `x${resistance / 20}` : ''].filter(Boolean).join(' '));
       if (resistance != null) withHearts.add(entity.editorEntityUID);
     }
 
@@ -264,16 +268,16 @@ export function useEntityCustomRenderer({
       }
     }
 
-    for (const uid of labels.keys()) {
+    for (const uid of new Set([...labels.keys(), ...distances.keys(), ...fieldsOfView.keys()])) {
       place(uid);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refs, scene.entities, characters, textureRevision, appReadyRevision]);
+  }, [refs, scene.entities, characters, settings, textureRevision, appReadyRevision]);
 
   // Effect C: reposition labels on camera change without recreating them
   useEffect(() => {
     cameraRef.current = camera;
-    for (const uid of labelsRef.current.keys()) {
+    for (const uid of new Set([...labelsRef.current.keys(), ...distancesRef.current.keys(), ...fieldsOfViewRef.current.keys()])) {
       place(uid);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

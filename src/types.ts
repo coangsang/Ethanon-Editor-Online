@@ -181,6 +181,8 @@ export interface EntityTemplate {
    */
   /** Runtime-only (never serialized): RGB (0xRRGGBB) multiplied into the base sprite when compositing. */
   compositeBaseColor?: number;
+  /** Runtime-only (never serialized): keep base layout but omit its pixels. */
+  compositeBaseHidden?: boolean;
   compositeLayers?: {
     spriteFile: string;
     spriteCut: { x: number; y: number };

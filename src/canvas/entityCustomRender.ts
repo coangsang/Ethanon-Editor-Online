@@ -11,6 +11,10 @@ import {
   resolveExternalTemplate,
 } from "../utils/entityTemplate";
 import { resolveImageUrl } from "../utils/resolveImageUrl";
+import {
+  isCharacterRenderFieldEnabled,
+  type EntityCustomRenderSettingsMap,
+} from "../utils/entityCustomRenderSettings";
 
 export const ATTACK_MINIMUM_DISTANCE_COLOR = 0xf97316;
 export const FIELD_OF_VIEW_COLOR = 0x38bdf8;
@@ -25,6 +29,7 @@ export const FIELD_OF_VIEW_COLOR = 0x38bdf8;
  */
 export type EntityCustomRenderContext = {
   characters: readonly ProjectCharacterEntry[];
+  settings?: EntityCustomRenderSettingsMap;
   /** Needed to check that a custom sprite image actually exists. */
   templateImageUrls?: Record<string, string>;
   /** Atlases by sprite file; a custom sprite without one uses the template's grid cut. */
@@ -372,8 +377,11 @@ export function getCharacterEntityInfo(
   return {
     fileName,
     name: characterDisplayName(fileName, characters),
-    resistance: typeof properties?.resistance === "number" && Number.isInteger(properties.resistance)
-      ? properties.resistance : null,
+    resistance:
+      typeof properties?.resistance === "number" &&
+      Number.isInteger(properties.resistance)
+        ? properties.resistance
+        : null,
     level: finiteNumber(properties?.level),
     speed: finiteNumber(properties?.speed),
     jumpImpulse: finiteNumber(properties?.jumpImpulse),
@@ -477,15 +485,50 @@ function getContextCharacterInfo(
   return info;
 }
 
+/** Applies viewport preferences without changing character data or restoring entity overrides. */
+export function getCharacterRenderInfo(
+  entity: EntityInstance,
+  context: EntityCustomRenderContext,
+): CharacterEntityInfo | null {
+  if (
+    !getEntityCustomRenderer(entity.entityName) ||
+    context.settings?.[entity.editorEntityUID]?.enabled === false
+  )
+    return null;
+  const info = getContextCharacterInfo(entity, context);
+  if (!info) return null;
+  const settings = context.settings?.[entity.editorEntityUID];
+  if (!settings) return info;
+  const enabled = (
+    field: Parameters<typeof isCharacterRenderFieldEnabled>[1],
+  ) => isCharacterRenderFieldEnabled(settings, field);
+  return {
+    ...info,
+    name: enabled("name") ? info.name : "",
+    resistance: enabled("resistance") ? info.resistance : null,
+    attackMinimumDistance: enabled("attackMinimumDistance")
+      ? info.attackMinimumDistance
+      : null,
+    fieldOfView: enabled("fieldOfView") ? info.fieldOfView : null,
+    bodyColor: enabled("bodyColor") ? info.bodyColor : null,
+    hairSprite: enabled("hair") ? info.hairSprite : null,
+    eyeSprite: enabled("eyes") ? info.eyeSprite : null,
+    eyeColor: enabled("eyeColor") ? info.eyeColor : null,
+    equippedItems: info.equippedItems.filter((item) =>
+      enabled(`item:${item.slot}`),
+    ),
+  };
+}
+
 const characterRenderer: EntityCustomRenderer = {
   getLabel: (entity, context) =>
-    getContextCharacterInfo(entity, context)?.name ?? null,
+    getCharacterRenderInfo(entity, context)?.name || null,
   getSpriteFile: (entity, context) =>
     getContextCharacterInfo(entity, context)?.bodySprite ?? null,
   getBaseColor: (entity, context) =>
-    getContextCharacterInfo(entity, context)?.bodyColor ?? null,
+    getCharacterRenderInfo(entity, context)?.bodyColor ?? null,
   getOverlayLayers: (entity, context) => {
-    const info = getContextCharacterInfo(entity, context);
+    const info = getCharacterRenderInfo(entity, context);
     return info ? getCharacterOverlayLayers(info) : [];
   },
 };
@@ -496,6 +539,7 @@ export const CHARACTER_RENDER_ENTITY_NAMES: readonly string[] = [
   "character_air_attack",
   "copycat_spawn",
   "spider_egg",
+  "dungeon44_ethereal_captain_spawn",
 ];
 
 export const ENTITY_CUSTOM_RENDERERS: Readonly<
@@ -546,6 +590,8 @@ export function resolveEntityRenderTemplate(
 ): EntityTemplate | null {
   const base = resolveEntityTemplate(entity, templates);
   if (!context) return base;
+  if (context.settings?.[entity.editorEntityUID]?.enabled === false)
+    return base;
   const renderer = getEntityCustomRenderer(entity.entityName);
   if (!renderer) return base;
 
@@ -555,12 +601,7 @@ export function resolveEntityRenderTemplate(
     return cached.result;
   }
 
-  const result = computeCustomRenderTemplate(
-    entity,
-    base,
-    renderer,
-    context,
-  );
+  const result = computeCustomRenderTemplate(entity, base, renderer, context);
   if (!byEntity) {
     byEntity = new WeakMap();
     renderTemplateCache.set(context, byEntity);
@@ -609,7 +650,13 @@ function computeCustomRenderTemplate(
         ? (base?.spriteCut ?? { x: 1, y: 1 })
         : { x: 1, y: 1 },
     renderFirstFrameOnly: true,
-    ...(compositeLayers.length > 0 ? { compositeLayers } : {}),
-    ...(bodyColor !== null ? { compositeBaseColor: bodyColor } : {}),
+    compositeLayers: compositeLayers.length > 0 ? compositeLayers : undefined,
+    compositeBaseColor: bodyColor ?? undefined,
+    compositeBaseHidden:
+      renderer === characterRenderer &&
+      !isCharacterRenderFieldEnabled(
+        context.settings?.[entity.editorEntityUID],
+        "body",
+      ),
   };
 }

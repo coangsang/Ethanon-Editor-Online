@@ -28,6 +28,7 @@ export function Viewport() {
   const templates = useSceneStore(s => s.templates);
   const projectCharacters = useSceneStore(s => s.projectCharacters);
   const projectItems = useSceneStore(s => s.projectItems);
+  const customRenderSettings = useSceneStore(s => s.customRenderSettings);
   const templateAtlases = useSceneStore(s => s.templateAtlases);
   const templateImageUrls = useSceneStore(s => s.templateImageUrls);
   const showGrid = useSceneStore(s => s.showGrid);
@@ -42,9 +43,14 @@ export function Viewport() {
   const updateWorldTransform = useSceneStore(s => s.updateWorldTransform);
   const setParallaxOriginNormalized = useSceneStore(s => s.setParallaxOriginNormalized);
 
-  const customRenderContext = useMemo(
+  // Textures load every custom layer regardless of viewport visibility, so toggling it never reloads them.
+  const textureLoadContext = useMemo(
     () => ({ characters: projectCharacters, items: projectItems, templateImageUrls, templateAtlases, templates }),
     [projectCharacters, projectItems, templateImageUrls, templateAtlases, templates],
+  );
+  const customRenderContext = useMemo(
+    () => ({ ...textureLoadContext, settings: customRenderSettings }),
+    [textureLoadContext, customRenderSettings],
   );
 
   const { viewportSize, appReadyRevision, runtimeState, retryViewport } = usePixiStage({ refs, camera, showGrid });
@@ -55,7 +61,7 @@ export function Viewport() {
     templateAtlases,
     templateImageUrls,
     placingTemplate,
-    customRenderContext,
+    customRenderContext: textureLoadContext,
   });
   const { onEntityPointerDown, onStartGizmoDrag, onViewportClick, zoomIn, zoomOut, resetZoom } = useViewportInteractions({
     refs,
@@ -88,6 +94,7 @@ export function Viewport() {
     camera,
     scene,
     characters: projectCharacters,
+    settings: customRenderSettings,
     textureRevision,
     appReadyRevision,
   });

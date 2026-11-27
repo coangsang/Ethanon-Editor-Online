@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ProjectCharacterEntry, ProjectItemEntry } from '../../types';
 import { useSceneStore } from '../../store/sceneStore';
 import { Inspector } from '../Inspector';
+import { CHARACTER_RENDER_ENTITY_NAMES, resolveEntityRenderTemplate } from '../../canvas/entityCustomRender';
 
 const SCENE_PROPERTIES = `
   <SceneProperties><Ambient r="1" g="1" b="1" /><ZAxisDirection x="0" y="-1" /></SceneProperties>
@@ -42,6 +43,142 @@ afterEach(() => {
 });
 
 describe('Inspector custom mode', () => {
+  function loadCharacters() {
+    const fileName = 'npcs/enemies/blood-priest.character';
+    useSceneStore.setState({ projectCharacters: [BLOOD_PRIEST] });
+    useSceneStore.getState().loadScene(`<Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>${[
+      ...CHARACTER_RENDER_ENTITY_NAMES.map((name, index) => entityXml(`uid-${index + 1}`, name, fileName)),
+      entityXml('other', 'crate'),
+      entityXml('extension', 'character_spawn.ent', fileName),
+    ].join('')}</EntitiesInScene></Ethanon>`);
+    useSceneStore.getState().selectEntity('uid-1');
+  }
+
+  it('Alt-clicks a field to set every character uniformly while ordinary clicks stay local', () => {
+    loadCharacters();
+    useSceneStore.getState().setCharacterRenderFieldEnabled('uid-2', 'body', false);
+    useSceneStore.getState().setCharacterRenderFieldEnabled('uid-2', 'name', false);
+    const originalScene = useSceneStore.getState().scene;
+    const originalXml = useSceneStore.getState().saveScene();
+    const history = useSceneStore.getState().history;
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    const body = screen.getByRole('button', { name: 'Render Body in viewport' });
+    fireEvent.click(body, { altKey: true });
+    const settings = useSceneStore.getState().customRenderSettings;
+    for (const entity of originalScene.entities.slice(0, 4)) {
+      const uid = entity.editorEntityUID;
+      expect(settings[uid]?.fields?.body).toBe(false);
+      expect(resolveEntityRenderTemplate(entity, {}, { characters: [BLOOD_PRIEST], settings })?.compositeBaseHidden).toBe(true);
+    }
+    expect(settings['uid-2']?.fields?.name).toBe(false);
+    expect(settings.other).toBeUndefined();
+    expect(settings.extension).toBeUndefined();
+    fireEvent.click(body);
+    expect(useSceneStore.getState().customRenderSettings['uid-1']?.fields?.body).toBe(true);
+    expect(useSceneStore.getState().customRenderSettings['uid-2']?.fields?.body).toBe(false);
+    fireEvent.click(body, { altKey: true });
+    fireEvent.click(body, { altKey: true });
+    for (const entity of originalScene.entities.slice(0, 4)) {
+      expect(useSceneStore.getState().customRenderSettings[entity.editorEntityUID]?.fields?.body).toBe(true);
+    }
+    expect(useSceneStore.getState().scene).toBe(originalScene);
+    expect(useSceneStore.getState().history).toBe(history);
+    expect(useSceneStore.getState().saveScene()).toBe(originalXml);
+    expect(useSceneStore.getState().hasUnsavedChanges()).toBe(false);
+  });
+
+  it.each(['checkbox', 'label'])('Alt-clicks the master %s for all characters and preserves field choices', target => {
+    loadCharacters();
+    useSceneStore.getState().setCharacterRenderFieldEnabled('uid-2', 'body', false);
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    const master = screen.getByRole('checkbox', { name: 'Render as Character' });
+    const clickTarget = target === 'checkbox' ? master : screen.getByText('Render as Character');
+    fireEvent.click(clickTarget, { altKey: true });
+    for (const entity of useSceneStore.getState().scene.entities.slice(0, 4)) {
+      expect(useSceneStore.getState().customRenderSettings[entity.editorEntityUID]?.enabled).toBe(false);
+    }
+    expect(useSceneStore.getState().customRenderSettings.other).toBeUndefined();
+    expect(useSceneStore.getState().customRenderSettings.extension).toBeUndefined();
+    fireEvent.click(clickTarget, { altKey: true });
+    for (const entity of useSceneStore.getState().scene.entities.slice(0, 4)) {
+      expect(useSceneStore.getState().customRenderSettings[entity.editorEntityUID]?.enabled).toBe(true);
+    }
+    expect(useSceneStore.getState().customRenderSettings['uid-2']?.fields?.body).toBe(false);
+    fireEvent.click(master);
+    expect(useSceneStore.getState().customRenderSettings['uid-1']?.enabled).toBe(false);
+    expect(useSceneStore.getState().customRenderSettings['uid-2']?.enabled).toBe(true);
+  });
+
+  it('Alt-clicks equipment by type even when other characters use different slots', () => {
+    loadCharacters();
+    const equippedCharacter = (relativePath: string, armorSlot: number): ProjectCharacterEntry => ({
+      ...BLOOD_PRIEST, relativePath,
+      objects: [
+        ...BLOOD_PRIEST.objects!,
+        { name: `equippedItem${armorSlot}`, properties: { type: 'armor', sprite: 'armor.png' } },
+        { name: `equippedItem${1 - armorSlot}`, properties: { type: 'weapon', sprite: 'weapon.png' } },
+      ],
+    });
+    useSceneStore.setState({
+      projectCharacters: [equippedCharacter('enemies/blood-priest.character', 0), equippedCharacter('other.character', 1)],
+      templateImageUrls: { 'armor.png': 'blob:armor', 'weapon.png': 'blob:weapon' },
+    });
+    useSceneStore.getState().updateEntity('uid-2', {
+      customData: [{ type: 'string', name: 'fileName', value: 'npcs/other.character' }],
+    });
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Render Armor in viewport' }), { altKey: true });
+    expect(useSceneStore.getState().customRenderSettings['uid-1']?.fields?.['item:equippedItem0']).toBe(false);
+    expect(useSceneStore.getState().customRenderSettings['uid-2']?.fields?.['item:equippedItem1']).toBe(false);
+    expect(useSceneStore.getState().customRenderSettings['uid-2']?.fields?.['item:equippedItem0']).toBeUndefined();
+    act(() => useSceneStore.getState().selectEntity('uid-2'));
+    expect(screen.getByRole('button', { name: 'Render Armor in viewport' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Render Weapon in viewport' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('controls rendering per entity, retains field choices, and never changes saved scene data', () => {
+    useSceneStore.setState({ projectCharacters: [BLOOD_PRIEST] });
+    loadEntity('character_spawn', 'npcs/enemies/blood-priest.character');
+    const originalScene = useSceneStore.getState().scene;
+    const originalXml = useSceneStore.getState().saveScene();
+    const originalHistory = useSceneStore.getState().history;
+    const view = render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    const master = screen.getByRole('checkbox', { name: 'Render as Character' }) as HTMLInputElement;
+    expect(master.checked).toBe(true);
+    const body = screen.getByRole('button', { name: 'Render Body in viewport' });
+    expect(body.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(body);
+    expect(body.getAttribute('aria-pressed')).toBe('false');
+    expect(body.querySelector('.lucide-eye-off')).toBeTruthy();
+    expect(screen.getByText('entity/blood_priest.png')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Render Name in viewport' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(master);
+    expect(master.checked).toBe(false);
+    expect((body as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(master);
+    expect(body.getAttribute('aria-pressed')).toBe('false');
+    expect((body as HTMLButtonElement).disabled).toBe(false);
+    expect(useSceneStore.getState().scene).toBe(originalScene);
+    expect(useSceneStore.getState().history).toBe(originalHistory);
+    expect(useSceneStore.getState().hasUnsavedChanges()).toBe(false);
+    expect(useSceneStore.getState().saveScene()).toBe(originalXml);
+
+    // Leaving and reopening the Inspector preserves viewport preferences.
+    view.unmount();
+    render(<Inspector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Character' }));
+    expect(screen.getByRole('button', { name: 'Render Body in viewport' }).getAttribute('aria-pressed')).toBe('false');
+
+    cleanup();
+    // Loading another scene, even with reused UIDs, starts with rendering enabled.
+    loadEntity('character_spawn', 'npcs/enemies/blood-priest.character');
+    expect(useSceneStore.getState().customRenderSettings).toEqual({});
+  });
+
   it.each([[45, 90], [90, 180], [190, 380], [270, 540], [0, 0], ['45', 90]])(
     'shows fieldOfView %s and doubled angle %s with a blue marker', (fieldOfView, total) => {
       useSceneStore.setState({ projectCharacters: [{ ...BLOOD_PRIEST, objects: [

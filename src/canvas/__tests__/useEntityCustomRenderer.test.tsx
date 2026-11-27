@@ -6,6 +6,7 @@ import { transformEventBus } from '../../store/TransformEventBus';
 import type { ViewportRefs } from '../viewportTypes';
 import { useEntityCustomRenderer } from '../useEntityCustomRenderer';
 import { ATTACK_MINIMUM_DISTANCE_COLOR, FIELD_OF_VIEW_COLOR } from '../entityCustomRender';
+import type { EntityCustomRenderSettingsMap } from '../../utils/entityCustomRenderSettings';
 
 const { createdTexts, createdContainers, createdHearts, MockGraphics, MockContainer, MockText } = vi.hoisted(() => {
   class Graphics {
@@ -130,6 +131,46 @@ afterEach(() => {
 });
 
 describe('useEntityCustomRenderer', () => {
+  it('keeps guides live without a name label, and toggles each effect independently', () => {
+    const { refs } = makeRefs();
+    const initialProps = {
+      refs, camera: { x: 0, y: 0, zoom: 1 }, scene: makeScene([makeEntity()]),
+      characters: [{ name: 'blood-priest.character', relativePath: 'blood-priest.character',
+        handle: {} as ProjectCharacterEntry['handle'],
+        objects: [{ name: 'character', properties: { name: 'Priest', resistance: 40, fieldOfView: 45, attackMinimumDistance: 100 } }],
+      }], textureRevision: 0, appReadyRevision: 1,
+      settings: { 'uid-1': { fields: { name: false, resistance: false } } } as EntityCustomRenderSettingsMap,
+    };
+    const { rerender } = renderHook(props => useEntityCustomRenderer(props), { initialProps });
+    expect(createdTexts).toHaveLength(0);
+    const fov = createdHearts[0];
+    const distance = createdHearts[1];
+    expect(fov.arc).toHaveBeenCalled();
+    expect(distance.lineTo).toHaveBeenLastCalledWith(100, 0);
+    act(() => transformEventBus.emit([{ uid: 'uid-1', x: 10, y: 20 }]));
+    expect(fov.position.set).toHaveBeenLastCalledWith(10, 20);
+    expect(distance.position.set).toHaveBeenLastCalledWith(10, 20);
+    rerender({ ...initialProps, camera: { x: 5, y: 7, zoom: 2 } });
+    expect(fov.position.set).toHaveBeenLastCalledWith(25, 47);
+    expect(distance.position.set).toHaveBeenLastCalledWith(25, 47);
+
+    rerender({ ...initialProps, settings: { 'uid-1': { fields: { name: false, fieldOfView: false } } } });
+    expect(fov.destroy).toHaveBeenCalledOnce();
+    expect(distance.destroy).not.toHaveBeenCalled();
+    expect(createdTexts[0].text).toBe('x2');
+    const heart = createdHearts[2];
+    expect(heart.svg).toHaveBeenCalled();
+    rerender({ ...initialProps, settings: { 'uid-1': { fields: { resistance: false, attackMinimumDistance: false } } } });
+    expect(createdTexts[0].text).toBe('Priest');
+    expect(heart.destroy).toHaveBeenCalledOnce();
+    expect(distance.destroy).toHaveBeenCalledOnce();
+    rerender({ ...initialProps, settings: { 'uid-1': { enabled: false } } });
+    expect(createdTexts[0].destroy).toHaveBeenCalledOnce();
+    expect(createdHearts.every(graphics => graphics.destroy.mock.calls.length === 1)).toBe(true);
+    rerender({ ...initialProps, settings: {} });
+    expect(createdTexts[1].text).toBe('Priest x2');
+  });
+
   const characterWithFov = (fieldOfView: number | string | boolean): ProjectCharacterEntry => ({
     name: 'blood-priest.character', relativePath: 'blood-priest.character',
     handle: {} as ProjectCharacterEntry['handle'],

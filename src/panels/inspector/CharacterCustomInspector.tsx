@@ -1,8 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
-import { Heart, Play, Square } from 'lucide-react';
+import { Eye, EyeOff, Heart, Play, Square } from 'lucide-react';
 import type { EntityInstance } from '../../types';
 import { readProjectSound } from '../../io/projectFolder';
 import type { ProjectDirectoryHandle } from '../../io/projectFolder';
+import { useSceneStore } from '../../store/sceneStore';
+import type { CharacterRenderField } from '../../utils/entityCustomRenderSettings';
+
+/** Reserve the same eye column for fields that have no viewport effect. */
+function RenderVisibility({ uid, field, label }: { uid: string; field?: CharacterRenderField; label?: string }) {
+  const settings = useSceneStore(s => s.customRenderSettings[uid]);
+  const setFieldEnabled = useSceneStore(s => s.setCharacterRenderFieldEnabled);
+  if (!field) return <span className="w-4 shrink-0" aria-hidden="true" />;
+  const enabled = settings?.fields?.[field] !== false;
+  return (
+    <button
+      type="button"
+      aria-label={`Render ${label} in viewport`}
+      aria-pressed={enabled}
+      disabled={settings?.enabled === false}
+      title={`${enabled ? 'Hide' : 'Show'} ${label} in viewport. Alt+click to apply to all characters.`}
+      onClick={event => setFieldEnabled(uid, field, !enabled, event.altKey)}
+      className="w-4 h-4 shrink-0 inline-flex items-center justify-center rounded-sm text-gray-400 enabled:hover:text-gray-200 enabled:hover:bg-gray-700 enabled:cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:outline-gray-400 disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      {enabled ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}
+    </button>
+  );
+}
 
 /** One sound row: file name plus a Play/Stop button. */
 function SoundRow({ label, fileName, rootHandle }: { label: string; fileName: string; rootHandle: ProjectDirectoryHandle | null }) {
@@ -45,6 +68,7 @@ function SoundRow({ label, fileName, rootHandle }: { label: string; fileName: st
 
   return (
     <div className="flex items-center gap-2">
+      <span className="w-4 shrink-0" aria-hidden="true" />
       <span className="text-xs text-gray-400 w-14 shrink-0">{label}</span>
       <span className="flex-1 min-w-0 truncate text-[10px] text-gray-300 font-mono" title={error ?? fileName}>
         {fileName}
@@ -62,7 +86,6 @@ function SoundRow({ label, fileName, rootHandle }: { label: string; fileName: st
     </div>
   );
 }
-import { useSceneStore } from '../../store/sceneStore';
 import { ATTACK_MINIMUM_DISTANCE_COLOR, FIELD_OF_VIEW_COLOR, getCharacterEntityInfo } from '../../canvas/entityCustomRender';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
 
@@ -73,6 +96,9 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
   const templateImageUrls = useSceneStore(s => s.templateImageUrls);
   const pingSprite = useSceneStore(s => s.pingSprite);
   const rootHandle = useSceneStore(s => s.rootHandle);
+  const renderEnabled = useSceneStore(s => s.customRenderSettings[entity.editorEntityUID]?.enabled !== false);
+  const setRenderEnabled = useSceneStore(s => s.setCustomRenderEnabled);
+  const uid = entity.editorEntityUID;
   const info = getCharacterEntityInfo(entity, characters, items);
   // Hair is shown only when its sprite image was loaded from the project.
   const hairImageUrl = info?.hairSprite ? resolveImageUrl(templateImageUrls, info.hairSprite) : null;
@@ -84,11 +110,30 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
       <div className="inspector-section-title text-xs text-gray-400 font-semibold uppercase tracking-wider">
         Character
       </div>
+      <label
+        className="flex items-center gap-2 cursor-pointer select-none text-xs text-gray-300"
+        title="Render as Character. Alt+click to apply to all characters."
+        onClick={event => {
+          if (event.target instanceof HTMLInputElement) return;
+          // Label activation forwards a synthetic input click without modifier keys.
+          event.preventDefault();
+          setRenderEnabled(uid, !renderEnabled, event.altKey);
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={renderEnabled}
+          onChange={event => setRenderEnabled(uid, event.target.checked, (event.nativeEvent as MouseEvent).altKey)}
+          className="w-3.5 h-3.5"
+        />
+        Render as Character
+      </label>
       {!info ? (
         <div className="text-[11px] italic text-gray-500">No fileName in custom data</div>
       ) : (
         <>
           <div className="flex items-center gap-2">
+            <RenderVisibility uid={uid} field="name" label="Name" />
             <span className="text-xs text-gray-400 w-14 shrink-0">Name</span>
             <span className="flex-1 min-w-0 truncate text-xs text-gray-200 font-semibold" title={info.name}>
               {info.name}
@@ -96,6 +141,7 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
           </div>
           {info.resistance !== null && (
             <div className="flex items-center gap-2">
+              <RenderVisibility uid={uid} field="resistance" label="Resistance" />
               <span className="text-xs text-gray-400 min-w-14 shrink-0">Resistance</span>
               <span className="inline-flex items-center gap-1 text-xs text-gray-200" aria-label={`${info.resistance} resistance, ${info.resistance / 20} hearts`}>
                 {info.resistance} · x{info.resistance / 20}
@@ -110,12 +156,14 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
             ['Scale', info.scale],
           ] as const).map(([label, value]) => value !== null && (
             <div key={label} className="flex items-center gap-2">
+              <RenderVisibility uid={uid} />
               <span className="text-xs text-gray-400 min-w-14 shrink-0">{label}</span>
               <span className="text-xs text-gray-200" aria-label={`${label}: ${value}`}>{value}</span>
             </div>
           ))}
           {info.attackMinimumDistance !== null && (
             <div className="flex items-center gap-2">
+              <RenderVisibility uid={uid} field="attackMinimumDistance" label="Attack Minimum Distance" />
               <span className="text-xs text-gray-400 shrink-0">Attack Minimum Distance</span>
               <span className="inline-flex items-center gap-1 text-xs text-gray-200" aria-label={`Attack Minimum Distance: ${info.attackMinimumDistance}`}>
                 {info.attackMinimumDistance}
@@ -125,6 +173,7 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
           )}
           {info.fieldOfView !== null && (
             <div className="flex items-center gap-2">
+              <RenderVisibility uid={uid} field="fieldOfView" label="Field of View" />
               <span className="text-xs text-gray-400 shrink-0">Field of View</span>
               <span
                 className="inline-flex items-center gap-1 text-xs text-gray-200"
@@ -137,6 +186,7 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
             </div>
           )}
           <div className="flex items-center gap-2">
+            <RenderVisibility uid={uid} />
             <span className="text-xs text-gray-400 w-14 shrink-0">File</span>
             <span className="flex-1 min-w-0 truncate text-[10px] text-gray-300 font-mono" title={info.fileName}>
               {info.fileName}
@@ -146,6 +196,7 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
             <div className="text-[11px] text-amber-400">Character file not found in project</div>
           )}
           <div className="flex items-center gap-2">
+            <RenderVisibility uid={uid} field="body" label="Body" />
             <span className="text-xs text-gray-400 w-14 shrink-0">Body</span>
             <button
               type="button"
@@ -159,6 +210,7 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
           </div>
           {info.bodyColor !== null && (
             <div className="flex items-center gap-2">
+              <RenderVisibility uid={uid} field="bodyColor" label="Color" />
               <span className="text-xs text-gray-400 w-14 shrink-0">Color</span>
               <span
                 className="inline-block w-4 h-4 shrink-0 border border-gray-600"
@@ -172,6 +224,7 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
           )}
           {info.hairSprite && hairImageUrl && (
             <div className="flex items-center gap-2">
+              <RenderVisibility uid={uid} field="hair" label="Hair" />
               <span className="text-xs text-gray-400 w-14 shrink-0">Hair</span>
               <button
                 type="button"
@@ -185,6 +238,7 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
           )}
           {info.eyeSprite && eyeImageUrl && (
             <div className="flex items-center gap-2">
+              <RenderVisibility uid={uid} field="eyes" label="Eyes" />
               <span className="text-xs text-gray-400 w-14 shrink-0">Eyes</span>
               <button
                 type="button"
@@ -198,6 +252,7 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
           )}
           {info.eyeColor !== null && (
             <div className="flex items-center gap-2">
+              <RenderVisibility uid={uid} field="eyeColor" label="Eye Color" />
               <span className="text-xs text-gray-400 w-14 shrink-0">Eye Color</span>
               <span
                 className="inline-block w-4 h-4 shrink-0 border border-gray-600"
@@ -216,6 +271,7 @@ export function CharacterCustomInspector({ entity }: { entity: EntityInstance })
             const sprite = item.sprite;
             return (
               <div key={item.slot} className="flex items-center gap-2">
+                <RenderVisibility uid={uid} field={`item:${item.slot}`} label={item.typeLabel} />
                 <span className="text-xs text-gray-400 w-14 shrink-0">{item.typeLabel}</span>
                 <button
                   type="button"

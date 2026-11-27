@@ -44,6 +44,14 @@ import { decodeProjectText } from '../io/decodeProjectText';
 import { pushHistorySnapshot, type HistoryEntry } from './sceneHistory';
 import { resetPerformanceProfiler, setPerformanceProfilerEnabled } from '../utils/performanceProfiler';
 import { DEFAULT_VIEWPORT_ZOOM } from '../canvas/viewportMath';
+import type { CharacterRenderField, EntityCustomRenderSettingsMap } from '../utils/entityCustomRenderSettings';
+import { CHARACTER_RENDER_ENTITY_NAMES, getCharacterEntityInfo } from '../canvas/entityCustomRender';
+
+function customRenderTargetUIDs(entities: EntityInstance[], uid: string, allCharacters: boolean): string[] {
+  return allCharacters
+    ? entities.filter(entity => CHARACTER_RENDER_ENTITY_NAMES.includes(entity.entityName)).map(entity => entity.editorEntityUID)
+    : [uid];
+}
 
 function getInvalidCollisionSaveWarning(entities: EntityInstance[]): string | null {
   const invalid = findEntitiesWithInvalidCollision(entities);
@@ -158,6 +166,9 @@ interface SceneStore {
   snapToGrid: boolean;
   showParticles: boolean;
   showCollisions: boolean;
+  customRenderSettings: EntityCustomRenderSettingsMap;
+  setCustomRenderEnabled: (uid: string, enabled: boolean, allCharacters?: boolean) => void;
+  setCharacterRenderFieldEnabled: (uid: string, field: CharacterRenderField, enabled: boolean, allCharacters?: boolean) => void;
   updateParticlesWhileMoving: boolean;
   showFps: boolean;
   showParticleFps: boolean;
@@ -256,7 +267,7 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   const replaceScene = (state: Partial<SceneStore>) => {
     clearInspectorEdits();
     resetPerformanceProfiler();
-    set(state);
+    set({ ...state, customRenderSettings: {} });
   };
 
   return ({
@@ -300,6 +311,37 @@ export const useSceneStore = create<SceneStore>((set, get) => {
   snapToGrid: false,
   showParticles: true,
   showCollisions: false,
+  customRenderSettings: {},
+  setCustomRenderEnabled: (uid, enabled, allCharacters = false) => set(state => {
+    const customRenderSettings = { ...state.customRenderSettings };
+    for (const targetUID of customRenderTargetUIDs(state.scene.entities, uid, allCharacters)) {
+      customRenderSettings[targetUID] = { ...customRenderSettings[targetUID], enabled };
+    }
+    return { customRenderSettings };
+  }),
+  setCharacterRenderFieldEnabled: (uid, field, enabled, allCharacters = false) => set(state => {
+    const customRenderSettings = { ...state.customRenderSettings };
+    const equippedItems = (entity: EntityInstance) =>
+      getCharacterEntityInfo(entity, state.projectCharacters, state.projectItems)?.equippedItems ?? [];
+    const source = allCharacters && field.startsWith('item:')
+      ? state.scene.entities.find(entity => entity.editorEntityUID === uid)
+      : undefined;
+    // Equipment slots can hold different types on different characters.
+    const itemType = source ? equippedItems(source).find(item => `item:${item.slot}` === field)?.typeLabel : undefined;
+    const targetsByUID = itemType ? new Map(state.scene.entities.map(entity => [entity.editorEntityUID, entity])) : undefined;
+    for (const targetUID of customRenderTargetUIDs(state.scene.entities, uid, allCharacters)) {
+      const target = targetsByUID?.get(targetUID);
+      const fields: CharacterRenderField[] = target
+        ? equippedItems(target).filter(item => item.typeLabel === itemType).map<CharacterRenderField>(item => `item:${item.slot}`)
+        : [field];
+      const settings = customRenderSettings[targetUID];
+      customRenderSettings[targetUID] = {
+        ...settings,
+        fields: { ...settings?.fields, ...Object.fromEntries(fields.map(targetField => [targetField, enabled])) },
+      };
+    }
+    return { customRenderSettings };
+  }),
   updateParticlesWhileMoving: true,
   showFps: false,
   showParticleFps: false,

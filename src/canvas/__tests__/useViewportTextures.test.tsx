@@ -13,12 +13,16 @@ function deferred<T>() {
 const pixiAssets = vi.hoisted(() => ({
   load: vi.fn(),
   unload: vi.fn(async () => undefined),
+  from: vi.fn((resource: unknown) => ({ source: { resource }, destroy: vi.fn() })),
 }));
 
 vi.mock('pixi.js', () => ({
   Assets: pixiAssets,
   Rectangle: class Rectangle {},
-  Texture: class Texture {},
+  Texture: class Texture {
+    static from = pixiAssets.from;
+    static EMPTY = { empty: true };
+  },
 }));
 
 import { useViewportTextures } from '../useViewportTextures';
@@ -58,14 +62,49 @@ function hookProps(refs: ViewportRefs, url: string) {
 beforeEach(() => {
   pixiAssets.load.mockReset();
   pixiAssets.unload.mockReset().mockResolvedValue(undefined);
+  pixiAssets.from.mockClear();
 });
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe('useViewportTextures transactional commits', () => {
+  it.each([false, true])('omits hidden body pixels, keeps overlays (%s), and separates cached frames', async withOverlay => {
+    const context = { drawImage: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn() };
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as unknown as CanvasRenderingContext2D);
+    const bodyImage = {};
+    const overlayImage = {};
+    const body = { uid: 1, width: 20, height: 40, frame: { x: 0, y: 0, width: 20, height: 40 }, source: { resource: bodyImage } };
+    const overlay = { uid: 2, width: 10, height: 10, frame: { x: 0, y: 0, width: 10, height: 10 }, source: { resource: overlayImage } };
+    pixiAssets.load.mockImplementation(async ({ src }: { src: string }) => src === 'body-url' ? body : overlay);
+    const refs = createTextureRefs();
+    const { result } = renderHook(() => useViewportTextures({
+      ...hookProps(refs, 'body-url'),
+      templates: { Hero: template, Hat: { ...template, spriteFile: 'hat.png' } },
+      templateImageUrls: { 'hero.png': 'body-url', 'hat.png': 'hat-url' },
+    }));
+    await waitFor(() => expect(result.current.textureRevision).toBe(1));
+    const visibleTemplate = {
+      ...template,
+      compositeLayers: withOverlay ? [{ spriteFile: 'hat.png', spriteCut: { x: 1, y: 1 } }] : undefined,
+    };
+    const visible = result.current.getRenderFrame(visibleTemplate, 0);
+    context.drawImage.mockClear();
+    const hiddenTemplate = { ...visibleTemplate, compositeBaseHidden: true };
+    const hidden = result.current.getRenderFrame(hiddenTemplate, 0);
+    expect(hidden.texture).not.toBe(visible.texture);
+    expect(hidden.layoutWidth).toBe(20);
+    expect(hidden.layoutHeight).toBe(40);
+    expect(context.drawImage).toHaveBeenCalledTimes(withOverlay ? 1 : 0);
+    if (withOverlay) expect(context.drawImage.mock.calls[0][0]).toBe(overlayImage);
+    expect(result.current.getRenderFrame(hiddenTemplate, 0)).toBe(hidden);
+    expect(result.current.getRenderFrame(visibleTemplate, 0).texture).toBe(visible.texture);
+    expect(pixiAssets.load).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['frame', 'particle', 'independent frame'])(
     'keeps retired textures alive while a %s on stage still uses them',
     async kind => {
