@@ -1,4 +1,4 @@
-import { CHARACTER_RENDER_ENTITY_NAMES } from '../../canvas/entityCustomRender';
+import { CHARACTER_RENDER_ENTITY_NAMES } from '../../utils/character';
 
 /**
  * Custom Inspector views keyed by the scene entity's `EntityName`, matched

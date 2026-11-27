@@ -86,7 +86,8 @@ function SoundRow({ label, fileName, rootHandle }: { label: string; fileName: st
     </div>
   );
 }
-import { ATTACK_MINIMUM_DISTANCE_COLOR, FIELD_OF_VIEW_COLOR, getCharacterEntityInfo } from '../../canvas/entityCustomRender';
+import { ATTACK_MINIMUM_DISTANCE_COLOR, FIELD_OF_VIEW_COLOR } from '../../canvas/entityCustomRender';
+import { getCharacterEntityInfo } from '../../utils/character';
 import { resolveImageUrl } from '../../utils/resolveImageUrl';
 
 /** Custom Inspector for entities drawn from a `.character` file (customData `fileName`). */

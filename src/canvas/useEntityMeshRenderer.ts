@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import * as PIXI from 'pixi.js';
 import type { EntityInstance, EntityTemplate, SceneData, SpriteAtlas } from '../types';
 import { resolveEntityRenderTemplate, type EntityCustomRenderContext } from './entityCustomRender';
+import type { RenderTemplate } from './renderTemplate';
 import { ParticleSystemRuntime } from './particleSystem';
 import {
   applyEntityTransformToMesh,
@@ -33,7 +34,7 @@ type UseEntityMeshRendererParams = {
   templateAtlases: Record<string, SpriteAtlas>;
   textureRevision: number;
   appReadyRevision?: number;
-  getRenderFrame: (template: EntityTemplate, spriteFrame: number) => RenderFrame;
+  getRenderFrame: (template: RenderTemplate, spriteFrame: number) => RenderFrame;
   parallaxOriginNormalized: { x: number; y: number };
   parallaxPreviewActive: boolean;
   showParticles: boolean;

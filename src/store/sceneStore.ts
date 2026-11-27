@@ -45,7 +45,7 @@ import { pushHistorySnapshot, type HistoryEntry } from './sceneHistory';
 import { resetPerformanceProfiler, setPerformanceProfilerEnabled } from '../utils/performanceProfiler';
 import { DEFAULT_VIEWPORT_ZOOM } from '../canvas/viewportMath';
 import type { CharacterRenderField, EntityCustomRenderSettingsMap } from '../utils/entityCustomRenderSettings';
-import { CHARACTER_RENDER_ENTITY_NAMES, getCharacterEntityInfo } from '../canvas/entityCustomRender';
+import { CHARACTER_RENDER_ENTITY_NAMES, getCharacterEntityInfo } from '../utils/character';
 
 function customRenderTargetUIDs(entities: EntityInstance[], uid: string, allCharacters: boolean): string[] {
   return allCharacters

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { EntityInstance, EntityTemplate, ProjectCharacterEntry, ProjectItemEntry } from '../../types';
 import { resolveEntityTemplate } from '../../utils/entityTemplate';
 import type { CharacterRenderField } from '../../utils/entityCustomRenderSettings';
-import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, findItemSprite, getCharacterEquippedItems, getCharacterOverlayLayers, getCharacterEntityInfo, type CharacterEntityInfo } from '../entityCustomRender';
+import { getEntityCustomLabel, getEntityCustomRenderer, resolveEntityRenderTemplate, getCharacterOverlayLayers } from '../entityCustomRender';
+import { findItemSprite, getCharacterEquippedItems, getCharacterEntityInfo, type CharacterEntityInfo } from '../../utils/character';
 
 function entity(entityName: string, customData: EntityInstance['customData'] = []): EntityInstance {
   return {

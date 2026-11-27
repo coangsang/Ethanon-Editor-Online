@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ProjectCharacterEntry, ProjectItemEntry } from '../../types';
 import { useSceneStore } from '../../store/sceneStore';
 import { Inspector } from '../Inspector';
-import { CHARACTER_RENDER_ENTITY_NAMES, resolveEntityRenderTemplate } from '../../canvas/entityCustomRender';
+import { resolveEntityRenderTemplate } from '../../canvas/entityCustomRender';
+import { CHARACTER_RENDER_ENTITY_NAMES } from '../../utils/character';
 
 const SCENE_PROPERTIES = `
   <SceneProperties><Ambient r="1" g="1" b="1" /><ZAxisDirection x="0" y="-1" /></SceneProperties>

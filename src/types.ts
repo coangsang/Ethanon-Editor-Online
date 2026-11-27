@@ -170,31 +170,6 @@ export interface EntityTemplate {
   customData?: CustomDataVariable[];
   physics?: EntityPhysicsConfig;
   rawEntityData?: Record<string, unknown>;
-  /** Runtime-only (never serialized): viewport always draws the sprite's first frame. */
-  renderFirstFrameOnly?: boolean;
-  /**
-   * Runtime-only (never serialized): sprites drawn over `spriteFile`'s first
-   * frame, bottom to top, all aligned on their pivots. `spriteCut` is the grid
-   * cut used when the sprite has no atlas. `offset` (pixels) moves the layer's
-   * pivot away from the shared pivot; `angle` (degrees, same sign as an entity's
-   * angle) rotates the layer around its own pivot.
-   */
-  /** Runtime-only (never serialized): RGB (0xRRGGBB) multiplied into the base sprite when compositing. */
-  compositeBaseColor?: number;
-  /** Runtime-only (never serialized): keep base layout but omit its pixels. */
-  compositeBaseHidden?: boolean;
-  compositeLayers?: {
-    spriteFile: string;
-    spriteCut: { x: number; y: number };
-    offset?: { x: number; y: number };
-    angle?: number;
-    /** Drawn under `spriteFile` instead of over it (layers keep their order). */
-    behind?: boolean;
-    /** Blend mode of this layer when composited (1 = screen); default normal. */
-    blendMode?: number;
-    /** Runtime-only RGB (0xRRGGBB) multiplied into this sprite before compositing. */
-    color?: number;
-  }[];
 }
 
 export type InlineEntityTemplate = Partial<Omit<EntityTemplate, "name">> & {

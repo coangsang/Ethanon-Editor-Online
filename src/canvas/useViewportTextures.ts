@@ -4,6 +4,7 @@ import * as PIXI from 'pixi.js';
 import type { EntityTemplate, SpriteAtlas } from '../types';
 import { resolveExternalTemplate } from '../utils/entityTemplate';
 import { resolveEntityRenderTemplate, type EntityCustomRenderContext } from './entityCustomRender';
+import type { RenderTemplate } from './renderTemplate';
 import { resolveImageUrl } from '../utils/resolveImageUrl';
 import { measurePerformanceMetric } from '../utils/performanceProfiler';
 import {
@@ -267,7 +268,7 @@ export function useViewportTextures({
     refs.textureUrlMapRef.current.clear();
   }, [assetManager, refs]);
 
-  const getSingleRenderFrame = useCallback((template: EntityTemplate, requestedFrame: number): RenderFrame => {
+  const getSingleRenderFrame = useCallback((template: RenderTemplate, requestedFrame: number): RenderFrame => {
     const spriteFrame = template.renderFirstFrameOnly ? 0 : requestedFrame;
     const key = template.spriteFile;
     const fullTexture = refs.baseTextureMapRef.current.get(key);
@@ -378,7 +379,7 @@ export function useViewportTextures({
    * its pivot), as one texture. Pivots of atlas-less sprites are centered.
    * Null when the base sprite or every layer is not loaded yet.
    */
-  const getCompositeRenderFrame = useCallback((template: EntityTemplate): RenderFrame | null => {
+  const getCompositeRenderFrame = useCallback((template: RenderTemplate): RenderFrame | null => {
     const base = { spriteFile: template.spriteFile, spriteCut: template.spriteCut, offset: undefined, angle: undefined };
     if (!refs.baseTextureMapRef.current.has(base.spriteFile)) return null;
     const isLoaded = (layer: { spriteFile: string }) => refs.baseTextureMapRef.current.has(layer.spriteFile);
@@ -465,7 +466,7 @@ export function useViewportTextures({
     return composite;
   }, [getSingleRenderFrame, refs]);
 
-  const getRenderFrame = useCallback((template: EntityTemplate, requestedFrame: number): RenderFrame => {
+  const getRenderFrame = useCallback((template: RenderTemplate, requestedFrame: number): RenderFrame => {
     if (template.compositeLayers?.length || template.compositeBaseColor !== undefined || template.compositeBaseHidden) {
       const composite = getCompositeRenderFrame(template);
       if (composite) return composite;
