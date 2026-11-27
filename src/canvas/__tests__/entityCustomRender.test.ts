@@ -76,9 +76,11 @@ describe('entity custom render registry', () => {
     expect(getEntityCustomRenderer('character_air_attack.ent')).toBeNull();
   });
 
-  it('matches the entity name exactly, so the .ent variant is a different entity', () => {
-    expect(getEntityCustomRenderer('character_spawn.ent')).toBeNull();
-    expect(getEntityCustomLabel(entity('character_spawn.ent', fileName))).toBeNull();
+  it('matches the entity name exactly, so a .ent variant needs its own entry', () => {
+    expect(getEntityCustomRenderer('character_spawn.ent')).toBe(getEntityCustomRenderer('character_spawn'));
+    expect(getEntityCustomLabel(entity('character_spawn.ent', fileName))).toBe('blood-priest');
+    expect(getEntityCustomRenderer('character_air_attack.ent')).toBeNull();
+    expect(getEntityCustomLabel(entity('character_air_attack.ent', fileName))).toBeNull();
   });
 
   it('ignores prototype keys and unrelated entities', () => {
@@ -133,9 +135,9 @@ describe('character_spawn body sprite override', () => {
     expect(resolveEntityRenderTemplate(spawn, {}, { characters: [], templateImageUrls: urls })).toBeNull();
   });
 
-  it('does not override other entity names, including character_spawn.ent', () => {
+  it('does not override other entity names, including unlisted .ent variants', () => {
     const ctx = { characters, templateImageUrls: urls };
-    expect(resolveEntityRenderTemplate(entity('character_spawn.ent', fileName), {}, ctx)).toBeNull();
+    expect(resolveEntityRenderTemplate(entity('character_air_attack.ent', fileName), {}, ctx)).toBeNull();
   });
 });
 

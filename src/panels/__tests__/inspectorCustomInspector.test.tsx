@@ -49,7 +49,7 @@ describe('Inspector custom mode', () => {
     useSceneStore.getState().loadScene(`<Ethanon>${SCENE_PROPERTIES}<EntitiesInScene>${[
       ...CHARACTER_RENDER_ENTITY_NAMES.map((name, index) => entityXml(`uid-${index + 1}`, name, fileName)),
       entityXml('other', 'crate'),
-      entityXml('extension', 'character_spawn.ent', fileName),
+      entityXml('extension', 'character_air_attack.ent', fileName),
     ].join('')}</EntitiesInScene></Ethanon>`);
     useSceneStore.getState().selectEntity('uid-1');
   }
@@ -285,7 +285,7 @@ describe('Inspector custom mode', () => {
   });
 
   it('does not offer custom mode for entities without a custom inspector', () => {
-    loadEntity('character_spawn.ent', 'npcs/enemies/blood-priest.character');
+    loadEntity('character_air_attack.ent', 'npcs/enemies/blood-priest.character');
     render(<Inspector />);
     expect(screen.queryByRole('button', { name: 'Character' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Custom' })).toBeNull();
